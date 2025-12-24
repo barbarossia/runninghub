@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
+import FolderSelector, { FolderInfo } from '@/components/folder/FolderSelector';
 import { ArrowLeft, Video, Crop, Loader2, CheckSquare, Square, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -15,7 +16,7 @@ import { API_ENDPOINTS } from '@/constants';
 export default function CropPage() {
   const { selectedVideos, toggleVideo, selectAll, deselectAll } = useVideoSelectionStore();
   const { videos, setVideos } = useVideoStore();
-  const { selectedFolder } = useFolderStore();
+  const { selectedFolder, setSelectedFolder, addRecentFolder } = useFolderStore();
   const { cropConfig } = useCropStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
@@ -55,6 +56,41 @@ export default function CropPage() {
 
     loadVideos();
   }, [videos.length, selectedFolder, setVideos]);
+
+  const handleFolderSelected = (folderInfo: FolderInfo) => {
+    setSelectedFolder({
+      success: true,
+      folder_name: folderInfo.name,
+      folder_path: folderInfo.path,
+      session_id: folderInfo.session_id,
+      is_virtual: folderInfo.is_virtual,
+      message: 'Folder selected',
+    });
+
+    if (folderInfo.path) {
+      addRecentFolder({
+        name: folderInfo.name,
+        path: folderInfo.path,
+        source: (folderInfo.source || (folderInfo.is_virtual ? 'filesystem_api' : 'manual_input')) as 'filesystem_api' | 'manual_input',
+      });
+    }
+
+    if (folderInfo.videos) {
+      setVideos(folderInfo.videos);
+    } else {
+        // If no videos provided directly, trigger reload via useEffect or manual fetch
+        // Setting selectedFolder will trigger useEffect, but useEffect checks if videos.length === 0
+        // So we might need to manually trigger if folderInfo.videos is undefined
+        // Actually, FolderSelector typically returns videos if using FS API.
+        // If manual input, it validates but might not return videos immediately in `select` response
+        // Wait, FolderSelector `handleManualInput` calls `/api/folder/select`.
+        // `/api/folder/select` returns folder info.
+        // It doesn't return videos.
+        // So we rely on useEffect to load videos.
+        // But useEffect depends on [videos.length, selectedFolder].
+        // If videos.length is 0, it runs.
+    }
+  };
 
   const handleStartCrop = async () => {
     if (selectedPaths.length === 0) {
@@ -163,11 +199,11 @@ export default function CropPage() {
                   <p>Loading videos...</p>
                 </div>
               ) : !hasVideos ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No videos loaded.</p>
-                  <Link href="/videos" className="text-purple-600 hover:underline text-sm">
-                    Select a folder containing videos
-                  </Link>
+                <div className="p-4">
+                  <p className="text-sm text-gray-500 mb-4 text-center">
+                    Select a folder to load videos for cropping.
+                  </p>
+                  <FolderSelector onFolderSelected={handleFolderSelected} />
                 </div>
               ) : (
                 videos.map((video) => {
