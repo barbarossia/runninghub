@@ -869,6 +869,59 @@ def crop(ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audi
         sys.exit(1)
 
 
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--mode", default="last_frame", help="Extraction mode")
+@click.option("--format", "image_format", default="png", type=click.Choice(["png", "jpg"]), help="Output image format")
+@click.option("--quality", default=95, type=int, help="Image quality (for JPG)")
+@click.option("--frame-count", default=5, type=int, help="Number of frames (for last_frames mode)")
+@click.option("--interval", "interval_seconds", default=10, type=float, help="Interval in seconds")
+@click.option("--frame-interval", default=1, type=int, help="Interval in frames")
+@click.option("--organize/--no-organize", default=True, help="Organize images by video name")
+@click.option("--delete/--no-delete", default=False, help="Delete video after processing")
+@click.option("--output-dir", type=click.Path(), required=True, help="Output directory")
+@click.option("--timeout", default=3600, help="Timeout in seconds")
+@click.pass_context
+def clip(ctx, file_path, mode, image_format, quality, frame_count, interval_seconds, 
+         frame_interval, organize, delete, output_dir, timeout):
+    """Extract frames from a video file."""
+    from .video_utils import clip_video
+
+    video_path = Path(file_path)
+    out_dir = Path(output_dir)
+
+    clip_config = {
+        'mode': mode,
+        'imageFormat': image_format,
+        'quality': quality,
+        'frameCount': frame_count,
+        'intervalSeconds': interval_seconds,
+        'intervalFrames': frame_interval,
+        'organizeByVideo': organize,
+        'deleteOriginal': delete
+    }
+
+    try:
+        success, stdout, stderr = clip_video(
+            video_path,
+            clip_config,
+            out_dir,
+            timeout=timeout
+        )
+
+        if success:
+            if stdout:
+                print(stdout)
+        else:
+            if stderr:
+                print_error(stderr)
+            sys.exit(1)
+
+    except Exception as e:
+        print_error(f"Failed to clip: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the CLI."""
     cli()
