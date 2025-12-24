@@ -30,7 +30,7 @@ interface ConsoleViewerProps {
   defaultVisible?: boolean; // Force console to be visible by default
 }
 
-export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId, defaultVisible = false }: ConsoleViewerProps) {
+export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId, defaultVisible = true }: ConsoleViewerProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
   const [isMinimized, setIsMinimized] = useState(() => !taskId && !defaultVisible); // Auto-expand if taskId exists or defaultVisible

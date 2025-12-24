@@ -46,6 +46,8 @@ export const ANIMATION_DURATION = {
   SLOW: 500,
 } as const;
 
+import { CropMode } from '@/types/crop';
+
 export const API_ENDPOINTS = {
   FOLDER_SELECT: '/api/folder/select',
   FOLDER_LIST: '/api/folder/list',

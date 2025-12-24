@@ -277,6 +277,7 @@ export default function VideoCropPage() {
         {/* Console Viewer */}
         <ConsoleViewer
           taskId={currentTaskId}
+          onRefresh={handleRefresh}
           defaultVisible={true}
           autoRefreshInterval={undefined}
         />

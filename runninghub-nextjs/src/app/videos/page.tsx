@@ -276,6 +276,7 @@ export default function VideosPage() {
           taskId={currentTaskId}
           onRefresh={handleRefresh}
           autoRefreshInterval={undefined}
+          defaultVisible={true}
         />
       </div>
     </div>

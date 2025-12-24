@@ -331,6 +331,7 @@ export default function GalleryPage() {
           onRefresh={handleRefresh}
           autoRefreshInterval={undefined}
           taskId={activeConsoleTaskId}
+          defaultVisible={true}
         />
       </div>
     </div>
