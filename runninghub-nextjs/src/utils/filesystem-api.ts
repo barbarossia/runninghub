@@ -1,34 +1,8 @@
-/**
- * File System Access API utilities for modern folder selection
- * Provides cross-browser compatibility and fallback mechanisms
- */
-
-export interface FileHandleInfo {
-  handle: FileSystemFileHandle | FileSystemDirectoryHandle;
-  file?: File;
-}
-
-export interface FileSystemDirectoryHandle {
-  name: string;
-  entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
-  getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FileSystemDirectoryHandle>;
-  getFileHandle(name: string): Promise<FileSystemFileHandle>;
-}
-
-export interface FileSystemFileHandle {
-  name: string;
-  kind: 'file';
-  getFile(): Promise<File>;
-}
-
-export interface FileSystemHandle {
-  name: string;
-  kind: 'file' | 'directory';
-}
+import type { FileHandleInfo, ImageFile, VideoFile, FolderItem } from '@/types';
 
 declare global {
   interface Window {
-    showDirectoryPicker?: (options?: { mode?: string; startIn?: string }) => Promise<FileSystemDirectoryHandle>;
+    showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite'; startIn?: WellKnownDirectory | FileSystemHandle }) => Promise<FileSystemDirectoryHandle>;
   }
 }
 
@@ -232,48 +206,19 @@ export async function getDirectoryInfo(
 /**
  * Convert directory entries to processable format
  */
-export interface ProcessableImage {
-  name: string;
-  path: string;
-  size: number;
-  type: string;
-  extension: string;
-  is_virtual?: boolean;
-  file_handle_info?: FileHandleInfo;
-  blob_url?: string;
-}
-
-export interface ProcessableVideo {
-  name: string;
-  path: string;
-  size: number;
-  type: string;
-  extension: string;
-  is_virtual?: boolean;
-  file_handle_info?: FileHandleInfo;
-  blob_url?: string;
-}
-
-export interface ProcessableFolder {
-  name: string;
-  path: string;
-  type: string;
-  is_virtual?: boolean;
-}
-
 export interface ProcessableFormatResult {
-  images: ProcessableImage[];
-  videos: ProcessableVideo[];
-  folders: ProcessableFolder[];
+  images: ImageFile[];
+  videos: VideoFile[];
+  folders: FolderItem[];
   cleanup: () => void;
 }
 
 export function convertToProcessableFormat(
   entries: DirectoryEntry[]
 ): ProcessableFormatResult {
-  const images: ProcessableImage[] = [];
-  const videos: ProcessableVideo[] = [];
-  const folders: ProcessableFolder[] = [];
+  const images: ImageFile[] = [];
+  const videos: VideoFile[] = [];
+  const folders: FolderItem[] = [];
   const blobUrls: string[] = [];
 
   entries.forEach(entry => {
@@ -287,21 +232,30 @@ export function convertToProcessableFormat(
         blobUrls.push(blobUrl);
       }
 
-      const fileObj = {
-        name: entry.name,
-        path: entry.path,
-        size: entry.size || 0,
-        type: entry.type || 'file',
-        extension: `.${extension}`,
-        is_virtual: true,
-        file_handle_info: entry.file_handle_info,
-        blob_url: blobUrl
-      };
-
       if (entry.type === 'video') {
+        const fileObj: VideoFile = {
+          name: entry.name,
+          path: entry.path,
+          size: entry.size || 0,
+          type: 'video',
+          extension: `.${extension}`,
+          is_virtual: true,
+          file_handle_info: entry.file_handle_info,
+          blob_url: blobUrl
+        };
         videos.push(fileObj);
       } else {
         // Default to image or if type is image
+        const fileObj: ImageFile = {
+          name: entry.name,
+          path: entry.path,
+          size: entry.size || 0,
+          type: 'image',
+          extension: `.${extension}`,
+          is_virtual: true,
+          file_handle_info: entry.file_handle_info,
+          blob_url: blobUrl
+        };
         images.push(fileObj);
       }
     } else if (entry.kind === 'directory') {
