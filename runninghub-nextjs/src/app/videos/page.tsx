@@ -53,8 +53,10 @@ export default function VideosPage() {
     }
   });
 
-  const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string) => {
-    setIsLoadingFolder(true);
+  const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string, silent = false) => {
+    if (!silent) {
+      setIsLoadingFolder(true);
+    }
     try {
       const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
         method: 'POST',
@@ -71,9 +73,13 @@ export default function VideosPage() {
       }
     } catch (error) {
       console.error('Error loading folder contents:', error);
-      toast.error(ERROR_MESSAGES.FOLDER_NOT_FOUND);
+      if (!silent) {
+        toast.error(ERROR_MESSAGES.FOLDER_NOT_FOUND);
+      }
     } finally {
-      setIsLoadingFolder(false);
+      if (!silent) {
+        setIsLoadingFolder(false);
+      }
     }
   }, [setVideos]);
 
@@ -264,7 +270,7 @@ export default function VideosPage() {
         <ConsoleViewer
           taskId={currentTaskId}
           onRefresh={handleRefresh}
-          autoRefreshInterval={undefined}
+          autoRefreshInterval={5000}
         />
       </div>
     </div>
