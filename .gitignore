@@ -94,6 +94,8 @@ desktop.ini
 .claude/
 
 # Misc
+gallery_snapshot.txt
+gallery_debug_snapshot.txt
 *.pid
 *.seed
 *.pid.lock
