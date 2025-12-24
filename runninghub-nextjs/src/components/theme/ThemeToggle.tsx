@@ -11,9 +11,11 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   // Only set mounted to true after client-side hydration
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setMounted(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!mounted) {
     return (

@@ -19,10 +19,12 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
 
   // Run validation only after client-side hydration
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setMounted(true);
     setEnvValidation(validateEnvironment());
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">

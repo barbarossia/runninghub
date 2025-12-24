@@ -3,6 +3,7 @@ import { useFolderStore } from '@/store/folder-store';
 import { useVideoStore } from '@/store/video-store';
 import { useImageStore } from '@/store/image-store';
 import type { FolderInfo as FolderSelectorFolderInfo } from '@/components/folder/FolderSelector';
+import type { ImageFile, VideoFile } from '@/types';
 
 export type FolderType = 'images' | 'videos';
 
@@ -41,17 +42,17 @@ export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSele
 
       // Load content based on folder type
       if (folderType === 'videos' && folderInfo.videos && folderInfo.videos.length > 0) {
-        setVideos(folderInfo.videos as any[]);
+        setVideos(folderInfo.videos as VideoFile[]);
       } else if (folderType === 'images' && folderInfo.images && folderInfo.images.length > 0) {
-        setImages(folderInfo.images as any[]);
+        setImages(folderInfo.images as ImageFile[]);
 
         // Also set folder contents for images
         const { setFolderContents } = useFolderStore.getState();
         setFolderContents({
           current_path: folderInfo.path,
           parent_path: undefined,
-          images: folderInfo.images as any[],
-          folders: (folderInfo.folders || []).map((f: any) => ({ ...f, type: 'folder' as const })),
+          images: folderInfo.images as ImageFile[],
+          folders: (folderInfo.folders || []).map((f) => ({ ...f, type: 'folder' as const })),
           videos: [],
           is_direct_access: true,
         });
