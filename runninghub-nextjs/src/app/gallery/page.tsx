@@ -329,7 +329,7 @@ export default function GalleryPage() {
         {/* Console Viewer */}
         <ConsoleViewer
           onRefresh={handleRefresh}
-          autoRefreshInterval={5000}
+          autoRefreshInterval={undefined}
           taskId={activeConsoleTaskId}
         />
       </div>

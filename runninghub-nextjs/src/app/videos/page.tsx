@@ -275,7 +275,7 @@ export default function VideosPage() {
         <ConsoleViewer
           taskId={currentTaskId}
           onRefresh={handleRefresh}
-          autoRefreshInterval={5000}
+          autoRefreshInterval={undefined}
         />
       </div>
     </div>
