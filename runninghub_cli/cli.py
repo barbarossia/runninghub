@@ -221,6 +221,12 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option("--node", required=True, help="Node ID to use")
+@click.option(
+    "--param",
+    "-p",
+    multiple=True,
+    help="Additional parameters in format 'nodeId:fieldName:value'",
+)
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
@@ -230,8 +236,14 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
 @click.pass_context
-def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup):
-    """Upload a file and process it in one command."""
+def process(
+    ctx, file_path, node, param, timeout, output_json, no_download, no_cleanup
+):
+    """Upload a file and process it in one command.
+
+    You can pass additional parameters using -p/--param:
+    example: runninghub process image.png --node 203 -p 231:text:hello -p 235:value:512
+    """
     source_file_path = file_path
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
@@ -244,14 +256,41 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup)
 
         # Step 2: Submit task
         print_info(f"Submitting task to node: {node}")
-        node_config = {
-            "nodeId": node,
-            "fieldName": "image",
-            "fieldValue": file_id,
-            "description": "image",
-        }
 
-        task_id = client.submit_task(cfg.workflow_id, [node_config])
+        # Start with the main image node
+        node_config_list = [
+            {
+                "nodeId": node,
+                "fieldName": "image",
+                "fieldValue": file_id,
+                "description": "image",
+            }
+        ]
+
+        # Add additional parameters
+        for p in param:
+            try:
+                # Split by first 2 colons only to allow value to contain colons
+                parts = p.split(":", 2)
+                if len(parts) != 3:
+                    raise ValueError("Format must be nodeId:fieldName:value")
+
+                p_node_id, p_field_name, p_value = parts
+                node_config_list.append(
+                    {
+                        "nodeId": p_node_id,
+                        "fieldName": p_field_name,
+                        "fieldValue": p_value,
+                        "description": p_field_name,
+                    }
+                )
+                print_info(
+                    f"Added param: Node {p_node_id} ({p_field_name}) = {p_value}"
+                )
+            except ValueError as e:
+                print_warning(f"Skipping invalid parameter '{p}': {e}")
+
+        task_id = client.submit_task(cfg.workflow_id, node_config_list)
         print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 3: Wait for completion
@@ -324,6 +363,12 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup)
     help="File pattern to match (default: * processes all files)",
 )
 @click.option(
+    "--param",
+    "-p",
+    multiple=True,
+    help="Additional parameters in format 'nodeId:fieldName:value'",
+)
+@click.option(
     "--timeout", default=600, help="Timeout per file in seconds (default: 600)"
 )
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
@@ -342,13 +387,18 @@ def batch(
     input_dir,
     node,
     pattern,
+    param,
     timeout,
     output_json,
     no_download,
     no_cleanup,
     max_concurrent,
 ):
-    """Batch process all files in a directory."""
+    """Batch process all files in a directory.
+
+    You can pass additional parameters using -p/--param:
+    example: runninghub batch ./images --node 203 -p 231:text:hello
+    """
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
 
@@ -372,6 +422,24 @@ def batch(
     successful_count = 0
     failed_count = 0
 
+    # Parse additional parameters once
+    extra_params = []
+    for p in param:
+        try:
+            parts = p.split(":", 2)
+            if len(parts) != 3:
+                raise ValueError("Format must be nodeId:fieldName:value")
+            extra_params.append(
+                {
+                    "nodeId": parts[0],
+                    "fieldName": parts[1],
+                    "fieldValue": parts[2],
+                    "description": parts[1],
+                }
+            )
+        except ValueError as e:
+            print_warning(f"Skipping invalid parameter '{p}': {e}")
+
     for i, file_path in enumerate(files_to_process, 1):
         print(f"\n{'=' * 60}")
         print_info(f"Processing file {i}/{len(files_to_process)}: {file_path.name}")
@@ -385,14 +453,20 @@ def batch(
 
             # Step 2: Submit task
             print_info(f"Submitting task to node: {node}")
-            node_config = {
-                "nodeId": node,
-                "fieldName": "image",
-                "fieldValue": file_id,
-                "description": "image",
-            }
+            
+            # Construct node config list
+            node_config_list = [
+                {
+                    "nodeId": node,
+                    "fieldName": "image",
+                    "fieldValue": file_id,
+                    "description": "image",
+                }
+            ]
+            # Add extra params
+            node_config_list.extend(extra_params)
 
-            task_id = client.submit_task(cfg.workflow_id, [node_config])
+            task_id = client.submit_task(cfg.workflow_id, node_config_list)
             print_success(f"Task submitted successfully! Task ID: {task_id}")
 
             # Step 3: Wait for completion
