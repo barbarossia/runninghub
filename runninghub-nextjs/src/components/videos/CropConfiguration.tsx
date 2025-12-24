@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Crop, ChevronDown, ChevronUp } from 'lucide-react';
 import { CropMode } from '@/types/crop';
 import { useCropStore } from '@/store/crop-store';
-import { validateCropConfig, buildCustomCropParams } from '@/lib/ffmpeg-crop';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,8 @@ export function CropConfiguration({
   const { cropConfig, setCropMode, setCustomDimensions, setOutputSuffix, togglePreserveAudio } =
     useCropStore();
 
+  const [isExpanded, setIsExpanded] = useState(true);
+
   // Derive values from state, reset when mode is not custom
   const isCustomMode = cropConfig.mode === CROP_PRESETS.CUSTOM;
   const customWidth = isCustomMode ? (cropConfig.customWidth || '') : '';
@@ -30,20 +32,6 @@ export function CropConfiguration({
   const customX = isCustomMode ? (cropConfig.customX || '0') : '0';
   const customY = isCustomMode ? (cropConfig.customY || '0') : '0';
   const [outputSuffix, setLocalOutputSuffix] = useState<string>(cropConfig.outputSuffix || '_cropped');
-
-  // Validation error is derived from validation
-  const getValidationError = (): string => {
-    if (!isCustomMode) return '';
-    const config = {
-      x: parseFloat(customX) || 0,
-      y: parseFloat(customY) || 0,
-      width: parseFloat(customWidth) || 0,
-      height: parseFloat(customHeight) || 0,
-    };
-    const validation = validateCropConfig(config);
-    return validation.error || '';
-  };
-  const validationError = getValidationError();
 
   // Notify parent of config changes
   useEffect(() => {
@@ -55,32 +43,23 @@ export function CropConfiguration({
     setCropMode(mode);
   };
 
-  // Handle custom dimension change with validation
+  // Handle custom dimension change
   const handleCustomDimensionChange = (field: 'width' | 'height' | 'x' | 'y', value: string) => {
-    let numericValue = parseFloat(value);
+    // Update custom dimensions directly without client-side validation
+    // Python CLI will handle validation
+    const params: {
+      width?: string;
+      height?: string;
+      x?: string;
+      y?: string;
+    } = {};
 
-    if (isNaN(numericValue)) {
-      numericValue = 0;
-    }
+    if (field === 'width') params.width = value || undefined;
+    if (field === 'height') params.height = value || undefined;
+    if (field === 'x') params.x = value || undefined;
+    if (field === 'y') params.y = value || undefined;
 
-    // Build new config with the updated value
-    const config = {
-      x: field === 'x' ? numericValue : (parseFloat(customX) || 0),
-      y: field === 'y' ? numericValue : (parseFloat(customY) || 0),
-      width: field === 'width' ? numericValue : (parseFloat(customWidth) || 0),
-      height: field === 'height' ? numericValue : (parseFloat(customHeight) || 0),
-    };
-
-    const validation = validateCropConfig(config);
-    if (validation.valid) {
-      const params = buildCustomCropParams({
-        customWidth: config.width || undefined,
-        customHeight: config.height || undefined,
-        customX: config.x || undefined,
-        customY: config.y || undefined,
-      });
-      setCustomDimensions(params);
-    }
+    setCustomDimensions(params);
   };
 
   // Handle output suffix change
@@ -92,97 +71,137 @@ export function CropConfiguration({
   return (
     <Card
       className={cn(
-        'p-4 bg-gray-900/50 border-gray-700',
+        'p-4 bg-transparent border-white/10',
         disabled && 'opacity-50 pointer-events-none',
         className
       )}
     >
       <div className="space-y-4">
         {/* Header */}
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-1">Crop Configuration</h3>
-          <p className="text-sm text-gray-400">Select how to crop your videos</p>
+        <div 
+          className="flex items-center justify-between cursor-pointer group/header"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 group-hover/header:bg-blue-500/20 transition-colors">
+              <Crop className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white group-hover/header:text-blue-400 transition-colors">Crop Configuration</h3>
+              {!isExpanded && (
+                <p className="text-xs text-blue-500/80 font-medium">
+                  Mode: {cropConfig.mode.charAt(0).toUpperCase() + cropConfig.mode.slice(1)}
+                  {cropConfig.preserveAudio && ' • Audio Preserved'}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="text-gray-500 group-hover/header:text-white transition-colors">
+            {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+          </div>
         </div>
 
+        {isExpanded && (
+          <>
         {/* Crop Mode Presets */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.LEFT_HALF)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.LEFT_HALF
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-3 h-8 bg-current opacity-70 rounded-sm" />
-              </div>
-              <span>Left Half</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className={`absolute inset-y-0 left-0 w-1/2 bg-current ${cropConfig.mode === CROP_PRESETS.LEFT_HALF ? 'opacity-60' : 'opacity-20'}`}></div>
             </div>
+            <span className="text-sm font-medium">Left Half</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.RIGHT_HALF)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.RIGHT_HALF
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-3 h-8 bg-current opacity-70 rounded-sm ml-auto" />
-              </div>
-              <span>Right Half</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className={`absolute inset-y-0 right-0 w-1/2 bg-current ${cropConfig.mode === CROP_PRESETS.RIGHT_HALF ? 'opacity-60' : 'opacity-20'}`}></div>
             </div>
+            <span className="text-sm font-medium">Right Half</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleModeChange(CROP_PRESETS.TOP_HALF)}
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+              cropConfig.mode === CROP_PRESETS.TOP_HALF
+                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+            }`}
+          >
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className={`absolute inset-x-0 top-0 h-1/2 bg-current ${cropConfig.mode === CROP_PRESETS.TOP_HALF ? 'opacity-60' : 'opacity-20'}`}></div>
+            </div>
+            <span className="text-sm font-medium">Top Half</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleModeChange(CROP_PRESETS.BOTTOM_HALF)}
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+              cropConfig.mode === CROP_PRESETS.BOTTOM_HALF
+                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+            }`}
+          >
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className={`absolute inset-x-0 bottom-0 h-1/2 bg-current ${cropConfig.mode === CROP_PRESETS.BOTTOM_HALF ? 'opacity-60' : 'opacity-20'}`}></div>
+            </div>
+            <span className="text-sm font-medium">Bottom Half</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.CENTER)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.CENTER
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-6 h-6 bg-current opacity-70 rounded-sm" />
-              </div>
-              <span>Center Square</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className={`absolute inset-y-0 inset-x-1/4 bg-current ${cropConfig.mode === CROP_PRESETS.CENTER ? 'opacity-60' : 'opacity-20'}`}></div>
             </div>
+            <span className="text-sm font-medium">Center</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.CUSTOM)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.CUSTOM
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="text-2xl">✂️</div>
-              <span>Custom</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative flex items-center justify-center">
+              <div className={`w-6 h-4 border border-dashed border-current ${cropConfig.mode === CROP_PRESETS.CUSTOM ? 'opacity-80' : 'opacity-30'}`}></div>
             </div>
+            <span className="text-sm font-medium">Custom</span>
           </button>
         </div>
 
         {/* Custom Crop Options */}
         {cropConfig.mode === CROP_PRESETS.CUSTOM && (
-          <div className="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-white/5">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Width (%)</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Width (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -190,11 +209,11 @@ export function CropConfiguration({
                   value={customWidth}
                   onChange={(e) => handleCustomDimensionChange('width', e.target.value)}
                   placeholder="50"
-                  className="bg-gray-900 border-gray-700 text-white"
+                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Height (%)</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Height (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -202,11 +221,11 @@ export function CropConfiguration({
                   value={customHeight}
                   onChange={(e) => handleCustomDimensionChange('height', e.target.value)}
                   placeholder="100"
-                  className="bg-gray-900 border-gray-700 text-white"
+                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">X Position (%)</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">X Position (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -214,11 +233,11 @@ export function CropConfiguration({
                   value={customX}
                   onChange={(e) => handleCustomDimensionChange('x', e.target.value)}
                   placeholder="0"
-                  className="bg-gray-900 border-gray-700 text-white"
+                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Y Position (%)</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Y Position (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -226,48 +245,47 @@ export function CropConfiguration({
                   value={customY}
                   onChange={(e) => handleCustomDimensionChange('y', e.target.value)}
                   placeholder="0"
-                  className="bg-gray-900 border-gray-700 text-white"
+                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
                 />
               </div>
             </div>
 
-            {validationError && (
-              <p className="text-xs text-red-400">{validationError}</p>
-            )}
-
-            <p className="text-xs text-gray-500">
-              Enter values as percentages (0-100). X + Width must be ≤ 100%, Y + Height must be ≤
-              100%.
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              Enter values as percentages (0-100). Final crop region must stay within video boundaries.
             </p>
           </div>
         )}
 
         {/* Additional Options */}
-        <div className="space-y-3 pt-2 border-t border-gray-700">
+        <div className="space-y-4 pt-4 border-t border-white/10">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Output Suffix</label>
+            <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Output Suffix</label>
             <Input
               type="text"
               value={outputSuffix}
               onChange={(e) => handleOutputSuffixChange(e.target.value)}
               placeholder="_cropped"
-              className="bg-gray-900 border-gray-700 text-white"
+              className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Added to filename: video.mp4 → video{outputSuffix}.mp4
+            <p className="text-[11px] text-gray-500 mt-1.5">
+              Resulting filename: <span className="text-gray-400">video{outputSuffix || '_cropped'}.mp4</span>
             </p>
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={cropConfig.preserveAudio || false}
-              onChange={togglePreserveAudio}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
-            />
-            <span className="text-sm text-gray-300">Preserve Audio</span>
+          <label className="flex items-center gap-3 cursor-pointer group">
+            <div className="relative flex items-center">
+              <input
+                type="checkbox"
+                checked={cropConfig.preserveAudio || false}
+                onChange={togglePreserveAudio}
+                className="w-4 h-4 rounded border-white/20 bg-black/20 text-blue-500 focus:ring-blue-500/20 focus:ring-offset-0 transition-all cursor-pointer"
+              />
+            </div>
+            <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Preserve Audio Track</span>
           </label>
         </div>
+        </>
+        )}
       </div>
     </Card>
   );

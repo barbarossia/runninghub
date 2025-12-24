@@ -4,15 +4,18 @@ import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted] = useState(() => {
-    // Initialize as false on server, will be set to true on first client render
-    if (typeof window === 'undefined') return false;
-    return true;
-  });
+  const [mounted, setMounted] = useState(false);
+
+  // Only set mounted to true after client-side hydration
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!mounted) {
     return (

@@ -14,7 +14,7 @@ export const ENVIRONMENT_VARIABLES = {
 
 export const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
 
-export const SUPPORTED_VIDEO_EXTENSIONS = ['.webm', '.mkv', '.avi', '.mov', '.flv'];
+export const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv'];
 
 export const SUPPORTED_MEDIA_EXTENSIONS = [
   ...SUPPORTED_IMAGE_EXTENSIONS,
@@ -46,6 +46,8 @@ export const ANIMATION_DURATION = {
   SLOW: 500,
 } as const;
 
+import { CropMode } from '@/types/crop';
+
 export const API_ENDPOINTS = {
   FOLDER_SELECT: '/api/folder/select',
   FOLDER_LIST: '/api/folder/list',
@@ -58,6 +60,7 @@ export const API_ENDPOINTS = {
   VIDEOS_CONVERT: '/api/videos/convert',
   VIDEOS_SERVE: '/api/videos/serve',
   VIDEOS_RENAME: '/api/videos/rename',
+  VIDEOS_DELETE: '/api/videos/delete',
   VIDEOS_CROP: '/api/videos/crop',
 
   // Tasks
@@ -104,11 +107,13 @@ export const LOADING_MESSAGES = {
 } as const;
 
 export const CROP_PRESETS = {
-  LEFT_HALF: 'left',
-  RIGHT_HALF: 'right',
-  CENTER: 'center',
-  CUSTOM: 'custom',
-} as const;
+  LEFT_HALF: 'left' as CropMode,
+  RIGHT_HALF: 'right' as CropMode,
+  CENTER: 'center' as CropMode,
+  TOP_HALF: 'top' as CropMode,
+  BOTTOM_HALF: 'bottom' as CropMode,
+  CUSTOM: 'custom' as CropMode,
+};
 
 export const DEFAULT_CROP_CONFIG = {
   mode: 'left',
