@@ -106,7 +106,7 @@ export const api = {
 
   deleteImages: (images: string[]) =>
     apiRequest(API_ENDPOINTS.IMAGES_DELETE, {
-      method: 'POST',
+      method: 'DELETE',
       body: JSON.stringify({ images }),
     }),
 
