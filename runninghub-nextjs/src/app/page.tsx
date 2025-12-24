@@ -216,7 +216,7 @@ export default function Home() {
             </Link>
             <Link href="/videos">
               <Button variant="default" className="bg-purple-600 hover:bg-purple-700">
-                Video Conversion
+                Video Tools
               </Button>
             </Link>
             <Button variant="outline" disabled>
