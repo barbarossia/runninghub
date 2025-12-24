@@ -238,7 +238,7 @@ export default function Home() {
                 Video Conversion
               </Button>
             </Link>
-            <Link href="/videos">
+            <Link href="/videos/crop">
               <Button variant="default" className="bg-green-600 hover:bg-green-700">
                 Video Cropping
               </Button>
