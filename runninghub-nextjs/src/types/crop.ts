@@ -31,10 +31,3 @@ export interface CropResponse {
   video_count?: number;
   error?: string;
 }
-
-export interface CropPreset {
-  id: string;
-  name: string;
-  mode: CropMode;
-  description: string;
-}

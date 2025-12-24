@@ -2,16 +2,6 @@
 
 import React from 'react';
 import { Card } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 
 const RESOLUTION_OPTIONS = [
   { label: '512 x 512', width: 512, height: 512 },
@@ -38,7 +28,8 @@ export function ImageProcessConfig({
   onConfigChange,
   className = '',
 }: ImageProcessConfigProps) {
-  const handleResolutionChange = (value: string) => {
+  const handleResolutionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
     const option = RESOLUTION_OPTIONS.find((opt) => opt.label === value);
     if (option) {
       onConfigChange({
@@ -52,7 +43,7 @@ export function ImageProcessConfig({
   const currentResolutionLabel = 
     RESOLUTION_OPTIONS.find(
       (opt) => opt.width === config.width && opt.height === config.height
-    )?.label || 'Custom';
+    )?.label || '';
 
   return (
     <Card className={`p-4 space-y-4 ${className}`}>
@@ -66,9 +57,12 @@ export function ImageProcessConfig({
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Trigger Word */}
         <div className="space-y-2">
-          <Label htmlFor="trigger-word">Trigger Word</Label>
-          <Input
+          <label htmlFor="trigger-word" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Trigger Word
+          </label>
+          <input
             id="trigger-word"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             placeholder="e.g. naran"
             value={config.triggerWord}
             onChange={(e) =>
@@ -79,26 +73,22 @@ export function ImageProcessConfig({
 
         {/* Resolution Selection */}
         <div className="space-y-2">
-          <Label>Resolution</Label>
-          <Select
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Resolution
+          </label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             value={currentResolutionLabel}
-            onValueChange={handleResolutionChange}
+            onChange={handleResolutionChange}
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Select resolution" />
-            </SelectTrigger>
-            <SelectContent>
-              {RESOLUTION_OPTIONS.map((option) => (
-                <SelectItem key={option.label} value={option.label}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <option value="" disabled>Select resolution</option>
+            {RESOLUTION_OPTIONS.map((option) => (
+              <option key={option.label} value={option.label}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
-
-        {/* Manual Width/Height (Hidden if matched, or shown as readonly/editable if we want advanced mode) */}
-        {/* For now, just keeping them as part of the state but controlled via the dropdown */}
       </div>
     </Card>
   );

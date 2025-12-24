@@ -229,42 +229,15 @@ export async function getDirectoryInfo(
   };
 }
 
+import { ImageFile, VideoFile, FolderItem } from '@/types';
+
 /**
  * Convert directory entries to processable format
  */
-export interface ProcessableImage {
-  name: string;
-  path: string;
-  size: number;
-  type: string;
-  extension: string;
-  is_virtual?: boolean;
-  file_handle_info?: FileHandleInfo;
-  blob_url?: string;
-}
-
-export interface ProcessableVideo {
-  name: string;
-  path: string;
-  size: number;
-  type: string;
-  extension: string;
-  is_virtual?: boolean;
-  file_handle_info?: FileHandleInfo;
-  blob_url?: string;
-}
-
-export interface ProcessableFolder {
-  name: string;
-  path: string;
-  type: string;
-  is_virtual?: boolean;
-}
-
 export interface ProcessableFormatResult {
-  images: ProcessableImage[];
-  videos: ProcessableVideo[];
-  folders: ProcessableFolder[];
+  images: ImageFile[];
+  videos: VideoFile[];
+  folders: FolderItem[];
   cleanup: () => void;
 }
 
@@ -272,9 +245,9 @@ export function convertToProcessableFormat(
   entries: DirectoryEntry[],
   _basePath: string = ''
 ): ProcessableFormatResult {
-  const images: ProcessableImage[] = [];
-  const videos: ProcessableVideo[] = [];
-  const folders: ProcessableFolder[] = [];
+  const images: ImageFile[] = [];
+  const videos: VideoFile[] = [];
+  const folders: FolderItem[] = [];
   const blobUrls: string[] = [];
 
   entries.forEach(entry => {
@@ -292,18 +265,18 @@ export function convertToProcessableFormat(
         name: entry.name,
         path: entry.path,
         size: entry.size || 0,
-        type: entry.type || 'file',
+        type: (entry.type === 'video' ? 'video' : 'image') as 'video' | 'image',
         extension: `.${extension}`,
         is_virtual: true,
-        file_handle_info: entry.file_handle_info,
+        file_handle_info: entry.file_handle_info as FileHandleInfo,
         blob_url: blobUrl
       };
 
       if (entry.type === 'video') {
-        videos.push(fileObj);
+        videos.push(fileObj as VideoFile);
       } else {
         // Default to image or if type is image
-        images.push(fileObj);
+        images.push(fileObj as ImageFile);
       }
     } else if (entry.kind === 'directory') {
       folders.push({

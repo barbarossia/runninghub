@@ -924,6 +924,51 @@ def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
     print(f"{'=' * 60}")
 
 
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--mode", required=True, type=click.Choice(['left', 'right', 'center', 'custom']), help="Crop mode")
+@click.option("--width", help="Width percentage (0-100)")
+@click.option("--height", help="Height percentage (0-100)")
+@click.option("--x", help="X position percentage (0-100)")
+@click.option("--y", help="Y position percentage (0-100)")
+@click.option("--suffix", default="_cropped", help="Output filename suffix")
+@click.option("--preserve-audio", is_flag=True, help="Keep audio track")
+@click.option("--timeout", default=3600, help="Timeout in seconds")
+@click.pass_context
+def crop(ctx, file_path, mode, width, height, x, y, suffix, preserve_audio, timeout):
+    """Crop a video file."""
+    from .video_utils import crop_video, check_ffmpeg_available
+
+    video_path = Path(file_path)
+
+    if not check_ffmpeg_available():
+        print_error("FFmpeg is not installed or not accessible.")
+        sys.exit(1)
+
+    try:
+        success, stdout, stderr, output_path = crop_video(
+            video_path,
+            mode=mode,
+            width=width,
+            height=height,
+            x=x,
+            y=y,
+            output_suffix=suffix,
+            preserve_audio=preserve_audio,
+            timeout=timeout
+        )
+
+        if success:
+            print_success(f"Video cropped successfully: {output_path}")
+        else:
+            print_error(f"Failed to crop video: {stderr}")
+            sys.exit(1)
+
+    except Exception as e:
+        print_error(f"Error: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the CLI."""
     cli()

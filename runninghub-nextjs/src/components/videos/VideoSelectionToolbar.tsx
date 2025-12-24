@@ -9,7 +9,6 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
-  Play,
   Pencil,
   Crop,
 } from 'lucide-react';
@@ -69,21 +68,13 @@ export function VideoSelectionToolbar({
     } finally {
       setIsProcessing(false);
     }
-  }, [hasSelection, onConvert, selectedPaths, selectedCount]);
+  }, [hasSelection, onConvert, selectedPaths]);
 
   // Handle crop
   const handleCrop = useCallback(async () => {
     if (!hasSelection || !onCrop) return;
-
-    setIsProcessing(true);
-    try {
-      await onCrop(selectedPaths);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to crop videos');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [hasSelection, onCrop, selectedPaths, selectedCount]);
+    onCrop(selectedPaths);
+  }, [hasSelection, onCrop, selectedPaths]);
 
   // Handle rename
   const handleRename = async (video: VideoFile, newName: string) => {
@@ -197,6 +188,19 @@ export function VideoSelectionToolbar({
                       disabled={toolbarDisabled}
                       className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
                     >
+                      <Crop className="h-4 w-4 mr-2" />
+                      Crop Videos
+                    </Button>
+                  )}
+
+                  {onCrop && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleCrop}
+                      disabled={toolbarDisabled}
+                      className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
+                    >
                       {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Crop className="h-4 w-4 mr-2" />}
                       {isProcessing ? 'Cropping...' : 'Crop Videos'}
                     </Button>
@@ -253,6 +257,13 @@ export function VideoSelectionToolbar({
                 <Button variant="default" size="sm" onClick={handleConvert} disabled={toolbarDisabled} className="h-8 bg-purple-600 hover:bg-purple-500 text-white rounded-full px-4 shadow-lg shadow-purple-900/20">
                   {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Video className="h-3.5 w-3.5 mr-1.5 fill-current" />}
                   <span className="text-xs font-bold">{isProcessing ? '...' : 'Convert'}</span>
+                </Button>
+              )}
+
+              {onCrop && (
+                <Button variant="default" size="sm" onClick={handleCrop} disabled={toolbarDisabled} className="h-8 bg-green-600 hover:bg-green-500 text-white rounded-full px-4 shadow-lg shadow-green-900/20">
+                  <Crop className="h-3.5 w-3.5 mr-1.5 fill-current" />
+                  <span className="text-xs font-bold">Crop</span>
                 </Button>
               )}
 

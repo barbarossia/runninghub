@@ -25,9 +25,6 @@ export async function POST(request: NextRequest) {
     // Validate required environment variables
     const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
     const workflowId = process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID;
-    const apiHost =
-      process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
-    const downloadDir = process.env.RUNNINGHUB_DOWNLOAD_DIR;
 
     if (!apiKey || !workflowId) {
       return NextResponse.json(

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useFolderStore } from '@/store/folder-store';
 import { useVideoStore } from '@/store/video-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
@@ -18,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import type { VideoFile } from '@/types';
 
 export default function VideosPage() {
+  const router = useRouter();
   const { selectedFolder, setSelectedFolder, addRecentFolder, clearFolder } = useFolderStore();
   const { videos, setVideos, filteredVideos } = useVideoStore();
   const { deselectAll } = useVideoSelectionStore();
@@ -118,6 +120,12 @@ export default function VideosPage() {
     } catch (error) {
       console.error('Error converting videos:', error);
       toast.error(ERROR_MESSAGES.CONVERSION_FAILED);
+    }
+  };
+
+  const handleCropVideos = (selectedPaths: string[]) => {
+    if (selectedPaths.length > 0) {
+      router.push('/videos/crop');
     }
   };
 
@@ -227,6 +235,7 @@ export default function VideosPage() {
             {/* Selection Toolbar */}
             <VideoSelectionToolbar
               onConvert={handleConvertVideos}
+              onCrop={handleCropVideos}
               onRefresh={handleRefresh}
               disabled={isLoadingFolder}
             />

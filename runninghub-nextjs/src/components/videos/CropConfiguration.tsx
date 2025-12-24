@@ -1,273 +1,123 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { CropMode } from '@/types/crop';
+import React from 'react';
 import { useCropStore } from '@/store/crop-store';
-import { validateCropConfig, buildCustomCropParams } from '@/lib/ffmpeg-crop';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { CROP_PRESETS } from '@/constants';
+import { CropMode } from '@/types/crop';
 
 interface CropConfigurationProps {
-  onConfigChange?: (config: ReturnType<typeof useCropStore.getState>['cropConfig']) => void;
   disabled?: boolean;
   className?: string;
 }
 
 export function CropConfiguration({
-  onConfigChange,
   disabled = false,
   className = '',
 }: CropConfigurationProps) {
   const { cropConfig, setCropMode, setCustomDimensions, setOutputSuffix, togglePreserveAudio } =
     useCropStore();
 
-  // Derive values from state, reset when mode is not custom
-  const isCustomMode = cropConfig.mode === CROP_PRESETS.CUSTOM;
-  const customWidth = isCustomMode ? (cropConfig.customWidth || '') : '';
-  const customHeight = isCustomMode ? (cropConfig.customHeight || '') : '';
-  const customX = isCustomMode ? (cropConfig.customX || '0') : '0';
-  const customY = isCustomMode ? (cropConfig.customY || '0') : '0';
-  const [outputSuffix, setLocalOutputSuffix] = useState<string>(cropConfig.outputSuffix || '_cropped');
-
-  // Validation error is derived from validation
-  const getValidationError = (): string => {
-    if (!isCustomMode) return '';
-    const config = {
-      x: parseFloat(customX) || 0,
-      y: parseFloat(customY) || 0,
-      width: parseFloat(customWidth) || 0,
-      height: parseFloat(customHeight) || 0,
-    };
-    const validation = validateCropConfig(config);
-    return validation.error || '';
-  };
-  const validationError = getValidationError();
-
-  // Notify parent of config changes
-  useEffect(() => {
-    onConfigChange?.(cropConfig);
-  }, [cropConfig, onConfigChange]);
-
+  const isCustomMode = cropConfig.mode === 'custom';
+  
   // Handle mode change
   const handleModeChange = (mode: CropMode) => {
     setCropMode(mode);
   };
 
-  // Handle custom dimension change with validation
-  const handleCustomDimensionChange = (field: 'width' | 'height' | 'x' | 'y', value: string) => {
-    let numericValue = parseFloat(value);
-
-    if (isNaN(numericValue)) {
-      numericValue = 0;
-    }
-
-    // Build new config with the updated value
-    const config = {
-      x: field === 'x' ? numericValue : (parseFloat(customX) || 0),
-      y: field === 'y' ? numericValue : (parseFloat(customY) || 0),
-      width: field === 'width' ? numericValue : (parseFloat(customWidth) || 0),
-      height: field === 'height' ? numericValue : (parseFloat(customHeight) || 0),
-    };
-
-    const validation = validateCropConfig(config);
-    if (validation.valid) {
-      const params = buildCustomCropParams({
-        customWidth: config.width || undefined,
-        customHeight: config.height || undefined,
-        customX: config.x || undefined,
-        customY: config.y || undefined,
-      });
-      setCustomDimensions(params);
-    }
-  };
-
-  // Handle output suffix change
-  const handleOutputSuffixChange = (value: string) => {
-    setLocalOutputSuffix(value);
-    setOutputSuffix(value);
-  };
-
   return (
     <Card
       className={cn(
-        'p-4 bg-gray-900/50 border-gray-700',
+        'p-4 space-y-4',
         disabled && 'opacity-50 pointer-events-none',
         className
       )}
     >
-      <div className="space-y-4">
-        {/* Header */}
-        <div>
-          <h3 className="text-lg font-semibold text-white mb-1">Crop Configuration</h3>
-          <p className="text-sm text-gray-400">Select how to crop your videos</p>
-        </div>
+      <div>
+        <h3 className="text-lg font-semibold mb-1">Crop Configuration</h3>
+        <p className="text-sm text-gray-500">Select how to crop your videos</p>
+      </div>
 
-        {/* Crop Mode Presets */}
-        <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2">
+        {(['left', 'right', 'center', 'custom'] as CropMode[]).map((mode) => (
           <button
+            key={mode}
             type="button"
-            onClick={() => handleModeChange(CROP_PRESETS.LEFT_HALF)}
+            onClick={() => handleModeChange(mode)}
             className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
-              cropConfig.mode === CROP_PRESETS.LEFT_HALF
+              'px-4 py-2 rounded-md border text-sm font-medium transition-all capitalize',
+              cropConfig.mode === mode
                 ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
+                : 'hover:bg-gray-100 border-gray-200'
             )}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-3 h-8 bg-current opacity-70 rounded-sm" />
-              </div>
-              <span>Left Half</span>
-            </div>
+            {mode}
           </button>
+        ))}
+      </div>
 
-          <button
-            type="button"
-            onClick={() => handleModeChange(CROP_PRESETS.RIGHT_HALF)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
-              cropConfig.mode === CROP_PRESETS.RIGHT_HALF
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-3 h-8 bg-current opacity-70 rounded-sm ml-auto" />
-              </div>
-              <span>Right Half</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleModeChange(CROP_PRESETS.CENTER)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
-              cropConfig.mode === CROP_PRESETS.CENTER
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-6 h-6 bg-current opacity-70 rounded-sm" />
-              </div>
-              <span>Center Square</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleModeChange(CROP_PRESETS.CUSTOM)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
-              cropConfig.mode === CROP_PRESETS.CUSTOM
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <div className="text-2xl">✂️</div>
-              <span>Custom</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Custom Crop Options */}
-        {cropConfig.mode === CROP_PRESETS.CUSTOM && (
-          <div className="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Width (%)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={customWidth}
-                  onChange={(e) => handleCustomDimensionChange('width', e.target.value)}
-                  placeholder="50"
-                  className="bg-gray-900 border-gray-700 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Height (%)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={customHeight}
-                  onChange={(e) => handleCustomDimensionChange('height', e.target.value)}
-                  placeholder="100"
-                  className="bg-gray-900 border-gray-700 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">X Position (%)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={customX}
-                  onChange={(e) => handleCustomDimensionChange('x', e.target.value)}
-                  placeholder="0"
-                  className="bg-gray-900 border-gray-700 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Y Position (%)</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={customY}
-                  onChange={(e) => handleCustomDimensionChange('y', e.target.value)}
-                  placeholder="0"
-                  className="bg-gray-900 border-gray-700 text-white"
-                />
-              </div>
-            </div>
-
-            {validationError && (
-              <p className="text-xs text-red-400">{validationError}</p>
-            )}
-
-            <p className="text-xs text-gray-500">
-              Enter values as percentages (0-100). X + Width must be ≤ 100%, Y + Height must be ≤
-              100%.
-            </p>
-          </div>
-        )}
-
-        {/* Additional Options */}
-        <div className="space-y-3 pt-2 border-t border-gray-700">
+      {isCustomMode && (
+        <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-lg border">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Output Suffix</label>
+            <label className="block text-xs text-gray-500 mb-1">Width (%)</label>
             <Input
-              type="text"
-              value={outputSuffix}
-              onChange={(e) => handleOutputSuffixChange(e.target.value)}
-              placeholder="_cropped"
-              className="bg-gray-900 border-gray-700 text-white"
+              type="number"
+              value={cropConfig.customWidth || ''}
+              onChange={(e) => setCustomDimensions({ customWidth: e.target.value })}
+              placeholder="50"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Added to filename: video.mp4 → video{outputSuffix}.mp4
-            </p>
           </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={cropConfig.preserveAudio || false}
-              onChange={togglePreserveAudio}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Height (%)</label>
+            <Input
+              type="number"
+              value={cropConfig.customHeight || ''}
+              onChange={(e) => setCustomDimensions({ customHeight: e.target.value })}
+              placeholder="100"
             />
-            <span className="text-sm text-gray-300">Preserve Audio</span>
-          </label>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">X (%)</label>
+            <Input
+              type="number"
+              value={cropConfig.customX || ''}
+              onChange={(e) => setCustomDimensions({ customX: e.target.value })}
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Y (%)</label>
+            <Input
+              type="number"
+              value={cropConfig.customY || ''}
+              onChange={(e) => setCustomDimensions({ customY: e.target.value })}
+              placeholder="0"
+            />
+          </div>
         </div>
+      )}
+
+      <div className="space-y-3 pt-2 border-t">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Output Suffix</label>
+          <Input
+            type="text"
+            value={cropConfig.outputSuffix || ''}
+            onChange={(e) => setOutputSuffix(e.target.value)}
+            placeholder="_cropped"
+          />
+        </div>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={cropConfig.preserveAudio || false}
+            onChange={togglePreserveAudio}
+            className="w-4 h-4 rounded text-blue-600"
+          />
+          <span className="text-sm">Preserve Audio</span>
+        </label>
       </div>
     </Card>
   );

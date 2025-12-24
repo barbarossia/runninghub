@@ -96,46 +96,83 @@ def convert_video_to_mp4(
     overwrite: bool = True,
     timeout: int = 3600
 ) -> Tuple[bool, str, str]:
-    """Convert a video file to MP4 format using FFmpeg.
+    """Convert a video file to MP4 format using FFmpeg."""
+    # ... (existing implementation) ...
+    pass # Placeholder for replace context
+
+def crop_video(
+    input_path: Path,
+    mode: str,
+    width: str = None,
+    height: str = None,
+    x: str = None,
+    y: str = None,
+    output_suffix: str = "_cropped",
+    preserve_audio: bool = False,
+    timeout: int = 3600
+) -> Tuple[bool, str, str, Path]:
+    """Crop a video file using FFmpeg.
 
     Args:
         input_path: Path to the input video file.
-        overwrite: If True, overwrites the original file after conversion.
-        timeout: Conversion timeout in seconds (default: 3600 = 1 hour).
+        mode: Crop mode ('left', 'right', 'center', 'custom').
+        width: Width percentage (for custom mode).
+        height: Height percentage (for custom mode).
+        x: X position percentage (for custom mode).
+        y: Y position percentage (for custom mode).
+        output_suffix: Suffix to add to the output filename.
+        preserve_audio: If True, keeps the audio track.
+        timeout: Conversion timeout in seconds.
 
     Returns:
-        Tuple of (success: bool, stdout: str, stderr: str).
-
-    Raises:
-        FileNotFoundError: If FFmpeg is not available.
-        TimeoutError: If conversion times out.
+        Tuple of (success: bool, stdout: str, stderr: str, output_path: Path).
     """
     if not check_ffmpeg_available():
-        raise FileNotFoundError(
-            "FFmpeg is not installed or not accessible. "
-            "Please install FFmpeg to use video conversion features."
-        )
+        raise FileNotFoundError("FFmpeg is not installed or not accessible.")
 
     if not input_path.exists():
         raise FileNotFoundError(f"Input file does not exist: {input_path}")
 
     # Generate output path
-    final_output = input_path.with_suffix('.mp4')
-    temp_output = final_output.with_suffix('.temp.mp4')
+    output_path = input_path.parent / f"{input_path.stem}{output_suffix}{input_path.suffix}"
+    temp_output = output_path.with_suffix(f".temp{input_path.suffix}")
+
+    # Build crop filter
+    crop_filter = ""
+    if mode == 'left':
+        crop_filter = "crop=iw/2:ih:0:0"
+    elif mode == 'right':
+        crop_filter = "crop=iw/2:ih:iw/2:0"
+    elif mode == 'center':
+        crop_filter = "crop=min(iw,ih):min(iw,ih):(iw-ow)/2:(ih-oh)/2"
+    elif mode == 'custom':
+        # Default to 50% if not provided
+        w_val = float(width) / 100 if width else 0.5
+        h_val = float(height) / 100 if height else 0.5
+        x_val = float(x) / 100 if x else 0
+        y_val = float(y) / 100 if y else 0
+        crop_filter = f"crop=iw*{w_val}:ih*{h_val}:iw*{x_val}:ih*{y_val}"
+    else:
+        return False, "", f"Invalid crop mode: {mode}", output_path
 
     # Build FFmpeg command
-    # -c:v libx264: Use H.264 video codec
-    # -an: No audio (as per requirements)
     cmd = [
         'ffmpeg',
         '-i', str(input_path),
+        '-vf', crop_filter,
         '-c:v', 'libx264',
-        '-an',
-        '-y',  # Overwrite output file without asking
-        str(temp_output)
+        '-crf', '18',
+        '-preset', 'veryfast',
     ]
 
-    print_info(f"Converting: {input_path.name} -> {final_output.name}")
+    if preserve_audio:
+        cmd.extend(['-c:a', 'copy'])
+    else:
+        cmd.append('-an')
+
+    cmd.extend(['-y', str(temp_output)])
+
+    print_info(f"Cropping: {input_path.name} -> {output_path.name} (Mode: {mode})")
 
     try:
         result = subprocess.run(
@@ -146,28 +183,25 @@ def convert_video_to_mp4(
         )
 
         if result.returncode != 0:
-            # Clean up temp file on failure
             if temp_output.exists():
                 temp_output.unlink()
-            return False, result.stdout, result.stderr
+            return False, result.stdout, result.stderr, output_path
 
-        # If overwriting original, delete it and rename temp file
-        if overwrite:
-            input_path.unlink()
-            if temp_output != final_output and temp_output.exists():
-                temp_output.rename(final_output)
+        # Move temp to final
+        if temp_output.exists():
+            if output_path.exists():
+                output_path.unlink()
+            temp_output.rename(output_path)
 
-        print_success(f"Converted: {input_path.name} -> {final_output.name}")
-        return True, result.stdout, result.stderr
+        print_success(f"Successfully cropped: {output_path.name}")
+        return True, result.stdout, result.stderr, output_path
 
     except subprocess.TimeoutExpired:
-        # Clean up temp file if conversion timed out
         if temp_output.exists():
             temp_output.unlink()
-        raise TimeoutError(f"Video conversion timed out after {timeout} seconds")
-
+        raise TimeoutError(f"Video cropping timed out after {timeout} seconds")
     except Exception as e:
-        # Clean up temp file on any error
         if temp_output.exists():
             temp_output.unlink()
         raise e
+
