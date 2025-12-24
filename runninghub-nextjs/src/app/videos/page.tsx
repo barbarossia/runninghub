@@ -44,20 +44,6 @@ export default function VideosPage() {
     }
   };
 
-  // Use progress tracking hook to refresh when task completes
-  useProgressTracking({
-    onTaskComplete: (taskId) => {
-      if (taskId === currentTaskId) {
-        handleRefresh(true);
-      }
-    },
-    onTaskProgress: (taskId) => {
-      if (taskId === currentTaskId) {
-        handleRefresh(true);
-      }
-    }
-  });
-
   const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string, silent = false) => {
     if (!silent) {
       setIsLoadingFolder(true);
@@ -275,7 +261,6 @@ export default function VideosPage() {
         <ConsoleViewer
           taskId={currentTaskId}
           onRefresh={handleRefresh}
-          autoRefreshInterval={undefined}
           defaultVisible={true}
         />
       </div>

@@ -25,17 +25,15 @@ interface TaskState {
 
 interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
-  autoRefreshInterval?: number; // in ms, default 5000
   taskId?: string | null;
   defaultVisible?: boolean; // Force console to be visible by default
 }
 
-export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId, defaultVisible = true }: ConsoleViewerProps) {
+export function ConsoleViewer({ onRefresh, taskId, defaultVisible = true }: ConsoleViewerProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
   const [isMinimized, setIsMinimized] = useState(() => !taskId && !defaultVisible); // Auto-expand if taskId exists or defaultVisible
   const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
-  const [lastLogTime, setLastLogTime] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -79,20 +77,7 @@ export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId, d
         const res = await fetch('/api/logs?limit=100');
         if (res.ok) {
           const data = await res.json();
-          const newLogs = data.logs as LogEntry[];
-          
-          setLogs(newLogs);
-
-          // Check for new success logs to trigger refresh
-          if (newLogs.length > 0) {
-            const latestLog = newLogs[0];
-            
-            // If we have a new success log since we last checked
-            if (latestLog.level === 'success' && latestLog.timestamp !== lastLogTime) {
-               onRefresh?.(true); // Silent refresh
-               setLastLogTime(latestLog.timestamp);
-            }
-          }
+          setLogs(data.logs as LogEntry[]);
         }
       } catch (error) {
         console.error('Failed to fetch logs:', error);
@@ -103,18 +88,7 @@ export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId, d
     const interval = setInterval(fetchLogs, 1000); // Poll every 1s for logs
 
     return () => clearInterval(interval);
-  }, [onRefresh, lastLogTime]);
-
-  // Auto-refresh timer
-  useEffect(() => {
-    if (!autoRefreshInterval) return;
-
-    const interval = setInterval(() => {
-      onRefresh?.(true); // Silent refresh
-    }, autoRefreshInterval);
-
-    return () => clearInterval(interval);
-  }, [autoRefreshInterval, onRefresh]);
+  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -296,7 +270,6 @@ export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId, d
          </span>
          {onRefresh && (
            <div className="flex items-center gap-2">
-             <span className="text-gray-600">Auto-sync: 5s</span>
              <Button 
                variant="ghost" 
                size="sm" 

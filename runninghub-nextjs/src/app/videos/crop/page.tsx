@@ -110,13 +110,6 @@ export default function VideoCropPage() {
         if (data.task_id) {
           setCurrentTaskId(data.task_id);
         }
-
-        // Refresh folder contents after cropping completes
-        setTimeout(() => {
-          if (selectedFolder && !selectedFolder.is_virtual) {
-            loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
-          }
-        }, 2000);
       } else {
         toast.error(data.error || ERROR_MESSAGES.CROP_FAILED);
       }
@@ -279,7 +272,6 @@ export default function VideoCropPage() {
           taskId={currentTaskId}
           onRefresh={handleRefresh}
           defaultVisible={true}
-          autoRefreshInterval={undefined}
         />
       </div>
     </div>

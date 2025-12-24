@@ -53,20 +53,6 @@ export default function GalleryPage() {
     }
   };
 
-  // Use progress tracking hook to refresh when task completes
-  useProgressTracking({
-    onTaskComplete: (taskId) => {
-      if (taskId === activeConsoleTaskId) {
-        handleRefresh(true);
-      }
-    },
-    onTaskProgress: (taskId) => {
-      if (taskId === activeConsoleTaskId) {
-        handleRefresh(true);
-      }
-    }
-  });
-
   // Use folder selection hook with error handling
   const { handleFolderSelected } = useFolderSelection({
     folderType: 'images',
@@ -329,7 +315,6 @@ export default function GalleryPage() {
         {/* Console Viewer */}
         <ConsoleViewer
           onRefresh={handleRefresh}
-          autoRefreshInterval={undefined}
           taskId={activeConsoleTaskId}
           defaultVisible={true}
         />
