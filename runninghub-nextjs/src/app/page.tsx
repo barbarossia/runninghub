@@ -54,17 +54,17 @@ export default function Home() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="text-2xl">🎬</span>
-                Video Conversion
+                Video Tools
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 mb-4">
-                Convert video files to MP4 format using FFmpeg. Supports WebM, MKV, AVI, MOV, and FLV formats.
+                Convert video files to MP4 format and crop videos. Supports batch processing for multiple files.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">FFmpeg</Badge>
                 <Badge variant="secondary">Batch Conversion</Badge>
-                <Badge variant="secondary">MP4 Output</Badge>
+                <Badge variant="secondary">Cropping</Badge>
               </div>
             </CardContent>
           </Card>

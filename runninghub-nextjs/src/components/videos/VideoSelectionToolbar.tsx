@@ -188,19 +188,6 @@ export function VideoSelectionToolbar({
                       disabled={toolbarDisabled}
                       className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
                     >
-                      <Crop className="h-4 w-4 mr-2" />
-                      Crop Videos
-                    </Button>
-                  )}
-
-                  {onCrop && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleCrop}
-                      disabled={toolbarDisabled}
-                      className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
-                    >
                       {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Crop className="h-4 w-4 mr-2" />}
                       {isProcessing ? 'Cropping...' : 'Crop Videos'}
                     </Button>
@@ -257,13 +244,6 @@ export function VideoSelectionToolbar({
                 <Button variant="default" size="sm" onClick={handleConvert} disabled={toolbarDisabled} className="h-8 bg-purple-600 hover:bg-purple-500 text-white rounded-full px-4 shadow-lg shadow-purple-900/20">
                   {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Video className="h-3.5 w-3.5 mr-1.5 fill-current" />}
                   <span className="text-xs font-bold">{isProcessing ? '...' : 'Convert'}</span>
-                </Button>
-              )}
-
-              {onCrop && (
-                <Button variant="default" size="sm" onClick={handleCrop} disabled={toolbarDisabled} className="h-8 bg-green-600 hover:bg-green-500 text-white rounded-full px-4 shadow-lg shadow-green-900/20">
-                  <Crop className="h-3.5 w-3.5 mr-1.5 fill-current" />
-                  <span className="text-xs font-bold">Crop</span>
                 </Button>
               )}
 
