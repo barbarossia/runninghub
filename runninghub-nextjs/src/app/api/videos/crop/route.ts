@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
-import path from "path";
 import { writeLog } from "@/lib/logger";
 import { initTask, updateTask } from "@/lib/task-store";
-import { buildCropFilter, buildFFmpegArgs } from "@/lib/ffmpeg-crop";
 import { CropRequest } from "@/types/crop";
 
 export async function POST(request: NextRequest) {
@@ -30,14 +28,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if FFmpeg is available
-    const ffmpegAvailable = await checkFFmpegAvailable();
-    if (!ffmpegAvailable) {
+    // Validate required environment variables
+    const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+    const workflowId = process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID;
+    const apiHost =
+      process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
+
+    if (!apiKey || !workflowId) {
       return NextResponse.json(
-        {
-          error:
-            "FFmpeg is not installed or not accessible. Please install FFmpeg to use video cropping features.",
-        },
+        { error: "RunningHub API configuration missing" },
         { status: 500 }
       );
     }
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Initialize task in store
     await initTask(taskId, videos.length);
 
-    // Start background cropping
+    // Start background cropping using Python CLI
     cropVideosInBackground(
       videos,
       crop_config,
@@ -75,192 +74,103 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Check if FFmpeg is available
- */
-async function checkFFmpegAvailable(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const childProcess = spawn("ffmpeg", ["-version"], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    childProcess.on("close", (code) => {
-      resolve(code === 0);
-    });
-
-    childProcess.on("error", () => {
-      resolve(false);
-    });
-
-    // Timeout after 5 seconds
-    setTimeout(() => {
-      childProcess.kill();
-      resolve(false);
-    }, 5000);
-  });
-}
-
-/**
- * Crop a single video using FFmpeg
+ * Crop a single video using RunningHub Python CLI
  */
 function cropSingleVideo(
   videoPath: string,
   cropConfig: CropRequest["crop_config"],
   outputSuffix: string,
-  timeout: number
+  timeout: number,
+  env: NodeJS.ProcessEnv
 ): Promise<{
   success: boolean;
   stdout: string;
   stderr: string;
   error?: string;
-  outputPath?: string;
 }> {
   return new Promise((resolve) => {
-    (async () => {
-      const inputPath = videoPath;
-      const parsedPath = path.parse(videoPath);
-      const outputPath = path.join(
-        parsedPath.dir,
-        `${parsedPath.name}${outputSuffix}${parsedPath.ext}`
-      );
-      const tempOutputPath = path.join(
-        parsedPath.dir,
-        `${parsedPath.name}${outputSuffix}.temp${parsedPath.ext}`
-      );
+    const args = [
+      "-m",
+      "runninghub_cli.cli",
+      "crop",
+      videoPath,
+      "--mode",
+      cropConfig.mode,
+      "--output-suffix",
+      outputSuffix,
+      "--timeout",
+      String(timeout),
+    ];
 
-      // Build crop filter
-      const cropFilter = buildCropFilter({
-        mode: cropConfig.mode,
-        width: cropConfig.width,
-        height: cropConfig.height,
-        x: cropConfig.x,
-        y: cropConfig.y,
-      });
+    // Add custom dimensions if provided
+    if (cropConfig.mode === "custom") {
+      if (cropConfig.width) args.push("--width", cropConfig.width);
+      if (cropConfig.height) args.push("--height", cropConfig.height);
+      if (cropConfig.x) args.push("--x", cropConfig.x);
+      if (cropConfig.y) args.push("--y", cropConfig.y);
+    }
 
-      // Build FFmpeg command
-      const preserveAudio = false; // Default: no audio
-      const args = buildFFmpegArgs(
-        inputPath,
-        cropFilter,
-        tempOutputPath,
-        preserveAudio
-      );
+    console.log(`Running command: python ${args.join(" ")}`);
 
-      const cmd = "ffmpeg";
-      console.log(`Running command: ${cmd} ${args.join(" ")}`);
+    const childProcess = spawn("python", args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
 
-      const childProcess = spawn(cmd, args, {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+    let stdout = "";
+    let stderr = "";
 
-      let stdout = "";
-      let stderr = "";
+    // Collect stdout
+    childProcess.stdout?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stdout += text;
+      console.log(`[${videoPath}] STDOUT: ${text.trim()}`);
+    });
 
-      // Collect stdout
-      childProcess.stdout?.on("data", (data: Buffer) => {
-        const text = data.toString();
-        stdout += text;
-        console.log(`[${videoPath}] STDOUT: ${text.trim()}`);
-      });
+    // Collect stderr
+    childProcess.stderr?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stderr += text;
+      console.log(`[${videoPath}] STDERR: ${text.trim()}`);
+    });
 
-      // Collect stderr
-      childProcess.stderr?.on("data", (data: Buffer) => {
-        const text = data.toString();
-        stderr += text;
-        console.log(`[${videoPath}] STDERR: ${text.trim()}`);
-      });
-
-      // Set timeout
-      const timeoutHandle = setTimeout(
-        () => {
-          console.error(
-            `[${videoPath}] Process timed out after ${timeout} seconds`
-          );
-          childProcess.kill("SIGKILL");
-          resolve({
-            success: false,
-            stdout,
-            stderr,
-            error: `Cropping timed out after ${timeout} seconds`,
-          });
-        },
-        timeout * 1000
-      );
-
-      // Handle process exit
-      childProcess.on("close", async (code) => {
-        clearTimeout(timeoutHandle);
-        const success = code === 0;
-        console.log(`[${videoPath}] Process exited with code: ${code}`);
-
-        const fs = await import("fs/promises");
-
-        // Clean up temp file and handle result
-        if (success) {
-          try {
-            // Delete existing output file if it exists
-            if (await fileExists(outputPath)) {
-              await fs.unlink(outputPath);
-              console.log(`[${videoPath}] Deleted existing output file`);
-            }
-
-            // Rename temp file to final output
-            if (await fileExists(tempOutputPath)) {
-              await fs.rename(tempOutputPath, outputPath);
-              console.log(`[${videoPath}] Renamed temp file to final output`);
-            }
-
-            resolve({ success, stdout, stderr, outputPath });
-          } catch (err) {
-            console.error(`[${videoPath}] Error finalizing output:`, err);
-            resolve({
-              success: false,
-              stdout,
-              stderr,
-              error: `Failed to finalize output: ${err}`,
-            });
-            return;
-          }
-        } else {
-          // Clean up temp file on failure
-          try {
-            if (await fileExists(tempOutputPath)) {
-              await fs.unlink(tempOutputPath);
-              console.log(`[${videoPath}] Cleaned up temp file`);
-            }
-          } catch (err) {
-            console.error(`[${videoPath}] Failed to clean up temp file:`, err);
-          }
-
-          resolve({ success, stdout, stderr });
-        }
-      });
-
-      // Handle process errors
-      childProcess.on("error", (error) => {
-        clearTimeout(timeoutHandle);
-        console.error(`[${videoPath}] Process error:`, error);
+    // Set timeout
+    const timeoutHandle = setTimeout(
+      () => {
+        console.error(
+          `[${videoPath}] Process timed out after ${timeout} seconds`
+        );
+        childProcess.kill("SIGKILL");
         resolve({
           success: false,
           stdout,
           stderr,
-          error: error.message,
+          error: `Cropping timed out after ${timeout} seconds`,
         });
-      });
-    })();
-  });
-}
+      },
+      timeout * 1000
+    );
 
-/**
- * Check if a file exists
- */
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    const fs = await import("fs/promises");
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
+    // Handle process exit
+    childProcess.on("close", (code) => {
+      clearTimeout(timeoutHandle);
+      const success = code === 0;
+      console.log(`[${videoPath}] Process exited with code: ${code}`);
+      resolve({ success, stdout, stderr });
+    });
+
+    // Handle process errors
+    childProcess.on("error", (error) => {
+      clearTimeout(timeoutHandle);
+      console.error(`[${videoPath}] Process error:`, error);
+      resolve({
+        success: false,
+        stdout,
+        stderr,
+        error: error.message,
+      });
+    });
+  });
 }
 
 /**
@@ -284,6 +194,14 @@ async function cropVideosInBackground(
     taskId
   );
 
+  // Get environment variables for Python CLI
+  const env = {
+    ...process.env,
+    RUNNINGHUB_API_KEY: process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY,
+    RUNNINGHUB_WORKFLOW_ID: process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID,
+    RUNNINGHUB_API_HOST: process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn",
+  };
+
   let successCount = 0;
   let failureCount = 0;
 
@@ -295,7 +213,7 @@ async function cropVideosInBackground(
         "info",
         taskId
       );
-      await updateTask(taskId, { currentImage: videoPath }); // Reuse currentImage field
+      await updateTask(taskId, { currentImage: videoPath });
 
       // Check if file exists
       try {
@@ -317,15 +235,17 @@ async function cropVideosInBackground(
         videoPath,
         cropConfig,
         outputSuffix,
-        timeout
+        timeout,
+        env
       );
 
       if (result.success) {
         successCount++;
-        const outputMsg = result.outputPath
-          ? `✓ Cropped: ${videoPath} → ${result.outputPath}`
-          : `✓ Cropped: ${videoPath}`;
-        await writeLog(outputMsg, "success", taskId);
+        await writeLog(
+          `✓ Cropped: ${videoPath}`,
+          "success",
+          taskId
+        );
         await updateTask(taskId, { completedCount: successCount });
       } else {
         failureCount++;

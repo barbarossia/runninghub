@@ -37,6 +37,7 @@ export interface FolderInfo {
   source?: string;
   images?: unknown[];
   videos?: unknown[];
+  folders?: unknown[];
 }
 
 interface FolderSelectorProps {

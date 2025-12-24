@@ -27,13 +27,14 @@ interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
   autoRefreshInterval?: number; // in ms, default 5000
   taskId?: string | null;
+  defaultVisible?: boolean; // Force console to be visible by default
 }
 
-export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId }: ConsoleViewerProps) {
+export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId, defaultVisible = false }: ConsoleViewerProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
-  const [isMinimized, setIsMinimized] = useState(() => !taskId); // Auto-expand if taskId exists
-  const [isVisible, setIsVisible] = useState(() => !!taskId);
+  const [isMinimized, setIsMinimized] = useState(() => !taskId && !defaultVisible); // Auto-expand if taskId exists or defaultVisible
+  const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
   const [lastLogTime, setLastLogTime] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -270,7 +271,7 @@ export function ConsoleViewer({ onRefresh, autoRefreshInterval = 5000, taskId }:
         className="flex-1 bg-black p-2 font-mono text-[10px] overflow-y-auto"
       >
         {logs.length === 0 ? (
-          <div className="text-gray-600 italic text-center mt-10">Waiting for logs...</div>
+          <div className="text-gray-600 italic text-center mt-10"></div>
         ) : (
           <div className="space-y-0.5">
             {[...logs].reverse().map((log, i) => (

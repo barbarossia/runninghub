@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { CropMode } from '@/types/crop';
 import { useCropStore } from '@/store/crop-store';
-import { validateCropConfig, buildCustomCropParams } from '@/lib/ffmpeg-crop';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -31,20 +30,6 @@ export function CropConfiguration({
   const customY = isCustomMode ? (cropConfig.customY || '0') : '0';
   const [outputSuffix, setLocalOutputSuffix] = useState<string>(cropConfig.outputSuffix || '_cropped');
 
-  // Validation error is derived from validation
-  const getValidationError = (): string => {
-    if (!isCustomMode) return '';
-    const config = {
-      x: parseFloat(customX) || 0,
-      y: parseFloat(customY) || 0,
-      width: parseFloat(customWidth) || 0,
-      height: parseFloat(customHeight) || 0,
-    };
-    const validation = validateCropConfig(config);
-    return validation.error || '';
-  };
-  const validationError = getValidationError();
-
   // Notify parent of config changes
   useEffect(() => {
     onConfigChange?.(cropConfig);
@@ -55,32 +40,23 @@ export function CropConfiguration({
     setCropMode(mode);
   };
 
-  // Handle custom dimension change with validation
+  // Handle custom dimension change
   const handleCustomDimensionChange = (field: 'width' | 'height' | 'x' | 'y', value: string) => {
-    let numericValue = parseFloat(value);
+    // Update custom dimensions directly without client-side validation
+    // Python CLI will handle validation
+    const params: {
+      width?: string;
+      height?: string;
+      x?: string;
+      y?: string;
+    } = {};
 
-    if (isNaN(numericValue)) {
-      numericValue = 0;
-    }
+    if (field === 'width') params.width = value || undefined;
+    if (field === 'height') params.height = value || undefined;
+    if (field === 'x') params.x = value || undefined;
+    if (field === 'y') params.y = value || undefined;
 
-    // Build new config with the updated value
-    const config = {
-      x: field === 'x' ? numericValue : (parseFloat(customX) || 0),
-      y: field === 'y' ? numericValue : (parseFloat(customY) || 0),
-      width: field === 'width' ? numericValue : (parseFloat(customWidth) || 0),
-      height: field === 'height' ? numericValue : (parseFloat(customHeight) || 0),
-    };
-
-    const validation = validateCropConfig(config);
-    if (validation.valid) {
-      const params = buildCustomCropParams({
-        customWidth: config.width || undefined,
-        customHeight: config.height || undefined,
-        customX: config.x || undefined,
-        customY: config.y || undefined,
-      });
-      setCustomDimensions(params);
-    }
+    setCustomDimensions(params);
   };
 
   // Handle output suffix change
@@ -230,10 +206,6 @@ export function CropConfiguration({
                 />
               </div>
             </div>
-
-            {validationError && (
-              <p className="text-xs text-red-400">{validationError}</p>
-            )}
 
             <p className="text-xs text-gray-500">
               Enter values as percentages (0-100). X + Width must be ≤ 100%, Y + Height must be ≤

@@ -70,7 +70,7 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
           } else if (itemStats.isFile()) {
             const extension = path.extname(item).toLowerCase();
             const supportedImageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
-            const supportedVideoExtensions = ['.webm', '.mkv', '.avi', '.mov', '.flv'];
+            const supportedVideoExtensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv'];
 
             if (supportedImageExtensions.includes(extension)) {
               contents.images.push({

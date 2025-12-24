@@ -777,6 +777,98 @@ def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
     print(f"{'=' * 60}")
 
 
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option(
+    "--mode",
+    type=click.Choice(['left', 'right', 'center', 'custom'],
+                      case_sensitive=False),
+    default='left',
+    help="Crop mode: left, right, center, or custom"
+)
+@click.option(
+    "--output-suffix",
+    default="_cropped",
+    help="Suffix for output file (default: _cropped)"
+)
+@click.option(
+    "--width",
+    help="Custom width (for custom mode, e.g., iw*0.5 for 50%)"
+)
+@click.option(
+    "--height",
+    help="Custom height (for custom mode, e.g., ih*0.5 for 50%)"
+)
+@click.option(
+    "--x",
+    help="Custom X position (for custom mode, e.g., iw*0.25 for 25%)"
+)
+@click.option(
+    "--y",
+    help="Custom Y position (for custom mode, e.g., ih*0.25 for 25%)"
+)
+@click.option(
+    "--preserve-audio",
+    is_flag=True,
+    help="Preserve audio track"
+)
+@click.option(
+    "--timeout",
+    default=3600,
+    help="Timeout in seconds (default: 3600)"
+)
+@click.pass_context
+def crop(ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audio, timeout):
+    """Crop a single video file using FFmpeg."""
+    from .video_utils import crop_video, check_ffmpeg_available
+
+    video_path = Path(file_path)
+
+    # Check FFmpeg availability
+    if not check_ffmpeg_available():
+        print_error("FFmpeg is not installed or not accessible.")
+        print_info("Install with: brew install ffmpeg (macOS)")
+        sys.exit(1)
+
+    # Validate custom mode parameters
+    if mode == 'custom':
+        if not all([width, height]):
+            print_error("Custom mode requires --width and --height")
+            sys.exit(1)
+
+    try:
+        print_info(f"Cropping: {video_path.name} (mode: {mode})")
+        print_info(f"Output: {video_path.stem}{output_suffix}{video_path.suffix}")
+
+        success, stdout, stderr = crop_video(
+            video_path,
+            mode=mode,
+            output_suffix=output_suffix,
+            width=width,
+            height=height,
+            x=x,
+            y=y,
+            preserve_audio=preserve_audio,
+            timeout=timeout
+        )
+
+        if success:
+            print_success(f"Successfully cropped: {video_path.name}")
+        else:
+            print_error(f"Failed to crop: {video_path.name}")
+            if stderr:
+                print(f"Error output: {stderr[-500:]}")  # Last 500 chars
+            sys.exit(1)
+
+    except TimeoutError as e:
+        print_error(f"Cropping timed out: {e}")
+        sys.exit(1)
+
+    except Exception as e:
+        print_error(f"Failed to crop: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the CLI."""
     cli()

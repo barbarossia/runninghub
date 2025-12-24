@@ -14,7 +14,7 @@ export const ENVIRONMENT_VARIABLES = {
 
 export const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
 
-export const SUPPORTED_VIDEO_EXTENSIONS = ['.webm', '.mkv', '.avi', '.mov', '.flv'];
+export const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv'];
 
 export const SUPPORTED_MEDIA_EXTENSIONS = [
   ...SUPPORTED_IMAGE_EXTENSIONS,

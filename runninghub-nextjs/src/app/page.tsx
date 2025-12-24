@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,18 @@ import { validateEnvironment } from '@/utils/validation';
 import { ENVIRONMENT_VARIABLES } from '@/constants';
 
 export default function Home() {
-  const [envValidation] = useState(() => validateEnvironment());
+  const [envValidation, setEnvValidation] = useState<{
+    isValid: boolean;
+    missing: string[];
+    warnings: string[];
+  } | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Run validation only after client-side hydration
+  useEffect(() => {
+    setMounted(true);
+    setEnvValidation(validateEnvironment());
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
@@ -65,6 +76,25 @@ export default function Home() {
                 <Badge variant="secondary">FFmpeg</Badge>
                 <Badge variant="secondary">Batch Conversion</Badge>
                 <Badge variant="secondary">MP4 Output</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-2xl">✂️</span>
+                Video Cropping
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">
+                Crop videos to specific regions using FFmpeg. Support for preset ratios and custom dimensions.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">FFmpeg</Badge>
+                <Badge variant="secondary">Custom Crop</Badge>
+                <Badge variant="secondary">Preset Ratios</Badge>
               </div>
             </CardContent>
           </Card>
@@ -137,7 +167,11 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {envValidation ? (
+            {!mounted ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : envValidation ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${envValidation.isValid ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -209,6 +243,11 @@ export default function Home() {
             <Link href="/videos">
               <Button variant="default" className="bg-purple-600 hover:bg-purple-700">
                 Video Conversion
+              </Button>
+            </Link>
+            <Link href="/videos/crop">
+              <Button variant="default" className="bg-green-600 hover:bg-green-700">
+                Video Cropping
               </Button>
             </Link>
             <Button variant="outline" disabled>
