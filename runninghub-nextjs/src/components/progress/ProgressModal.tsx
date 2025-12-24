@@ -2,14 +2,12 @@
 
 import React, { useCallback, useMemo, useEffect, useState } from 'react';
 import {
-  X,
   CheckCircle2,
   XCircle,
   Loader2,
   AlertCircle,
   ChevronDown,
   ChevronRight,
-  FileImage,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -22,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { useProgressStore, useImageStore } from '@/store';
+import { useProgressStore } from '@/store';
 import { useProgressTracking } from '@/hooks';
 import { toast } from 'sonner';
 import type { ProcessingTask } from '@/types';
@@ -41,7 +39,6 @@ export function ProgressModal({
   onTaskFail,
 }: ProgressModalProps) {
   const store = useProgressStore();
-  const imageStore = useImageStore();
 
   const {
     activeTask,

@@ -66,7 +66,7 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
     if (autoOpenModal && hasActiveTask && !store.isProgressModalOpen) {
       store.openProgressModal();
     }
-  }, [hasActiveTask, autoOpenModal, store.isProgressModalOpen]);
+  }, [hasActiveTask, autoOpenModal, store.isProgressModalOpen, store]);
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -75,6 +75,14 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
         clearInterval(pollingIntervalRef.current);
       }
     };
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    pollingTaskIdRef.current = null;
   }, []);
 
   const startTask = useCallback((task: ProcessingTask) => {
@@ -188,15 +196,7 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
         // Don't stop polling on network errors, just log them
       }
     }, pollInterval);
-  }, [pollInterval, completeTask, failTask, updateTaskProgress]);
-
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-    pollingTaskIdRef.current = null;
-  }, []);
+  }, [pollInterval, completeTask, failTask, updateTaskProgress, stopPolling]);
 
   return {
     tasks: store.tasks,

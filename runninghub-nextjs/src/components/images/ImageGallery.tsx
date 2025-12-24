@@ -8,13 +8,10 @@ import {
   List,
   Maximize2,
   Search,
-  Filter,
-  Check,
-  ChevronRight,
   FileImage,
   Heart,
 } from 'lucide-react';
-import { useImageStore, useSelectionStore } from '@/store';
+import { useImageStore } from '@/store';
 import { useImageSelection } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { SUPPORTED_IMAGE_EXTENSIONS, VIEW_MODES, API_ENDPOINTS } from '@/constants';
+import { API_ENDPOINTS } from '@/constants';
 import type { ImageFile, ViewMode } from '@/types';
 
 interface ImageGalleryProps {
@@ -50,7 +47,6 @@ export function ImageGallery({
 
   // Selection hook
   const {
-    selectedImages,
     selectedCount,
     isAllSelected,
     hasSelection,

@@ -5,7 +5,6 @@ import { Video, RefreshCw, Pencil, Crop, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useVideoSelectionStore, useVideoStore } from '@/store';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { API_ENDPOINTS } from '@/constants';
 import { RenameVideoDialog } from './RenameVideoDialog';
 import { VideoFile } from '@/types';
@@ -125,8 +124,6 @@ export function VideoSelectionToolbar({
     <>
       <BaseSelectionToolbar
         selectedCount={selectedCount}
-        isProcessing={isProcessing}
-        disabled={disabled}
         className={className}
         onDeselectAll={handleDeselectAll}
       >

@@ -4,10 +4,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   Trash2,
   Play,
-  Download,
-  Copy,
-  Move,
-  RefreshCw,
   Check,
   ChevronDown,
   Settings,
@@ -18,7 +14,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -32,7 +27,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useSelectionStore } from '@/store';
-import { KEYBOARD_SHORTCUTS } from '@/constants';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BaseSelectionToolbar } from './BaseSelectionToolbar';
@@ -40,10 +34,6 @@ import { BaseSelectionToolbar } from './BaseSelectionToolbar';
 interface SelectionToolbarProps {
   onProcess?: (selectedPaths: string[]) => void;
   onDelete?: (selectedPaths: string[]) => void;
-  onDownload?: (selectedPaths: string[]) => void;
-  onMove?: (selectedPaths: string[]) => void;
-  onCopy?: (selectedPaths: string[]) => void;
-  onRefresh?: () => void;
   nodes?: Array<{ id: string; name: string }>;
   selectedNode?: string;
   onNodeChange?: (nodeId: string) => void;
@@ -54,10 +44,6 @@ interface SelectionToolbarProps {
 export function SelectionToolbar({
   onProcess,
   onDelete,
-  onDownload,
-  onMove,
-  onCopy,
-  onRefresh,
   nodes = [],
   selectedNode,
   onNodeChange,
@@ -103,24 +89,6 @@ export function SelectionToolbar({
     }
   }, [onDelete, selectedPaths, selectedCount, store]);
 
-  // Handle download
-  const handleDownload = useCallback(() => {
-    if (!onDownload) return;
-    onDownload(selectedPaths);
-  }, [onDownload, selectedPaths]);
-
-  // Handle move
-  const handleMove = useCallback(() => {
-    if (!onMove) return;
-    onMove(selectedPaths);
-  }, [onMove, selectedPaths]);
-
-  // Handle copy
-  const handleCopy = useCallback(() => {
-    if (!onCopy) return;
-    onCopy(selectedPaths);
-  }, [onCopy, selectedPaths]);
-
   // Handle node change
   const handleNodeChange = useCallback(
     (nodeId: string) => {
@@ -140,8 +108,6 @@ export function SelectionToolbar({
     <>
       <BaseSelectionToolbar
         selectedCount={selectedCount}
-        isProcessing={isProcessing}
-        disabled={disabled}
         className={className}
         onDeselectAll={handleDeselectAll}
       >

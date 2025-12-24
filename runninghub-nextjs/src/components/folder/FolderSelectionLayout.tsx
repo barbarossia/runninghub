@@ -3,8 +3,6 @@
 import { ReactNode } from 'react';
 import { LucideIcon } from 'lucide-react';
 import FolderSelector, { FolderInfo as FolderSelectorFolderInfo } from '@/components/folder/FolderSelector';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 
 interface FolderSelectionLayoutProps {
   title: string;
@@ -15,7 +13,6 @@ interface FolderSelectionLayoutProps {
   onFolderSelected: (folderInfo: FolderSelectorFolderInfo) => void;
   onError?: (error: string) => void;
   features?: ReactNode;
-  backToSelectionButton?: ReactNode;
 }
 
 export function FolderSelectionLayout({
@@ -27,7 +24,6 @@ export function FolderSelectionLayout({
   onFolderSelected,
   onError,
   features,
-  backToSelectionButton,
 }: FolderSelectionLayoutProps) {
   return (
     <div className="space-y-8">

@@ -15,9 +15,8 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
-  X,
 } from 'lucide-react';
-import { useVideoStore, useVideoSelectionStore } from '@/store';
+import { useVideoStore } from '@/store';
 import { useVideoSelection } from '@/hooks/useVideoSelection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,10 +40,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { SUPPORTED_VIDEO_EXTENSIONS, VIEW_MODES, API_ENDPOINTS } from '@/constants';
 import type { VideoFile } from '@/types';
 import { VideoPlayerModal } from './VideoPlayerModal';
-import { toast } from 'sonner';
 
 interface VideoGalleryProps {
   videos?: VideoFile[];
@@ -74,7 +71,6 @@ export function VideoGallery({
 
   // Selection hook
   const {
-    selectedVideos,
     selectedCount,
     isAllSelected,
     hasSelection,

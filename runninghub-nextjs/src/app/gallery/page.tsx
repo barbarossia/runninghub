@@ -22,12 +22,11 @@ import {
   Home,
   Images,
   ArrowLeft,
-  Info,
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { useFileSystem, useImageSelection } from '@/hooks';
+import { useFileSystem } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
 import type { ImageFile } from '@/types';
 
@@ -43,12 +42,10 @@ export default function GalleryPage() {
   const [selectedNode, setSelectedNode] = useState<string>(
     ENVIRONMENT_VARIABLES.DEFAULT_NODE_ID
   );
-  const [isLoadingNodes, setIsLoadingNodes] = useState(false);
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
 
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
-  const { selectedCount } = useImageSelection();
 
   // Use folder selection hook with error handling
   const { handleFolderSelected } = useFolderSelection({
@@ -71,7 +68,6 @@ export default function GalleryPage() {
   }, [selectedFolder, loadFolderContents]);
 
   const loadNodes = async () => {
-    setIsLoadingNodes(true);
     try {
       const response = await fetch(API_ENDPOINTS.NODES);
       const data = await response.json();
@@ -82,8 +78,6 @@ export default function GalleryPage() {
     } catch (err) {
       console.error('Failed to load nodes:', err);
       toast.error('Failed to load available nodes');
-    } finally {
-      setIsLoadingNodes(false);
     }
   };
 

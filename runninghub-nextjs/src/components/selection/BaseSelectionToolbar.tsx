@@ -2,26 +2,22 @@
 
 import React, { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export interface BaseToolbarProps {
   selectedCount: number;
-  isProcessing?: boolean;
-  disabled?: boolean;
   className?: string;
   badgeColor?: string;
   badgeText?: string;
-  children: (mode: 'expanded' | 'floating') => ReactNode;
+  children: (mode: 'expanded' | 'floating' | 'expanded-actions') => ReactNode;
   onDeselectAll: () => void;
 }
 
 export function BaseSelectionToolbar({
   selectedCount,
-  isProcessing = false,
-  disabled = false,
   className = '',
   badgeColor = 'bg-blue-600',
   badgeText = undefined,
@@ -30,8 +26,6 @@ export function BaseSelectionToolbar({
 }: BaseToolbarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const hasSelection = selectedCount > 0;
-
-  const toolbarDisabled = disabled || !hasSelection || isProcessing;
 
   return (
     <AnimatePresence mode="wait">

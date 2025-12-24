@@ -28,6 +28,7 @@ import {
 } from '@/utils/filesystem-api';
 import { apiRequest } from '@/utils/api';
 import { useFolderStore } from '@/store';
+import type { ImageFile, VideoFile } from '@/types';
 
 export interface FolderInfo {
   name: string;
@@ -35,9 +36,9 @@ export interface FolderInfo {
   session_id?: string;
   is_virtual?: boolean;
   source?: string;
-  images?: unknown[];
-  videos?: unknown[];
-  folders?: unknown[];
+  images?: ImageFile[];
+  videos?: VideoFile[];
+  folders?: { name: string; path: string; is_virtual?: boolean }[];
 }
 
 interface FolderSelectorProps {
@@ -136,6 +137,7 @@ export default function FolderSelector({
           path: response.virtual_path || response.actual_path || '',
           images,
           videos,
+          folders,
           source: 'filesystem_api',
           session_id: response.session_id,
           is_virtual: !!response.virtual_path,

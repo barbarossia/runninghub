@@ -269,8 +269,7 @@ export interface ProcessableFormatResult {
 }
 
 export function convertToProcessableFormat(
-  entries: DirectoryEntry[],
-  _basePath: string = ''
+  entries: DirectoryEntry[]
 ): ProcessableFormatResult {
   const images: ProcessableImage[] = [];
   const videos: ProcessableVideo[] = [];
