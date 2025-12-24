@@ -59,6 +59,11 @@ export default function GalleryPage() {
       if (taskId === activeConsoleTaskId) {
         handleRefresh(true);
       }
+    },
+    onTaskProgress: (taskId) => {
+      if (taskId === activeConsoleTaskId) {
+        handleRefresh(true);
+      }
     }
   });
 

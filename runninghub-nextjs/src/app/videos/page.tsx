@@ -50,6 +50,11 @@ export default function VideosPage() {
       if (taskId === currentTaskId) {
         handleRefresh(true);
       }
+    },
+    onTaskProgress: (taskId) => {
+      if (taskId === currentTaskId) {
+        handleRefresh(true);
+      }
     }
   });
 
