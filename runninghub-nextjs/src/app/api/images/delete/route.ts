@@ -6,7 +6,7 @@ interface DeleteRequest {
   images: string[];
 }
 
-export async function POST(request: NextRequest) {
+export async function DELETE(request: NextRequest) {
   try {
     const data: DeleteRequest = await request.json();
     const { images } = data;
