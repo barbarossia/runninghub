@@ -73,6 +73,16 @@ class Config:
         # Expand ~ to user home and resolve to absolute path
         return Path(prefix_path).expanduser().resolve()
 
+    @property
+    def node_mapping(self) -> dict:
+        """Get the node ID to human-readable name mapping."""
+        mapping_str = os.getenv("RUNNINGHUB_NODE_MAPPING", "{}")
+        try:
+            import json
+            return json.loads(mapping_str)
+        except Exception:
+            return {}
+
     def validate(self) -> bool:
         """Validate that required configuration is present.
 

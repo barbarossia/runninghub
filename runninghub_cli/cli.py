@@ -38,6 +38,21 @@ def cli(ctx, env_file):
         sys.exit(1)
 
 
+def resolve_node_id(node_id_or_alias: str, mapping: dict) -> str:
+    """Resolve a node ID or alias to a node ID."""
+    # First check if it's already a node ID (key in mapping)
+    if node_id_or_alias in mapping:
+        return node_id_or_alias
+    
+    # Check if it's an alias (value in mapping)
+    for node_id, alias in mapping.items():
+        if alias.lower() == node_id_or_alias.lower():
+            return node_id
+            
+    # Return as is if not found
+    return node_id_or_alias
+
+
 @cli.command()
 @click.pass_context
 def config(ctx):
@@ -50,6 +65,11 @@ def config(ctx):
     print(f"  API Key: {'*' * len(cfg.api_key)} (hidden)")
     print(f"  Download Directory: {cfg.download_dir}")
     print(f"  Image Folder: {cfg.image_folder}")
+    
+    if cfg.node_mapping:
+        print_info("Node Mapping:")
+        for node_id, alias in cfg.node_mapping.items():
+            print(f"  {node_id}: {alias}")
 
 
 @cli.command()
@@ -254,13 +274,16 @@ def process(
         file_id = client.upload_file(file_path)
         print_success(f"File uploaded successfully! File ID: {file_id}")
 
+        # Resolve main node ID
+        resolved_node = resolve_node_id(node, cfg.node_mapping)
+
         # Step 2: Submit task
-        print_info(f"Submitting task to node: {node}")
+        print_info(f"Submitting task to node: {resolved_node}")
 
         # Start with the main image node
         node_config_list = [
             {
-                "nodeId": node,
+                "nodeId": resolved_node,
                 "fieldName": "image",
                 "fieldValue": file_id,
                 "description": "image",
@@ -275,7 +298,11 @@ def process(
                 if len(parts) != 3:
                     raise ValueError("Format must be nodeId:fieldName:value")
 
-                p_node_id, p_field_name, p_value = parts
+                p_node_id_or_alias, p_field_name, p_value = parts
+                
+                # Resolve node ID if it's an alias
+                p_node_id = resolve_node_id(p_node_id_or_alias, cfg.node_mapping)
+                
                 node_config_list.append(
                     {
                         "nodeId": p_node_id,
@@ -429,9 +456,13 @@ def batch(
             parts = p.split(":", 2)
             if len(parts) != 3:
                 raise ValueError("Format must be nodeId:fieldName:value")
+            
+            p_node_id_or_alias = parts[0]
+            p_node_id = resolve_node_id(p_node_id_or_alias, cfg.node_mapping)
+            
             extra_params.append(
                 {
-                    "nodeId": parts[0],
+                    "nodeId": p_node_id,
                     "fieldName": parts[1],
                     "fieldValue": parts[2],
                     "description": parts[1],
@@ -439,6 +470,9 @@ def batch(
             )
         except ValueError as e:
             print_warning(f"Skipping invalid parameter '{p}': {e}")
+
+    # Resolve main node ID
+    resolved_main_node = resolve_node_id(node, cfg.node_mapping)
 
     for i, file_path in enumerate(files_to_process, 1):
         print(f"\n{'=' * 60}")
@@ -452,12 +486,12 @@ def batch(
             print_success(f"File uploaded successfully! File ID: {file_id}")
 
             # Step 2: Submit task
-            print_info(f"Submitting task to node: {node}")
+            print_info(f"Submitting task to node: {resolved_main_node}")
             
             # Construct node config list
             node_config_list = [
                 {
-                    "nodeId": node,
+                    "nodeId": resolved_main_node,
                     "fieldName": "image",
                     "fieldValue": file_id,
                     "description": "image",
