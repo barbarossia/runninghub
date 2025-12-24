@@ -104,6 +104,25 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
+                <span className="text-2xl">📸</span>
+                Video Clipping
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">
+                Extract frames from videos as images. Supports multiple extraction modes and high-quality output.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">Python</Badge>
+                <Badge variant="secondary">Batch Extract</Badge>
+                <Badge variant="secondary">Multi-mode</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                 <span className="text-2xl">🚀</span>
                 AI Processing
               </CardTitle>
@@ -250,6 +269,11 @@ export default function Home() {
             <Link href="/videos/crop">
               <Button variant="default" className="bg-green-600 hover:bg-green-700">
                 Video Cropping
+              </Button>
+            </Link>
+            <Link href="/videos/clip">
+              <Button variant="default" className="bg-orange-600 hover:bg-orange-700">
+                Video Clipping
               </Button>
             </Link>
             <Button variant="outline" disabled>

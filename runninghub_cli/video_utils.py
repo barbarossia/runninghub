@@ -2,6 +2,8 @@
 
 import os
 import subprocess
+import tempfile
+import yaml
 from pathlib import Path
 from typing import Tuple, Optional
 
@@ -10,6 +12,115 @@ from .utils import print_info, print_error, print_success
 # Supported video formats for conversion
 SUPPORTED_VIDEO_FORMATS = ['.webm', '.mkv', '.avi', '.mov', '.flv']
 TARGET_FORMAT = '.mp4'
+
+
+def clip_video(
+    input_path: Path,
+    clip_config: dict,
+    output_dir: Path,
+    timeout: int = 3600
+) -> Tuple[bool, str, str]:
+    """Extract frames from a video file using the video-clip tool.
+
+    Args:
+        input_path: Path to the input video file.
+        clip_config: Dictionary containing extraction settings.
+        output_dir: Path where extracted frames should be saved.
+        timeout: Processing timeout in seconds (default: 3600 = 1 hour).
+
+    Returns:
+        Tuple of (success: bool, stdout: str, stderr: str).
+    """
+    if not input_path.exists():
+        return False, "", f"Input file does not exist: {input_path}"
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use a temporary directory for isolation
+    with tempfile.TemporaryDirectory(prefix="clip_isolation_") as temp_dir:
+        isolation_path = Path(temp_dir)
+        video_temp_path = isolation_path / input_path.name
+        
+        # Create symlink to the original video
+        try:
+            os.symlink(input_path, video_temp_path)
+        except Exception as e:
+            # Fallback to copy if symlink fails
+            import shutil
+            shutil.copy2(input_path, video_temp_path)
+        
+        # Prepare configuration data
+        config_data = {
+            'paths': {
+                'video_input_dir': str(isolation_path),
+                'image_output_dir': str(output_dir),
+                'processed_video_dir': str(isolation_path / "processed")
+            },
+            'video': {
+                'supported_formats': [input_path.suffix.lstrip('.').lower()]
+            },
+            'image': {
+                'format': clip_config.get('imageFormat', 'png'),
+                'quality': clip_config.get('quality', 95),
+                'filename_pattern': '{filename}_{index:03d}'
+            },
+            'processing': {
+                'delete_original': clip_config.get('deleteOriginal', False),
+                'verbose': True,
+                'max_videos': 1
+            },
+            'extraction': {
+                'mode': clip_config.get('mode', 'last_frame'),
+                'frame_count': clip_config.get('frameCount', 5),
+                'interval_seconds': clip_config.get('intervalSeconds', 10),
+                'interval_frames': clip_config.get('intervalFrames', 1),
+                'organize_by_video': clip_config.get('organizeByVideo', True)
+            }
+        }
+        
+        config_path = isolation_path / "config.yml"
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(config_data, f)
+            
+        # Build command to run the video-clip tool
+        cmd = [
+            "python3", "-m", "video_clip.cli",
+            "-c", str(config_path),
+            "--verbose"
+        ]
+        
+        # Set up environment with PYTHONPATH to find the video_clip package
+        env = os.environ.copy()
+        # Assume video-clip project is located at the specified path
+        video_clip_root = "/Users/barbarossia/ai_coding/video-clip"
+        env["PYTHONPATH"] = f"{env.get('PYTHONPATH', '')}:{video_clip_root}"
+        
+        print_info(f"Clipping: {input_path.name} (mode: {config_data['extraction']['mode']})")
+        print(f"Output directory: {output_dir}")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=timeout
+            )
+            
+            if result.returncode == 0:
+                print_success(f"Successfully clipped: {input_path.name}")
+            else:
+                print_error(f"Failed to clip: {input_path.name}")
+                
+            return result.returncode == 0, result.stdout, result.stderr
+            
+        except subprocess.TimeoutExpired:
+            print_error(f"Clipping timed out: {input_path.name}")
+            return False, "", f"Clipping timed out after {timeout} seconds"
+        except Exception as e:
+            print_error(f"Error during clipping: {str(e)}")
+            return False, "", str(e)
 
 
 def build_crop_filter(mode: str, width: Optional[str] = None, height: Optional[str] = None,

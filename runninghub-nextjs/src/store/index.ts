@@ -5,3 +5,4 @@ export { useProgressStore } from './progress-store';
 export { useVideoStore } from './video-store';
 export { useVideoSelectionStore } from './video-selection-store';
 export { useCropStore } from './crop-store';
+export * from './video-clip-store';

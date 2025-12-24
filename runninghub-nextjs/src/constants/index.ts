@@ -4,6 +4,7 @@ export const ENVIRONMENT_VARIABLES = {
   API_HOST: process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || 'www.runninghub.cn',
   DOWNLOAD_DIR: process.env.RUNNINGHUB_DOWNLOAD_DIR || '~/Downloads',
   IMAGE_FOLDER: process.env.RUNNINGHUB_IMAGE_FOLDER || '.',
+  CLIP_OUTPUT_FOLDER: process.env.RUNNINGHUB_CLIP_OUTPUT_FOLDER || 'clipped_images',
   PREFIX_PATH: process.env.RUNNINGHUB_PREFIX_PATH || '~',
   PYTHON_CLI_PATH: process.env.PYTHON_CLI_PATH || '../',
   DEFAULT_TIMEOUT: parseInt(process.env.DEFAULT_TIMEOUT || '600'),
@@ -62,6 +63,7 @@ export const API_ENDPOINTS = {
   VIDEOS_RENAME: '/api/videos/rename',
   VIDEOS_DELETE: '/api/videos/delete',
   VIDEOS_CROP: '/api/videos/crop',
+  VIDEOS_CLIP: '/api/videos/clip',
 
   // Tasks
   NODES: '/api/nodes',
@@ -75,11 +77,14 @@ export const ERROR_MESSAGES = {
   NO_IMAGES_SELECTED: 'No images selected for processing',
   NO_VIDEOS_SELECTED: 'No videos selected for conversion',
   NO_VIDEOS_SELECTED_FOR_CROP: 'No videos selected for cropping',
+  NO_VIDEOS_SELECTED_FOR_CLIP: 'No videos selected for clipping',
   CONFIG_NOT_INITIALIZED: 'Failed to initialize configuration',
   PROCESSING_FAILED: 'Failed to start image processing',
   CONVERSION_FAILED: 'Failed to start video conversion',
   CROP_FAILED: 'Failed to start video cropping',
+  CLIP_FAILED: 'Failed to start video clipping',
   INVALID_CROP_CONFIG: 'Invalid crop configuration',
+  INVALID_CLIP_CONFIG: 'Invalid clip configuration',
   FILE_NOT_FOUND: 'File not found',
   INVALID_FILE_TYPE: 'Invalid file type',
   FILE_TOO_LARGE: 'File size exceeds limit',
@@ -94,6 +99,7 @@ export const SUCCESS_MESSAGES = {
   IMAGES_DELETED: 'Images deleted successfully',
   VIDEOS_CONVERTED: 'Videos converted successfully',
   VIDEOS_CROPPED: 'Videos cropped successfully',
+  VIDEOS_CLIPPED: 'Videos clipped successfully',
   SESSION_CLEARED: 'Session cleared successfully',
 } as const;
 
@@ -101,6 +107,7 @@ export const LOADING_MESSAGES = {
   PROCESSING_IMAGES: 'Processing images...',
   CONVERTING_VIDEOS: 'Converting videos...',
   CROPPING_VIDEOS: 'Cropping videos...',
+  CLIPPING_VIDEOS: 'Clipping videos...',
   LOADING_FOLDER: 'Loading folder contents...',
   DELETING_IMAGES: 'Deleting images...',
   FETCHING_NODES: 'Fetching available nodes...',
@@ -119,4 +126,23 @@ export const DEFAULT_CROP_CONFIG = {
   mode: 'left',
   outputSuffix: '_cropped',
   preserveAudio: false,
+} as const;
+
+export const CLIP_MODES = {
+  LAST_FRAME: 'last_frame',
+  FIRST_FRAME: 'first_frame',
+  LAST_FRAMES: 'last_frames',
+  INTERVAL: 'interval',
+  FRAME_INTERVAL: 'frame_interval',
+} as const;
+
+export const DEFAULT_CLIP_CONFIG = {
+  mode: CLIP_MODES.LAST_FRAME,
+  imageFormat: 'png',
+  quality: 95,
+  frameCount: 10,
+  intervalSeconds: 10,
+  intervalFrames: 1,
+  organizeByVideo: true,
+  deleteOriginal: false,
 } as const;
