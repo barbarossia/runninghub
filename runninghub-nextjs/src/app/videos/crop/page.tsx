@@ -74,7 +74,13 @@ export default function VideoCropPage() {
   const handleCropVideos = async (selectedPaths: string[]) => {
     try {
       // Build crop config for API
-      const crop_config = {
+      const crop_config: {
+        mode: string;
+        width?: string;
+        height?: string;
+        x?: string;
+        y?: string;
+      } = {
         mode: cropConfig.mode,
       };
 
@@ -135,6 +141,61 @@ export default function VideoCropPage() {
     clearFolder();
     setVideos([]);
     deselectAll();
+  };
+
+  const handleRenameVideo = async (video: VideoFile, newName: string) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_RENAME, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_path: video.path,
+          new_name: newName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Renamed to ${data.new_name}`);
+        // Refresh folder contents after renaming
+        if (selectedFolder && !selectedFolder.is_virtual) {
+          await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+        }
+      } else {
+        toast.error(data.error || ERROR_MESSAGES.UNKNOWN_ERROR);
+      }
+    } catch (error) {
+      console.error('Error renaming video:', error);
+      toast.error(ERROR_MESSAGES.UNKNOWN_ERROR);
+    }
+  };
+
+  const handleDeleteVideo = async (video: VideoFile) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_DELETE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: [video.path],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Deleted ${video.name}`);
+        // Refresh folder contents after deleting
+        if (selectedFolder && !selectedFolder.is_virtual) {
+          await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+        }
+      } else {
+        toast.error(data.error || ERROR_MESSAGES.UNKNOWN_ERROR);
+      }
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      toast.error(ERROR_MESSAGES.UNKNOWN_ERROR);
+    }
   };
 
   return (
@@ -199,6 +260,8 @@ export default function VideoCropPage() {
               videos={filteredVideos}
               isLoading={isLoadingFolder}
               onRefresh={handleRefresh}
+              onRename={handleRenameVideo}
+              onDelete={handleDeleteVideo}
             />
           </div>
         )}

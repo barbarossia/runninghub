@@ -52,7 +52,7 @@ export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSele
           current_path: folderInfo.path,
           parent_path: undefined,
           images: folderInfo.images as ImageFile[],
-          folders: (folderInfo.folders || []).map((f) => ({ ...f, type: 'folder' as const })),
+          folders: (folderInfo.folders || []).map((f: any) => ({ ...f, type: 'folder' as const })),
           videos: [],
           is_direct_access: true,
         });

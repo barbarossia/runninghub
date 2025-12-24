@@ -58,6 +58,7 @@ export const API_ENDPOINTS = {
   VIDEOS_CONVERT: '/api/videos/convert',
   VIDEOS_SERVE: '/api/videos/serve',
   VIDEOS_RENAME: '/api/videos/rename',
+  VIDEOS_DELETE: '/api/videos/delete',
   VIDEOS_CROP: '/api/videos/crop',
 
   // Tasks
