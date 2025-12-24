@@ -1,0 +1,786 @@
+"""Command-line interface for RunningHub API."""
+
+import json
+import sys
+from pathlib import Path
+from typing import List, Optional
+
+import click
+from colorama import Fore, Style
+
+from .client import RunningHubClient
+from .config import Config
+from .utils import (
+    format_json,
+    format_node_list,
+    format_task_status,
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
+
+
+@click.group()
+@click.option("--env-file", default=".env", help="Path to .env file")
+@click.pass_context
+def cli(ctx, env_file):
+    """RunningHub CLI - A command-line interface for RunningHub API."""
+    ctx.ensure_object(dict)
+
+    try:
+        config = Config(env_file)
+        config.validate()
+        ctx.obj["config"] = config
+    except ValueError as e:
+        print_error(f"Configuration error: {e}")
+        print_info("Please check your .env file or environment variables.")
+        sys.exit(1)
+
+
+@cli.command()
+@click.pass_context
+def config(ctx):
+    """Show current configuration."""
+    cfg = ctx.obj["config"]
+
+    print_info("Current Configuration:")
+    print(f"  API Host: {cfg.api_host}")
+    print(f"  Workflow ID: {cfg.workflow_id}")
+    print(f"  API Key: {'*' * len(cfg.api_key)} (hidden)")
+    print(f"  Download Directory: {cfg.download_dir}")
+    print(f"  Image Folder: {cfg.image_folder}")
+
+
+@cli.command()
+@click.pass_context
+def nodes(ctx):
+    """List available nodes for the workflow."""
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    try:
+        print_info(f"Fetching nodes for workflow: {cfg.workflow_id}")
+        nodes = client.get_node_info(cfg.workflow_id)
+
+        if nodes:
+            print_success(f"Found {len(nodes)} nodes:")
+            print(format_node_list(nodes))
+        else:
+            print_warning("No nodes found for this workflow.")
+
+    except Exception as e:
+        print_error(f"Failed to fetch nodes: {e}")
+
+
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.pass_context
+def upload(ctx, file_path):
+    """Upload a file to RunningHub."""
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    try:
+        file_id = client.upload_file(file_path)
+        print_success(f"File uploaded successfully!")
+        print(f"File ID: {file_id}")
+        print(f"File path: {file_path}")
+
+    except Exception as e:
+        print_error(f"Failed to upload file: {e}")
+
+
+@cli.command()
+@click.option("--node", required=True, help="Node ID to use")
+@click.option("--input", "input_value", required=True, help="Input value for the node")
+@click.option(
+    "--type",
+    "input_type",
+    default="STRING",
+    type=click.Choice(["STRING", "IMAGE", "LIST"]),
+    help="Input type (default: STRING)",
+)
+@click.pass_context
+def run(ctx, node, input_value, input_type):
+    """Submit a task to RunningHub."""
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    try:
+        # Prepare node configuration using RunningHub API format
+        # Based on API response: nodeId, fieldName, fieldValue
+        node_config = {
+            "nodeId": node,
+            "fieldName": "image" if input_type == "IMAGE" else "input",
+            "fieldValue": input_value,
+            "description": "image" if input_type == "IMAGE" else "input",
+        }
+
+        print_info(f"Submitting task to node: {node}")
+        task_id = client.submit_task(cfg.workflow_id, [node_config])
+
+        print_success(f"Task submitted successfully!")
+        print(f"Task ID: {task_id}")
+        print_info("Use 'runninghub status <task_id>' to check progress.")
+
+    except Exception as e:
+        print_error(f"Failed to submit task: {e}")
+
+
+@cli.command()
+@click.argument("task_id")
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
+@click.pass_context
+def status(ctx, task_id, output_json):
+    """Check the status of a task."""
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    try:
+        status_data = client.get_task_status(task_id)
+
+        if output_json:
+            print(format_json(status_data))
+        else:
+            print_info(f"Task Status: {task_id}")
+            print(format_task_status(status_data))
+
+    except Exception as e:
+        print_error(f"Failed to get task status: {e}")
+
+
+@cli.command()
+@click.argument("task_id")
+@click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
+@click.option(
+    "--poll-interval", default=5, help="Poll interval in seconds (default: 5)"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
+@click.option(
+    "--no-download", is_flag=True, help="Skip automatic download of output files"
+)
+@click.pass_context
+def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
+    """Wait for a task to complete."""
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    try:
+        print_info(f"Waiting for task completion: {task_id}")
+        final_status = client.wait_for_completion(
+            task_id, poll_interval=poll_interval, timeout=timeout
+        )
+
+        print_success("Task completed!")
+
+        if output_json:
+            print(format_json(final_status))
+        else:
+            print(format_task_status(final_status))
+
+            # Display results if available
+            data = final_status.get("data", {})
+            if data:
+                print("\nResults:")
+                if isinstance(data, list):
+                    for i, item in enumerate(data):
+                        print(f"  File {i + 1}:")
+                        for key, value in item.items():
+                            print(f"    {key}: {value}")
+                else:
+                    for key, value in data.items():
+                        if key != "taskId":
+                            print(f"  {key}: {value}")
+
+        # Auto-download output files unless disabled
+        downloaded_files = []
+        if not no_download and not output_json and final_status.get("code") == 0:
+            print_info(f"\nDownloading output files to: {cfg.download_dir}")
+            try:
+                downloaded_files = client.download_task_outputs(
+                    final_status, cfg.download_dir
+                )
+                if downloaded_files:
+                    print_success(f"Downloaded {len(downloaded_files)} files:")
+                    for file_path in downloaded_files:
+                        print(f"  {file_path}")
+                else:
+                    print_warning("No output files found to download")
+            except Exception as e:
+                print_error(f"Failed to download files: {e}")
+
+    except TimeoutError as e:
+        print_error(f"Timeout waiting for task: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Failed while waiting for task: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--node", required=True, help="Node ID to use")
+@click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
+@click.option(
+    "--no-download", is_flag=True, help="Skip automatic download of output files"
+)
+@click.option(
+    "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
+)
+@click.pass_context
+def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup):
+    """Upload a file and process it in one command."""
+    source_file_path = file_path
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    try:
+        # Step 1: Upload file
+        print_info(f"Uploading file: {file_path}")
+        file_id = client.upload_file(file_path)
+        print_success(f"File uploaded successfully! File ID: {file_id}")
+
+        # Step 2: Submit task
+        print_info(f"Submitting task to node: {node}")
+        node_config = {
+            "nodeId": node,
+            "fieldName": "image",
+            "fieldValue": file_id,
+            "description": "image",
+        }
+
+        task_id = client.submit_task(cfg.workflow_id, [node_config])
+        print_success(f"Task submitted successfully! Task ID: {task_id}")
+
+        # Step 3: Wait for completion
+        print_info("Waiting for task completion...")
+        final_status = client.wait_for_completion(task_id, timeout=timeout)
+
+        print_success("Processing completed!")
+
+        if output_json:
+            print(format_json(final_status))
+        else:
+            print(format_task_status(final_status))
+
+            # Display results if available
+            data = final_status.get("data", {})
+            if data:
+                print("\nResults:")
+                if isinstance(data, list):
+                    for i, item in enumerate(data):
+                        print(f"  File {i + 1}:")
+                        for key, value in item.items():
+                            print(f"    {key}: {value}")
+                else:
+                    for key, value in data.items():
+                        if key != "taskId":
+                            print(f"  {key}: {value}")
+
+        # Auto-download output files unless disabled
+        downloaded_files = []
+        if not no_download and not output_json and final_status.get("code") == 0:
+            print_info(f"\nDownloading output files to: {cfg.download_dir}")
+            try:
+                downloaded_files = client.download_task_outputs(
+                    final_status, cfg.download_dir, input_filename=Path(file_path).stem
+                )
+                if downloaded_files:
+                    print_success(f"Downloaded {len(downloaded_files)} files:")
+                    for file_path in downloaded_files:
+                        print(f"  {file_path}")
+                else:
+                    print_warning("No output files found to download")
+            except Exception as e:
+                print_error(f"Failed to download files: {e}")
+
+        # Auto-cleanup source file unless disabled and download was successful
+        if not no_cleanup and downloaded_files and final_status.get("code") == 0:
+            try:
+                source_path = Path(source_file_path)
+                if source_path.exists():
+                    source_path.unlink()
+                    print_success(f"Deleted source file: {source_path}")
+                else:
+                    print_warning(f"Source file not found for cleanup: {source_path}")
+            except Exception as e:
+                print_error(f"Failed to delete source file: {e}")
+
+    except Exception as e:
+        print_error(f"Failed to process file: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument(
+    "input_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True)
+)
+@click.option("--node", required=True, help="Node ID to use")
+@click.option(
+    "--pattern",
+    default="*",
+    help="File pattern to match (default: * processes all files)",
+)
+@click.option(
+    "--timeout", default=600, help="Timeout per file in seconds (default: 600)"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
+@click.option(
+    "--no-download", is_flag=True, help="Skip automatic download of output files"
+)
+@click.option(
+    "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
+)
+@click.option(
+    "--max-concurrent", default=1, help="Maximum concurrent processes (default: 1)"
+)
+@click.pass_context
+def batch(
+    ctx,
+    input_dir,
+    node,
+    pattern,
+    timeout,
+    output_json,
+    no_download,
+    no_cleanup,
+    max_concurrent,
+):
+    """Batch process all files in a directory."""
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    input_path = Path(input_dir)
+
+    # Find all matching files
+    files_to_process = []
+    for file_path in input_path.glob(pattern):
+        if file_path.is_file():
+            files_to_process.append(file_path)
+
+    if not files_to_process:
+        print_warning(f"No files found matching pattern '{pattern}' in {input_dir}")
+        return
+
+    print_info(f"Found {len(files_to_process)} files to process:")
+    for file_path in files_to_process:
+        print(f"  {file_path.name}")
+
+    # Process files sequentially for now (can be enhanced for concurrent processing later)
+    successful_count = 0
+    failed_count = 0
+
+    for i, file_path in enumerate(files_to_process, 1):
+        print(f"\n{'=' * 60}")
+        print_info(f"Processing file {i}/{len(files_to_process)}: {file_path.name}")
+        print(f"{'=' * 60}")
+
+        try:
+            # Step 1: Upload file
+            print_info(f"Uploading file: {file_path}")
+            file_id = client.upload_file(str(file_path))
+            print_success(f"File uploaded successfully! File ID: {file_id}")
+
+            # Step 2: Submit task
+            print_info(f"Submitting task to node: {node}")
+            node_config = {
+                "nodeId": node,
+                "fieldName": "image",
+                "fieldValue": file_id,
+                "description": "image",
+            }
+
+            task_id = client.submit_task(cfg.workflow_id, [node_config])
+            print_success(f"Task submitted successfully! Task ID: {task_id}")
+
+            # Step 3: Wait for completion
+            print_info("Waiting for task completion...")
+            final_status = client.wait_for_completion(task_id, timeout=timeout)
+
+            print_success("Processing completed!")
+
+            if not output_json:
+                print(format_task_status(final_status))
+
+            # Display results if available
+            data = final_status.get("data", {})
+            if data and not output_json:
+                print("\nResults:")
+                if isinstance(data, list):
+                    for j, item in enumerate(data):
+                        print(f"  File {j + 1}:")
+                        for key, value in item.items():
+                            print(f"    {key}: {value}")
+                else:
+                    for key, value in data.items():
+                        if key != "taskId":
+                            print(f"  {key}: {value}")
+
+            # Auto-download output files unless disabled
+            downloaded_files = []
+            if not no_download and not output_json and final_status.get("code") == 0:
+                print_info(f"\nDownloading output files to: {cfg.download_dir}")
+                try:
+                    downloaded_files = client.download_task_outputs(
+                        final_status, cfg.download_dir, input_filename=file_path.stem
+                    )
+                    if downloaded_files:
+                        print_success(f"Downloaded {len(downloaded_files)} files:")
+                        for downloaded_path in downloaded_files:
+                            print(f"  {downloaded_path}")
+                    else:
+                        print_warning("No output files found to download")
+                except Exception as e:
+                    print_error(f"Failed to download files: {e}")
+
+            # Auto-cleanup source file unless disabled and download was successful
+            if not no_cleanup and downloaded_files and final_status.get("code") == 0:
+                try:
+                    if file_path.exists():
+                        file_path.unlink()
+                        print_success(f"Deleted source file: {file_path}")
+                    else:
+                        print_warning(f"Source file not found for cleanup: {file_path}")
+                except Exception as e:
+                    print_error(f"Failed to delete source file: {e}")
+
+            successful_count += 1
+            print_success(f"✓ Successfully processed: {file_path.name}")
+
+        except Exception as e:
+            failed_count += 1
+            print_error(f"✗ Failed to process {file_path.name}: {e}")
+            continue
+
+    # Print summary
+    print(f"\n{'=' * 60}")
+    print_info("Batch Processing Summary:")
+    print_success(f"Successfully processed: {successful_count} files")
+    if failed_count > 0:
+        print_error(f"Failed to process: {failed_count} files")
+    print(f"{'=' * 60}")
+
+
+@cli.command()
+@click.option("--node", required=True, help="Node ID to use")
+@click.option(
+    "--pattern",
+    default="*.png *.jpg *.jpeg",
+    help="File patterns to match (default: *.png *.jpg *.jpeg)",
+)
+@click.option(
+    "--timeout", default=600, help="Timeout per file in seconds (default: 600)"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
+@click.option(
+    "--no-download", is_flag=True, help="Skip automatic download of output files"
+)
+@click.option(
+    "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
+)
+@click.pass_context
+def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup):
+    """Process all images from the configured folder."""
+    cfg = ctx.obj["config"]
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+
+    # Parse patterns (space-separated)
+    patterns = pattern.split()
+
+    # Find all matching image files
+    files_to_process = []
+    for pattern_str in patterns:
+        for file_path in cfg.image_folder.glob(pattern_str):
+            if file_path.is_file():
+                files_to_process.append(file_path)
+
+    # Remove duplicates
+    files_to_process = list(dict.fromkeys(files_to_process))
+
+    if not files_to_process:
+        print_warning(
+            f"No image files found in {cfg.image_folder} matching patterns: {pattern}"
+        )
+        return
+
+    print_info(f"Found {len(files_to_process)} image files in {cfg.image_folder}:")
+    for file_path in files_to_process:
+        print(f"  {file_path.name}")
+
+    # Process files sequentially
+    successful_count = 0
+    failed_count = 0
+
+    for i, file_path in enumerate(files_to_process, 1):
+        print(f"\n{'=' * 60}")
+        print_info(f"Processing file {i}/{len(files_to_process)}: {file_path.name}")
+        print(f"{'=' * 60}")
+
+        try:
+            # Step 1: Upload file
+            print_info(f"Uploading file: {file_path}")
+            file_id = client.upload_file(str(file_path))
+            print_success(f"File uploaded successfully! File ID: {file_id}")
+
+            # Step 2: Submit task
+            print_info(f"Submitting task to node: {node}")
+            node_config = {
+                "nodeId": node,
+                "fieldName": "image",
+                "fieldValue": file_id,
+                "description": "image",
+            }
+
+            task_id = client.submit_task(cfg.workflow_id, [node_config])
+            print_success(f"Task submitted successfully! Task ID: {task_id}")
+
+            # Step 3: Wait for completion
+            print_info("Waiting for task completion...")
+            final_status = client.wait_for_completion(task_id, timeout=timeout)
+
+            print_success("Processing completed!")
+
+            if not output_json:
+                print(format_task_status(final_status))
+
+            # Display results if available
+            data = final_status.get("data", {})
+            if data and not output_json:
+                print("\nResults:")
+                if isinstance(data, list):
+                    for j, item in enumerate(data):
+                        print(f"  File {j + 1}:")
+                        for key, value in item.items():
+                            print(f"    {key}: {value}")
+                else:
+                    for key, value in data.items():
+                        if key != "taskId":
+                            print(f"  {key}: {value}")
+
+            # Auto-download output files unless disabled
+            downloaded_files = []
+            if not no_download and not output_json and final_status.get("code") == 0:
+                print_info(f"\nDownloading output files to: {cfg.download_dir}")
+                try:
+                    downloaded_files = client.download_task_outputs(
+                        final_status, cfg.download_dir, input_filename=file_path.stem
+                    )
+                    if downloaded_files:
+                        print_success(f"Downloaded {len(downloaded_files)} files:")
+                        for downloaded_path in downloaded_files:
+                            print(f"  {downloaded_path}")
+                    else:
+                        print_warning("No output files found to download")
+                except Exception as e:
+                    print_error(f"Failed to download files: {e}")
+
+            # Auto-cleanup source file unless disabled and download was successful
+            if not no_cleanup and downloaded_files and final_status.get("code") == 0:
+                try:
+                    if file_path.exists():
+                        file_path.unlink()
+                        print_success(f"Deleted source file: {file_path}")
+                    else:
+                        print_warning(f"Source file not found for cleanup: {file_path}")
+                except Exception as e:
+                    print_error(f"Failed to delete source file: {e}")
+
+            successful_count += 1
+            print_success(f"✓ Successfully processed: {file_path.name}")
+
+        except Exception as e:
+            failed_count += 1
+            print_error(f"✗ Failed to process {file_path.name}: {e}")
+            continue
+
+    # Print summary
+    print(f"\n{'=' * 60}")
+    print_info("Folder Processing Summary:")
+    print_success(f"Successfully processed: {successful_count} files")
+    if failed_count > 0:
+        print_error(f"Failed to process: {failed_count} files")
+    print_info(f"Source folder: {cfg.image_folder}")
+    print(f"{'=' * 60}")
+
+
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option(
+    "--timeout",
+    default=3600,
+    help="Timeout in seconds (default: 3600)"
+)
+@click.option(
+    "--no-overwrite",
+    is_flag=True,
+    help="Keep original file (default: overwrites with converted .mp4)"
+)
+@click.pass_context
+def convert_video(ctx, file_path, timeout, no_overwrite):
+    """Convert a single video file to MP4 format."""
+    from .video_utils import (
+        is_video_file,
+        convert_video_to_mp4,
+        check_ffmpeg_available,
+        SUPPORTED_VIDEO_FORMATS
+    )
+
+    video_path = Path(file_path)
+    overwrite = not no_overwrite
+
+    # Check if it's a supported video
+    if not is_video_file(video_path):
+        print_error(f"Unsupported file format: {video_path.suffix}")
+        print_info(f"Supported formats: {', '.join(SUPPORTED_VIDEO_FORMATS)}")
+        sys.exit(1)
+
+    # Check FFmpeg availability
+    if not check_ffmpeg_available():
+        print_error("FFmpeg is not installed or not accessible.")
+        print_info("Install with: brew install ffmpeg (macOS)")
+        sys.exit(1)
+
+    try:
+        print_info(f"Converting: {video_path.name}")
+
+        if overwrite:
+            print_warning("Original file will be replaced with converted MP4 version")
+
+        success, stdout, stderr = convert_video_to_mp4(
+            video_path,
+            overwrite=overwrite,
+            timeout=timeout
+        )
+
+        if success:
+            print_success(f"Successfully converted: {video_path.name}")
+        else:
+            print_error(f"Failed to convert: {video_path.name}")
+            if stderr:
+                print(f"Error output: {stderr[-500:]}")  # Last 500 chars
+            sys.exit(1)
+
+    except TimeoutError as e:
+        print_error(f"Conversion timed out: {e}")
+        sys.exit(1)
+
+    except Exception as e:
+        print_error(f"Failed to convert: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument(
+    "input_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True)
+)
+@click.option(
+    "--pattern",
+    default="*",
+    help="File pattern to match (default: * processes all video files)",
+)
+@click.option(
+    "--timeout",
+    default=3600,
+    help="Timeout per video in seconds (default: 3600 = 1 hour)"
+)
+@click.option(
+    "--no-overwrite",
+    is_flag=True,
+    help="Keep original files (default: overwrites with converted .mp4)"
+)
+@click.pass_context
+def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
+    """Convert all videos in a directory to MP4 format."""
+    from .video_utils import (
+        find_videos_in_directory,
+        convert_video_to_mp4,
+        check_ffmpeg_available,
+        SUPPORTED_VIDEO_FORMATS
+    )
+
+    input_path = Path(input_dir)
+    overwrite = not no_overwrite
+
+    # Check FFmpeg availability
+    if not check_ffmpeg_available():
+        print_error(
+            "FFmpeg is not installed or not accessible. "
+            "Please install FFmpeg to use video conversion features."
+        )
+        print_info("Install with: brew install ffmpeg (macOS)")
+        sys.exit(1)
+
+    # Find all matching video files
+    videos_to_convert = []
+    for file_path in input_path.glob(pattern):
+        if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_VIDEO_FORMATS:
+            videos_to_convert.append(file_path)
+
+    if not videos_to_convert:
+        print_warning(
+            f"No supported video files found in {input_dir} matching pattern '{pattern}'"
+        )
+        print_info(f"Supported formats: {', '.join(SUPPORTED_VIDEO_FORMATS)}")
+        return
+
+    print_info(f"Found {len(videos_to_convert)} video files to convert:")
+    for file_path in videos_to_convert:
+        print(f"  {file_path.name}")
+
+    if overwrite:
+        print_warning("Original files will be replaced with converted MP4 versions")
+    else:
+        print_info("Original files will be kept")
+
+    # Convert files
+    successful_count = 0
+    failed_count = 0
+
+    for i, video_path in enumerate(videos_to_convert, 1):
+        print(f"\n{'=' * 60}")
+        print_info(f"Converting video {i}/{len(videos_to_convert)}: {video_path.name}")
+        print(f"{'=' * 60}")
+
+        try:
+            success, stdout, stderr = convert_video_to_mp4(
+                video_path,
+                overwrite=overwrite,
+                timeout=timeout
+            )
+
+            if success:
+                successful_count += 1
+            else:
+                failed_count += 1
+                print_error(f"Failed to convert {video_path.name}")
+                if stderr:
+                    print(f"Error output: {stderr[-500:]}")  # Last 500 chars
+
+        except TimeoutError as e:
+            failed_count += 1
+            print_error(f"Conversion timed out: {video_path.name}")
+            print_info(f"Error: {e}")
+
+        except Exception as e:
+            failed_count += 1
+            print_error(f"Failed to convert {video_path.name}: {e}")
+
+    # Print summary
+    print(f"\n{'=' * 60}")
+    print_info("Video Conversion Summary:")
+    print_success(f"Successfully converted: {successful_count} videos")
+    if failed_count > 0:
+        print_error(f"Failed to convert: {failed_count} videos")
+    print(f"{'=' * 60}")
+
+
+def main():
+    """Main entry point for the CLI."""
+    cli()
+
+
+if __name__ == "__main__":
+    main()

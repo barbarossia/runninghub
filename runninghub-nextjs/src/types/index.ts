@@ -1,0 +1,146 @@
+export interface FileHandleInfo {
+  handle: FileSystemFileHandle | FileSystemDirectoryHandle;
+  file?: File;
+}
+
+export interface ImageFile {
+  name: string;
+  path: string;
+  size: number;
+  type: 'image';
+  extension: string;
+  is_virtual?: boolean;
+  file_handle_info?: FileHandleInfo;
+  blob_url?: string; // Blob URL for virtual files from File System Access API
+}
+
+export interface VideoFile {
+  name: string;
+  path: string;
+  size: number;
+  type: 'video';
+  extension: string;
+  duration?: number; // Video duration in seconds
+  is_virtual?: boolean;
+  file_handle_info?: FileHandleInfo;
+  blob_url?: string;
+}
+
+export type MediaFile = ImageFile | VideoFile;
+
+export interface FolderItem {
+  name: string;
+  path: string;
+  type: 'folder';
+  is_virtual?: boolean;
+}
+
+export interface FileSystemContents {
+  folders: FolderItem[];
+  images: ImageFile[];
+  videos: VideoFile[];
+  current_path: string;
+  parent_path?: string;
+  is_direct_access: boolean;
+  session_id?: string;
+  message?: string;
+}
+
+export interface RunningHubConfig {
+  api_key: string;
+  workflow_id: string;
+  api_host: string;
+  download_dir: string;
+  image_folder: string;
+  prefix_path: string;
+}
+
+export interface ProcessingTask {
+  task_id: string;
+  image_count: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
+  current_image?: string;
+  completed_images?: string[];
+  failed_images?: Array<{ path: string; error: string }>;
+}
+
+export interface ProcessImagesRequest {
+  images: string[];
+  node_id?: string;
+  timeout?: number;
+}
+
+export interface ProcessImagesResponse {
+  success: boolean;
+  task_id?: string;
+  message?: string;
+  image_count?: number;
+  error?: string;
+}
+
+export interface FolderSelectionResponse {
+  success: boolean;
+  folder_path: string;
+  message: string;
+  original_input?: string;
+  folder_name: string;
+  prefix_path?: string;
+  relative_path?: string;
+  is_under_prefix?: boolean;
+  error?: string;
+  suggestions?: string[];
+  session_id?: string;
+  is_virtual?: boolean;
+}
+
+export interface NodeInfo {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface NodesResponse {
+  success: boolean;
+  nodes: NodeInfo[];
+  output?: string;
+  error?: string;
+}
+
+export type ViewMode = 'grid' | 'list' | 'large';
+
+export interface SelectionState {
+  selectedImages: Set<string>;
+  lastSelectedImage?: string;
+  isAllSelected: boolean;
+}
+
+export interface KeyboardShortcut {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  action: () => void;
+  description: string;
+}
+
+export interface ConvertVideosRequest {
+  videos: string[];
+  overwrite?: boolean;
+  timeout?: number;
+}
+
+export interface ConvertVideosResponse {
+  success: boolean;
+  task_id?: string;
+  message?: string;
+  video_count?: number;
+  error?: string;
+}
+
+export interface VideoConversionTask extends ProcessingTask {
+  type: 'video_conversion';
+  total_videos: number;
+  completed_videos?: string[];
+  failed_videos?: Array<{ path: string; error: string }>;
+}
