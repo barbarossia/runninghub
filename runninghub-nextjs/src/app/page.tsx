@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,15 @@ import { validateEnvironment } from '@/utils/validation';
 import { ENVIRONMENT_VARIABLES } from '@/constants';
 
 export default function Home() {
-  const [envValidation] = useState(() => validateEnvironment());
+  const [envValidation, setEnvValidation] = useState<{
+    isValid: boolean;
+    missing: string[];
+    warnings: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    setEnvValidation(validateEnvironment());
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
