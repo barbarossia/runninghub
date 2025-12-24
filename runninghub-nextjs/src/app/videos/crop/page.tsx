@@ -1,27 +1,60 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useVideoSelectionStore, useCropStore, useVideoStore } from '@/store';
+import React, { useState, useEffect } from 'react';
+import { useVideoSelectionStore, useCropStore, useVideoStore, useFolderStore } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
-import { ArrowLeft, Video, Crop, Loader2, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, Video, Crop, Loader2, CheckSquare, Square, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
 
 export default function CropPage() {
   const { selectedVideos, toggleVideo, selectAll, deselectAll } = useVideoSelectionStore();
-  const { videos } = useVideoStore();
+  const { videos, setVideos } = useVideoStore();
+  const { selectedFolder } = useFolderStore();
   const { cropConfig } = useCropStore();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
 
   const selectedPaths = Array.from(selectedVideos.keys());
   const hasVideos = videos.length > 0;
   const isAllSelected = hasVideos && selectedPaths.length === videos.length;
+
+  // Load videos if store is empty but folder is selected
+  useEffect(() => {
+    const loadVideos = async () => {
+      if (videos.length === 0 && selectedFolder && !selectedFolder.is_virtual) {
+        setIsLoadingVideos(true);
+        try {
+          const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              folder_path: selectedFolder.folder_path, 
+              session_id: selectedFolder.session_id 
+            }),
+          });
+
+          const data = await response.json();
+          if (data.videos) {
+            setVideos(data.videos);
+          }
+        } catch (error) {
+          console.error('Error loading folder contents:', error);
+          toast.error('Failed to load videos from folder');
+        } finally {
+          setIsLoadingVideos(false);
+        }
+      }
+    };
+
+    loadVideos();
+  }, [videos.length, selectedFolder, setVideos]);
 
   const handleStartCrop = async () => {
     if (selectedPaths.length === 0) {
@@ -124,7 +157,12 @@ export default function CropPage() {
             </div>
 
             <div className="space-y-2 max-h-[400px] overflow-y-auto border rounded-md p-2 bg-gray-50/50">
-              {!hasVideos ? (
+              {isLoadingVideos ? (
+                <div className="flex items-center justify-center py-8 text-gray-500 gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <p>Loading videos...</p>
+                </div>
+              ) : !hasVideos ? (
                 <div className="text-center py-8 text-gray-500">
                   <p>No videos loaded.</p>
                   <Link href="/videos" className="text-purple-600 hover:underline text-sm">
