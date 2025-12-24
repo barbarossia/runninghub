@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import FolderSelector, { FolderInfo as FolderSelectorFolderInfo } from '@/components/folder/FolderSelector';
-import { ImageGallery } from '@/components/images';
+import { ImageGallery, ImageProcessConfig } from '@/components/images';
 import { ImageGallerySkeleton } from '@/components/images/ImageGallerySkeleton';
 import { SelectionToolbar } from '@/components/selection';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
@@ -28,6 +28,7 @@ import {
   useImageStore,
   useSelectionStore,
   useProgressStore,
+  useProcessStore,
 } from '@/store';
 import { useFileSystem, useImageSelection, useProgressTracking } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
@@ -38,6 +39,7 @@ export default function GalleryPage() {
   const { selectedFolder, folderContents, currentPath, isLoadingFolder } = useFolderStore();
   const { images, isLoadingImages, error: imageError } = useImageStore();
   const { deselectAll } = useSelectionStore();
+  const { config: processConfig, setConfig: setProcessConfig } = useProcessStore();
 
   // Local state
   const [localError, setLocalError] = useState<string>('');
@@ -187,6 +189,11 @@ export default function GalleryPage() {
           node_id: selectedNode,
           folder_path: selectedFolder.folder_path,
           session_id: selectedFolder.session_id,
+          params: {
+            '231:text': processConfig.triggerWord,
+            '235:value': processConfig.width.toString(),
+            '236:value': processConfig.height.toString(),
+          },
         }),
       });
 
@@ -380,6 +387,12 @@ export default function GalleryPage() {
               nodes={nodes}
               selectedNode={selectedNode}
               onNodeChange={setSelectedNode}
+            />
+
+            {/* Process Config */}
+            <ImageProcessConfig
+              config={processConfig}
+              onConfigChange={setProcessConfig}
             />
 
             {/* Image Gallery */}

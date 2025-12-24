@@ -7,12 +7,13 @@ interface ProcessRequest {
   images: string[];
   node_id?: string;
   timeout?: number;
+  params?: Record<string, string>;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const data: ProcessRequest = await request.json();
-    const { images, node_id = "203", timeout = 1800 } = data;
+    const { images, node_id = "203", timeout = 1800, params = {} } = data;
 
     if (!images || images.length === 0) {
       return NextResponse.json(
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     await initTask(taskId, images.length);
 
     // Start background processing (in a real implementation, you might use a job queue)
-    processImagesInBackground(images, node_id, timeout, taskId);
+    processImagesInBackground(images, node_id, timeout, taskId, params);
 
     const response = {
       success: true,
@@ -69,6 +70,7 @@ function processSingleImage(
   nodeId: string,
   timeout: number,
   env: NodeJS.ProcessEnv,
+  params: Record<string, string> = {},
 ): Promise<{
   success: boolean;
   stdout: string;
@@ -87,6 +89,11 @@ function processSingleImage(
       "--timeout",
       String(timeout),
     ];
+
+    // Add optional params
+    Object.entries(params).forEach(([key, value]) => {
+      args.push("-p", `${key}:${value}`);
+    });
 
     console.log(`Running command: ${cmd} ${args.join(" ")}`);
 
@@ -166,9 +173,14 @@ async function processImagesInBackground(
   nodeId: string,
   timeout: number,
   taskId: string,
+  params: Record<string, string> = {},
 ) {
   await writeLog(`=== BACKGROUND PROCESSING STARTED for task: ${taskId} ===`, 'info', taskId);
   await writeLog(`Processing ${images.length} images with node ${nodeId}`, 'info', taskId);
+  
+  if (Object.keys(params).length > 0) {
+    await writeLog(`With params: ${JSON.stringify(params)}`, 'info', taskId);
+  }
 
   const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
   const workflowId = process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID;
@@ -209,7 +221,7 @@ async function processImagesInBackground(
       }
 
       // Process the image
-      const result = await processSingleImage(imagePath, nodeId, timeout, env);
+      const result = await processSingleImage(imagePath, nodeId, timeout, env, params);
 
       if (result.success) {
         successCount++;
