@@ -17,7 +17,7 @@ def build_crop_filter(mode: str, width: Optional[str] = None, height: Optional[s
     """Build FFmpeg crop filter based on crop mode.
 
     Args:
-        mode: Crop mode ('left', 'right', 'center', 'custom').
+        mode: Crop mode ('left', 'right', 'center', 'top', 'bottom', 'custom').
         width: Custom width (for custom mode).
         height: Custom height (for custom mode).
         x: Custom X position (for custom mode).
@@ -39,12 +39,31 @@ def build_crop_filter(mode: str, width: Optional[str] = None, height: Optional[s
         # Width = iw/2, Height = ih, X = iw/4 (centers the half-width crop)
         return 'iw/2:ih:iw/4:0'
 
+    elif mode == 'top':
+        # Top half: width=iw, height=ih/2, x=0, y=0
+        return 'iw:ih/2:0:0'
+
+    elif mode == 'bottom':
+        # Bottom half: width=iw, height=ih/2, x=0, y=ih/2
+        return 'iw:ih/2:0:ih/2'
+
     elif mode == 'custom':
-        # Custom dimensions
-        w = width or 'iw/2'
-        h = height or 'ih'
-        x_pos = x or '0'
-        y_pos = y or '0'
+        # Custom dimensions - handle percentages if provided
+        def parse_val(val: Optional[str], default: str, ref: str) -> str:
+            if not val:
+                return default
+            if isinstance(val, str) and val.endswith('%'):
+                try:
+                    percentage = float(val[:-1]) / 100.0
+                    return f"{percentage}*{ref}"
+                except ValueError:
+                    return val
+            return val
+
+        w = parse_val(width, 'iw/2', 'iw')
+        h = parse_val(height, 'ih', 'ih')
+        x_pos = parse_val(x, '0', 'iw')
+        y_pos = parse_val(y, '0', 'ih')
         return f'{w}:{h}:{x_pos}:{y_pos}'
 
     else:
@@ -66,7 +85,7 @@ def crop_video(
 
     Args:
         input_path: Path to the input video file.
-        mode: Crop mode ('left', 'right', 'center', 'custom').
+        mode: Crop mode ('left', 'right', 'center', 'top', 'bottom', 'custom').
         output_suffix: Suffix to add to output filename.
         width: Custom width (for custom mode).
         height: Custom height (for custom mode).

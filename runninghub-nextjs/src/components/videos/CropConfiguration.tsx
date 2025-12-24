@@ -81,75 +81,95 @@ export function CropConfiguration({
         </div>
 
         {/* Crop Mode Presets */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.LEFT_HALF)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.LEFT_HALF
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/10'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-3 h-8 bg-current opacity-70 rounded-sm" />
-              </div>
-              <span>Left Half</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className="absolute inset-y-0 left-0 w-1/2 bg-current opacity-40"></div>
             </div>
+            <span className="text-sm font-medium">Left Half</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.RIGHT_HALF)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.RIGHT_HALF
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/10'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-3 h-8 bg-current opacity-70 rounded-sm ml-auto" />
-              </div>
-              <span>Right Half</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className="absolute inset-y-0 right-0 w-1/2 bg-current opacity-40"></div>
             </div>
+            <span className="text-sm font-medium">Right Half</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleModeChange(CROP_PRESETS.TOP_HALF)}
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+              cropConfig.mode === CROP_PRESETS.TOP_HALF
+                ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/10'
+            }`}
+          >
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-1/2 bg-current opacity-40"></div>
+            </div>
+            <span className="text-sm font-medium">Top Half</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleModeChange(CROP_PRESETS.BOTTOM_HALF)}
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+              cropConfig.mode === CROP_PRESETS.BOTTOM_HALF
+                ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/10'
+            }`}
+          >
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-current opacity-40"></div>
+            </div>
+            <span className="text-sm font-medium">Bottom Half</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.CENTER)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.CENTER
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/10'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-8 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                <div className="w-6 h-6 bg-current opacity-70 rounded-sm" />
-              </div>
-              <span>Center Square</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
+              <div className="absolute inset-y-0 inset-x-1/4 bg-current opacity-40"></div>
             </div>
+            <span className="text-sm font-medium">Center</span>
           </button>
 
           <button
             type="button"
             onClick={() => handleModeChange(CROP_PRESETS.CUSTOM)}
-            className={cn(
-              'px-4 py-3 rounded-lg border-2 text-sm font-medium transition-all',
+            className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.CUSTOM
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
-            )}
+                ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                : 'border-white/5 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/10'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <div className="text-2xl">✂️</div>
-              <span>Custom</span>
+            <div className="w-12 h-8 border border-current rounded mb-2 relative flex items-center justify-center">
+              <div className="w-6 h-4 border border-dashed border-current opacity-60"></div>
             </div>
+            <span className="text-sm font-medium">Custom</span>
           </button>
         </div>
 

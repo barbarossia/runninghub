@@ -105,11 +105,13 @@ export const LOADING_MESSAGES = {
 } as const;
 
 export const CROP_PRESETS = {
-  LEFT_HALF: 'left',
-  RIGHT_HALF: 'right',
-  CENTER: 'center',
-  CUSTOM: 'custom',
-} as const;
+  LEFT_HALF: 'left' as CropMode,
+  RIGHT_HALF: 'right' as CropMode,
+  CENTER: 'center' as CropMode,
+  TOP_HALF: 'top' as CropMode,
+  BOTTOM_HALF: 'bottom' as CropMode,
+  CUSTOM: 'custom' as CropMode,
+};
 
 export const DEFAULT_CROP_CONFIG = {
   mode: 'left',

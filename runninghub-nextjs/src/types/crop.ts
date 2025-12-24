@@ -1,4 +1,4 @@
-export type CropMode = 'left' | 'right' | 'center' | 'custom';
+export type CropMode = 'left' | 'right' | 'center' | 'top' | 'bottom' | 'custom';
 
 export interface CropConfig {
   mode: CropMode;

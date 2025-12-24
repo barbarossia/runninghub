@@ -781,10 +781,10 @@ def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option(
     "--mode",
-    type=click.Choice(['left', 'right', 'center', 'custom'],
+    type=click.Choice(['left', 'right', 'center', 'top', 'bottom', 'custom'],
                       case_sensitive=False),
     default='left',
-    help="Crop mode: left, right, center, or custom"
+    help="Crop mode: left, right, center, top, bottom, or custom"
 )
 @click.option(
     "--output-suffix",
