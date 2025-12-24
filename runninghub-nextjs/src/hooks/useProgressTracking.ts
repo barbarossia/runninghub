@@ -61,57 +61,6 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
   const hasActiveTask = activeTask?.status === 'processing' || false;
   const overallProgress = activeTask?.progress || 0;
 
-  // Polling for task status
-  const startPolling = useCallback((taskId: string) => {
-    // Stop existing polling
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-
-    pollingTaskIdRef.current = taskId;
-
-    // Start new polling
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        // In a real implementation, you would poll an endpoint to check task status
-        // For now, this is a placeholder for the polling logic
-        const response = await fetch(`/api/tasks/${taskId}/status`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch task status');
-        }
-
-        const data = await response.json();
-
-        // Update task based on status
-        if (data.status === 'completed') {
-          completeTask(taskId);
-          stopPolling();
-        } else if (data.status === 'failed') {
-          failTask(taskId, data.error || 'Task failed');
-          stopPolling();
-        } else if (data.status === 'processing') {
-          updateTaskProgress(
-            taskId,
-            data.progress || 0,
-            data.current_image
-          );
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-        // Don't stop polling on network errors, just log them
-      }
-    }, pollInterval);
-  }, [pollInterval, completeTask, failTask, updateTaskProgress, stopPolling]);
-
-  // Auto-start polling when activeTaskId changes in store
-  useEffect(() => {
-    if (store.activeTaskId && store.activeTaskId !== pollingTaskIdRef.current) {
-      startPolling(store.activeTaskId);
-    } else if (!store.activeTaskId && pollingTaskIdRef.current) {
-      stopPolling();
-    }
-  }, [store.activeTaskId, startPolling, stopPolling]);
-
   // Auto-open modal when task starts
   useEffect(() => {
     if (autoOpenModal && hasActiveTask && !store.isProgressModalOpen) {
@@ -126,14 +75,6 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
         clearInterval(pollingIntervalRef.current);
       }
     };
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-    pollingTaskIdRef.current = null;
   }, []);
 
   const startTask = useCallback((task: ProcessingTask) => {
@@ -206,6 +147,65 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
   const clearCompletedTasks = useCallback(() => {
     store.clearCompletedTasks();
   }, [store]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    pollingTaskIdRef.current = null;
+  }, []);
+
+  // Polling for task status
+  const startPolling = useCallback((taskId: string) => {
+    // Stop existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    pollingTaskIdRef.current = taskId;
+
+    // Start new polling
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        // In a real implementation, you would poll an endpoint to check task status
+        // For now, this is a placeholder for the polling logic
+        const response = await fetch(`/api/tasks/${taskId}/status`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch task status');
+        }
+
+        const data = await response.json();
+
+        // Update task based on status
+        if (data.status === 'completed') {
+          completeTask(taskId);
+          stopPolling();
+        } else if (data.status === 'failed') {
+          failTask(taskId, data.error || 'Task failed');
+          stopPolling();
+        } else if (data.status === 'processing') {
+          updateTaskProgress(
+            taskId,
+            data.progress || 0,
+            data.current_image
+          );
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        // Don't stop polling on network errors, just log them
+      }
+    }, pollInterval);
+  }, [pollInterval, completeTask, failTask, updateTaskProgress, stopPolling]);
+
+  // Auto-start polling when activeTaskId changes in store
+  useEffect(() => {
+    if (store.activeTaskId && store.activeTaskId !== pollingTaskIdRef.current) {
+      startPolling(store.activeTaskId);
+    } else if (!store.activeTaskId && pollingTaskIdRef.current) {
+      stopPolling();
+    }
+  }, [store.activeTaskId, startPolling, stopPolling]);
 
   return {
     tasks: store.tasks,
