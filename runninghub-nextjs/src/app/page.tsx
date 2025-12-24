@@ -37,7 +37,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mb-12">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -62,17 +62,36 @@ export default function Home() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="text-2xl">🎬</span>
-                Video Tools
+                Video Conversion
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 mb-4">
-                Convert video files to MP4 format and crop videos. Supports batch processing for multiple files.
+                Convert video files to MP4 format using FFmpeg. Supports WebM, MKV, AVI, MOV, and FLV formats.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">FFmpeg</Badge>
                 <Badge variant="secondary">Batch Conversion</Badge>
-                <Badge variant="secondary">Cropping</Badge>
+                <Badge variant="secondary">MP4 Output</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-2xl">✂️</span>
+                Video Cropping
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">
+                Crop videos to specific aspect ratios or custom dimensions. Ideal for social media and focused content.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">Presets</Badge>
+                <Badge variant="secondary">Custom UI</Badge>
+                <Badge variant="secondary">Fast Processing</Badge>
               </div>
             </CardContent>
           </Card>
@@ -216,7 +235,12 @@ export default function Home() {
             </Link>
             <Link href="/videos">
               <Button variant="default" className="bg-purple-600 hover:bg-purple-700">
-                Video Tools
+                Video Conversion
+              </Button>
+            </Link>
+            <Link href="/videos">
+              <Button variant="default" className="bg-green-600 hover:bg-green-700">
+                Video Cropping
               </Button>
             </Link>
             <Button variant="outline" disabled>
