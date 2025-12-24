@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { useFileSystem } from '@/hooks';
+import { useFileSystem, useProgressTracking } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
 import type { ImageFile } from '@/types';
 
@@ -46,6 +46,21 @@ export default function GalleryPage() {
 
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
+
+  const handleRefresh = async (silent = false) => {
+    if (selectedFolder) {
+      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id, silent);
+    }
+  };
+
+  // Use progress tracking hook to refresh when task completes
+  useProgressTracking({
+    onTaskComplete: (taskId) => {
+      if (taskId === activeConsoleTaskId) {
+        handleRefresh(true);
+      }
+    }
+  });
 
   // Use folder selection hook with error handling
   const { handleFolderSelected } = useFolderSelection({
@@ -91,12 +106,6 @@ export default function GalleryPage() {
     useImageStore.getState().setImages([]);
     deselectAll();
     setLocalError('');
-  };
-
-  const handleRefresh = async (silent = false) => {
-    if (selectedFolder) {
-      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id, silent);
-    }
   };
 
   const handleDelete = async (selectedPaths: string[]) => {
@@ -314,8 +323,8 @@ export default function GalleryPage() {
 
         {/* Console Viewer */}
         <ConsoleViewer
-          onRefresh={handleRefresh}
-          autoRefreshInterval={5000}
+          onRefresh={undefined}
+          autoRefreshInterval={undefined}
           taskId={activeConsoleTaskId}
         />
       </div>

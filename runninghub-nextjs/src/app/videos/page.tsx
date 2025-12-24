@@ -6,6 +6,7 @@ import { useVideoStore } from '@/store/video-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useProgressTracking } from '@/hooks/useProgressTracking';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { VideoGallery } from '@/components/videos/VideoGallery';
@@ -20,8 +21,8 @@ import { Button } from '@/components/ui/button';
 
 export default function VideosPage() {
   const { selectedFolder, clearFolder } = useFolderStore();
-  const { videos, setVideos, filteredVideos } = useVideoStore();
-  const { deselectAll } = useVideoSelectionStore();
+  const { videos, setVideos, filteredVideos, updateVideo } = useVideoStore();
+  const { deselectAll, deselectVideo } = useVideoSelectionStore();
   const { isProgressModalOpen } = useProgressStore();
 
   const [isLoadingFolder, setIsLoadingFolder] = useState(false);
@@ -30,6 +31,26 @@ export default function VideosPage() {
 
   const { handleFolderSelected } = useFolderSelection({
     folderType: 'videos',
+  });
+
+  const handleRefresh = async (silent = false) => {
+    if (selectedFolder && !selectedFolder.is_virtual) {
+      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+      if (!silent) {
+        toast.success('Folder contents refreshed');
+      }
+    } else if (!silent) {
+      toast.info('Cannot refresh virtual folder');
+    }
+  };
+
+  // Use progress tracking hook to refresh when task completes
+  useProgressTracking({
+    onTaskComplete: (taskId) => {
+      if (taskId === currentTaskId) {
+        handleRefresh(true);
+      }
+    }
   });
 
   const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string) => {
@@ -86,13 +107,6 @@ export default function VideosPage() {
         if (data.task_id) {
           setCurrentTaskId(data.task_id);
         }
-
-        // Refresh folder contents after conversion completes
-        setTimeout(() => {
-          if (selectedFolder && !selectedFolder.is_virtual) {
-            loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
-          }
-        }, 2000);
       } else {
         toast.error(data.error || ERROR_MESSAGES.CONVERSION_FAILED);
       }
@@ -102,14 +116,68 @@ export default function VideosPage() {
     }
   };
 
-  const handleRefresh = async (silent = false) => {
-    if (selectedFolder && !selectedFolder.is_virtual) {
-      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
-      if (!silent) {
-        toast.success('Folder contents refreshed');
+  const handleRenameVideo = async (video: VideoFile, newName: string) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_RENAME, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_path: video.path,
+          new_name: newName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Renamed to ${data.new_name}`);
+        
+        // Update video in store
+        updateVideo(video.path, {
+          path: data.new_path,
+          name: data.new_name,
+        });
+
+        // Update selection: deselect old
+        deselectVideo(video.path);
+
+        // Refresh to ensure sync with disk
+        handleRefresh(true);
+      } else {
+        throw new Error(data.error || 'Failed to rename video');
       }
-    } else if (!silent) {
-      toast.info('Cannot refresh virtual folder');
+    } catch (error) {
+      console.error('Error renaming video:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to rename video');
+    }
+  };
+
+  const handleDeleteVideo = async (video: VideoFile) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_DELETE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: [video.path],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Deleted ${video.name}`);
+        
+        // Refresh folder
+        handleRefresh(true);
+        
+        // Deselect if it was selected
+        deselectVideo(video.path);
+      } else {
+        throw new Error(data.error || 'Failed to delete video');
+      }
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete video');
     }
   };
 
@@ -178,6 +246,8 @@ export default function VideosPage() {
               videos={filteredVideos}
               isLoading={isLoadingFolder}
               onRefresh={handleRefresh}
+              onRename={handleRenameVideo}
+              onDelete={handleDeleteVideo}
             />
           </div>
         )}
@@ -193,7 +263,7 @@ export default function VideosPage() {
         {/* Console Viewer */}
         <ConsoleViewer
           taskId={currentTaskId}
-          onRefresh={handleRefresh}
+          onRefresh={undefined}
           autoRefreshInterval={undefined}
         />
       </div>
