@@ -112,33 +112,71 @@ def upload(ctx, file_path):
 
 
 @cli.command()
-@click.option("--node", required=True, help="Node ID to use")
-@click.option("--input", "input_value", required=True, help="Input value for the node")
+@click.option("--node", required=True, help="Node ID or alias to use")
+@click.option("--input", "input_value", help="Primary input value for the node")
 @click.option(
     "--type",
     "input_type",
     default="STRING",
     type=click.Choice(["STRING", "IMAGE", "LIST"]),
-    help="Input type (default: STRING)",
+    help="Primary input type (default: STRING)",
+)
+@click.option(
+    "--param",
+    "-p",
+    multiple=True,
+    help="Additional parameters in format 'nodeId:fieldName:value'",
 )
 @click.pass_context
-def run(ctx, node, input_value, input_type):
-    """Submit a task to RunningHub."""
+def invoke(ctx, node, input_value, input_type, param):
+    """Invoke a workflow by submitting a task to specific nodes.
+
+    You can pass a primary node and input, plus additional parameters:
+    example: runninghub invoke --node image --input file_id --type IMAGE -p "trigger word:text:naran"
+    """
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
 
     try:
-        # Prepare node configuration using RunningHub API format
-        # Based on API response: nodeId, fieldName, fieldValue
-        node_config = {
-            "nodeId": node,
-            "fieldName": "image" if input_type == "IMAGE" else "input",
-            "fieldValue": input_value,
-            "description": "image" if input_type == "IMAGE" else "input",
-        }
+        # Resolve main node ID
+        resolved_node = resolve_node_id(node, cfg.node_mapping)
+        
+        node_config_list = []
+        
+        # Add primary node if input_value is provided
+        if input_value:
+            node_config_list.append({
+                "nodeId": resolved_node,
+                "fieldName": "image" if input_type == "IMAGE" else "input",
+                "fieldValue": input_value,
+                "description": "image" if input_type == "IMAGE" else "input",
+            })
 
-        print_info(f"Submitting task to node: {node}")
-        task_id = client.submit_task(cfg.workflow_id, [node_config])
+        # Add additional parameters
+        for p in param:
+            try:
+                parts = p.split(":", 2)
+                if len(parts) != 3:
+                    raise ValueError("Format must be nodeId:fieldName:value")
+
+                p_node_id_or_alias, p_field_name, p_value = parts
+                p_node_id = resolve_node_id(p_node_id_or_alias, cfg.node_mapping)
+                
+                node_config_list.append({
+                    "nodeId": p_node_id,
+                    "fieldName": p_field_name,
+                    "fieldValue": p_value,
+                    "description": p_field_name,
+                })
+            except ValueError as e:
+                print_warning(f"Skipping invalid parameter '{p}': {e}")
+
+        if not node_config_list:
+            print_error("No node configurations provided. Use --input or -p.")
+            return
+
+        print_info(f"Submitting task with {len(node_config_list)} node configurations")
+        task_id = client.submit_task(cfg.workflow_id, node_config_list)
 
         print_success(f"Task submitted successfully!")
         print(f"Task ID: {task_id}")
@@ -146,6 +184,7 @@ def run(ctx, node, input_value, input_type):
 
     except Exception as e:
         print_error(f"Failed to submit task: {e}")
+
 
 
 @cli.command()
