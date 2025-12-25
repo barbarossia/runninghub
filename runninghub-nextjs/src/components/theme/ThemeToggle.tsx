@@ -17,23 +17,16 @@ export function ThemeToggle() {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  if (!mounted) {
-    return (
-      <Button variant="ghost" size="icon" className="h-9 w-9">
-        <Sun className="h-5 w-5" />
-      </Button>
-    );
-  }
-
-  const isDark = theme === 'dark';
+  const isDark = mounted && theme === 'dark';
 
   return (
     <Button
       variant="ghost"
       size="icon"
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      onClick={() => mounted && setTheme(isDark ? 'light' : 'dark')}
       className="h-9 w-9 relative overflow-hidden"
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      disabled={!mounted}
     >
       <motion.div
         initial={false}
