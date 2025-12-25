@@ -24,9 +24,11 @@
 - [x] Create RenameDialog component
 - [x] Add handleRenameConfirm function
 - [x] Update workspace page to pass handleRename callback
+- [x] Add handleRenameFile function in workspace page
 - [ ] Test rename with image files
 - [ ] Test rename with video files
 - [ ] Verify extension is preserved during rename
+- [ ] Implement actual rename API integration
 
 ### 5.3: Delete Functionality
 
@@ -35,9 +37,11 @@
 - [x] Create DeleteConfirmationDialog component
 - [x] Add handleDeleteConfirm function
 - [x] Update workspace page to pass handleDelete callback
+- [x] Add handleDeleteFile function in workspace page
 - [ ] Test delete with image files
 - [ ] Test delete with video files
 - [ ] Verify files are removed from gallery after delete
+- [ ] Implement actual delete API integration
 
 ### 5.4: Preview Functionality
 
@@ -48,6 +52,7 @@
 - [x] Display video preview in dialog with controls
 - [x] Show file metadata (dimensions, size, type, extension, duration, fps)
 - [x] Update workspace page to pass handlePreview callback
+- [x] Add handlePreviewFile function in workspace page
 - [ ] Test image preview
 - [ ] Test video preview with controls
 - [ ] Verify metadata display is correct
