@@ -585,6 +585,23 @@ Validates complete job input set:
 
 ## Implementation Steps
 
+**IMPORTANT: Build Verification Rule**
+
+After completing **each phase**, you MUST run `npm run build` to verify:
+- TypeScript compilation succeeds
+- No build errors are introduced
+- Changes don't break existing functionality
+- New types and components are properly integrated
+
+Only proceed to the next phase after the build succeeds. This prevents accumulating errors that are harder to debug later.
+
+```bash
+cd runninghub-nextjs
+npm run build
+```
+
+---
+
 ### Phase 1: Type Definitions
 **File**: `src/types/workspace.ts`
 - [ ] Add WorkflowInputParameter interface
@@ -595,6 +612,7 @@ Validates complete job input set:
 - [ ] Add MediaFile interface (with metadata fields)
 - [ ] Add MediaFileDetail interface
 - [ ] Keep backward compatibility (preserve old types during migration)
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure types compile correctly
 
 ### Phase 2: Store Migration
 **File**: `src/store/workspace-store.ts`
@@ -606,6 +624,7 @@ Validates complete job input set:
 - [ ] Implement job management actions
 - [ ] Implement UI state actions
 - [ ] Add persist middleware with partialize for workflows/jobs
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure store compiles correctly
 
 ### Phase 3: Validation Utilities
 **File**: `src/utils/workspace-validation.ts`
@@ -613,6 +632,7 @@ Validates complete job input set:
 - [ ] Implement validateJobInputs function
 - [ ] Add utility functions for file type detection
 - [ ] Add validation error formatting helpers
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure utilities compile correctly
 
 ### Phase 4: Media Gallery Component
 **File**: `src/components/workspace/MediaGallery.tsx`
@@ -709,6 +729,7 @@ Validates complete job input set:
   - [ ] Generate thumbnails for videos (using FFmpeg)
   - [ ] Cache thumbnails
   - [ ] Serve with proper cache headers
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure media components compile correctly
 
 ### Phase 5: Workflow Selector Component
 **File**: `src/components/workspace/WorkflowSelector.tsx`
@@ -749,6 +770,7 @@ Validates complete job input set:
 - [ ] Add "Create New Workflow" button
 - [ ] Show workflow parameter count
 - [ ] Show creation date
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure workflow components compile correctly
 
 ### Phase 9: Job Execution
 **File**: `src/app/api/workspace/execute/route.ts`
@@ -764,6 +786,7 @@ Validates complete job input set:
   - [ ] Record deleted files in job results
   - [ ] Handle deletion errors gracefully
   - [ ] Update folder contents after deletion
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure job execution API compiles correctly
 
 ### Phase 10: Job List Component
 **File**: `src/components/workspace/JobList.tsx`
@@ -823,6 +846,7 @@ Validates complete job input set:
   - [ ] Select the target workflow
   - [ ] Populate the selected text input field
 - [ ] Show success notification after copying
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure job components compile correctly
 
 ### Phase 12: Job Management API
 **File**: `src/app/api/workspace/jobs/[jobId]/route.ts`
@@ -836,6 +860,7 @@ Validates complete job input set:
 - [ ] Implement file type checking
 - [ ] Implement extension validation
 - [ ] Return validation results
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure all API endpoints compile correctly
 
 ### Phase 14: Workspace Page Redesign
 **File**: `src/app/workspace/page.tsx`
@@ -846,6 +871,7 @@ Validates complete job input set:
 - [ ] Integrate ConsoleViewer
 - [ ] Add responsive layout
 - [ ] Handle error states
+- [ ] **BUILD VERIFICATION**: Run `npm run build` to ensure workspace page compiles correctly
 
 ### Phase 15: Testing & Build
 - [ ] Test folder selection (FS API + manual)

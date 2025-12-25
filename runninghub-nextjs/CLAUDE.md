@@ -5,30 +5,54 @@ This document outlines the frontend development rules, coding standards, and des
 **Note**: For Git workflow rules, branch management, and commit guidelines, see the global [CLAUDE.md](../CLAUDE.md) in the project root.
 
 ## Table of Contents
-1. [Design System & Styling Standards](#design-system--styling-standards)
-2. [Component Reusability Standards](#component-reusability-standards)
-3. [Global Console Requirement](#global-console-requirement)
-4. [Data Refresh Policy](#data-refresh-policy)
-5. [Hydration Best Practices](#hydration-best-practices)
-6. [Styling Tokens Reference](#styling-tokens-reference)
+1. [Build Verification](#build-verification)
+2. [Design System & Styling Standards](#design-system--styling-standards)
+3. [Component Reusability Standards](#component-reusability-standards)
+4. [Global Console Requirement](#global-console-requirement)
+5. [Data Refresh Policy](#data-refresh-policy)
+6. [Hydration Best Practices](#hydration-best-practices)
+7. [Styling Tokens Reference](#styling-tokens-reference)
 
 ---
 
 ## Build Verification
 
-Before committing frontend changes, always run:
+**RULE 1**: Run `npm run build` before committing any changes and **after completing each implementation phase**.
+
 ```bash
 npm run build
 ```
 
-This ensures TypeScript compilation succeeds and there are no build errors.
+This ensures:
+- TypeScript compilation succeeds
+- No build errors are introduced
+- Changes don't break existing functionality
+- New types and components are properly integrated
+
+**Phase-based Development**: When implementing multi-phase features (e.g., following a plan from `docs/`), run the build after completing each phase to catch issues early. This prevents accumulating errors that are harder to debug later.
+
+**Example Workflow**:
+```bash
+# After completing Phase 1: Type Definitions
+npm run build  # ✓ Should succeed
+
+# After completing Phase 2: Store Redesign
+npm run build  # ✓ Should succeed
+
+# After completing Phase 3: Components
+npm run build  # ✓ Should succeed
+
+# Only commit when build succeeds
+git add .
+git commit -m "feat: complete phases 1-3"
+```
 
 ---
 
 ## Design System & Styling Standards
 
 ### Template Page Reference
-**RULE 1**: Use the **Gallery page** (`src/app/gallery/page.tsx`) as the template for all new pages.
+**RULE 2**: Use the **Gallery page** (`src/app/gallery/page.tsx`) as the template for all new pages.
 
 All new pages must follow the same:
 - **Layout structure**
@@ -102,7 +126,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ## Component Reusability Standards
 
-**RULE 2**: Always use the common **Select Folder**, **Toolbar**, and **Console** components. Keep all pages using these components with the same style, layout, and colors.
+**RULE 3**: Always use the common **Select Folder**, **Toolbar**, and **Console** components. Keep all pages using these components with the same style, layout, and colors.
 
 ### 1. Folder Selection Components
 **Location**: `src/components/folder/`
@@ -179,7 +203,7 @@ import { SelectionToolbar } from '@/components/selection';
 
 ## Global Console Requirement
 
-**RULE 3**: The Console should be **global** - present on all pages that need feedback, logging, or task tracking.
+**RULE 4**: The Console should be **global** - present on all pages that need feedback, logging, or task tracking.
 
 ### ConsoleViewer Component
 **File**: `src/components/ui/ConsoleViewer.tsx`
@@ -238,7 +262,7 @@ export default function YourPage() {
 
 ## Data Refresh Policy
 
-**RULE 4**: Pages should **NOT auto-refresh**. Only refresh when items (pages, videos, images) are added or removed.
+**RULE 5**: Pages should **NOT auto-refresh**. Only refresh when items (pages, videos, images) are added or removed.
 
 ### Refresh Implementation Pattern
 
@@ -311,7 +335,7 @@ Use `silent: true` for background updates that don't need user notification:
 
 ## Hydration Best Practices
 
-**RULE 5**: Prevent hydration errors by ensuring server-rendered HTML matches client-rendered HTML.
+**RULE 6**: Prevent hydration errors by ensuring server-rendered HTML matches client-rendered HTML.
 
 Hydration errors occur when React's server-rendered HTML doesn't match the client's initial render. This is common with:
 - Theme-dependent components (dark mode)
