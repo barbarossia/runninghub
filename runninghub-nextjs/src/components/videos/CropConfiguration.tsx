@@ -65,7 +65,9 @@ export function CropConfiguration({
     <ConfigurationCard
       title="Crop Configuration"
       icon={Crop}
-      variant="dark"
+      variant="light"
+      iconBgColor="bg-green-100"
+      iconColor="text-green-600"
       disabled={disabled}
       className={className}
       subtitle={
@@ -83,8 +85,8 @@ export function CropConfiguration({
             onClick={() => handleModeChange(CROP_PRESETS.LEFT_HALF)}
             className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.LEFT_HALF
-                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/20'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300'
             }`}
           >
             <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
@@ -98,8 +100,8 @@ export function CropConfiguration({
             onClick={() => handleModeChange(CROP_PRESETS.RIGHT_HALF)}
             className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.RIGHT_HALF
-                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/20'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300'
             }`}
           >
             <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
@@ -113,8 +115,8 @@ export function CropConfiguration({
             onClick={() => handleModeChange(CROP_PRESETS.TOP_HALF)}
             className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.TOP_HALF
-                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/20'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300'
             }`}
           >
             <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
@@ -128,8 +130,8 @@ export function CropConfiguration({
             onClick={() => handleModeChange(CROP_PRESETS.BOTTOM_HALF)}
             className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.BOTTOM_HALF
-                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/20'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300'
             }`}
           >
             <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
@@ -143,8 +145,8 @@ export function CropConfiguration({
             onClick={() => handleModeChange(CROP_PRESETS.CENTER)}
             className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.CENTER
-                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/20'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300'
             }`}
           >
             <div className="w-12 h-8 border border-current rounded mb-2 relative overflow-hidden">
@@ -158,8 +160,8 @@ export function CropConfiguration({
             onClick={() => handleModeChange(CROP_PRESETS.CUSTOM)}
             className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
               cropConfig.mode === CROP_PRESETS.CUSTOM
-                ? 'border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                ? 'border-green-500 bg-green-500 text-white shadow-lg shadow-green-500/20'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300'
             }`}
           >
             <div className="w-12 h-8 border border-current rounded mb-2 flex items-center justify-center">
@@ -171,10 +173,10 @@ export function CropConfiguration({
 
         {/* Custom Crop Options */}
         {cropConfig.mode === CROP_PRESETS.CUSTOM && (
-          <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-white/5">
+          <div className="space-y-4 p-4 rounded-xl border border-gray-200 bg-gray-50">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Width (%)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Width (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -182,11 +184,11 @@ export function CropConfiguration({
                   value={customWidth}
                   onChange={(e) => handleCustomDimensionChange('width', e.target.value)}
                   placeholder="50"
-                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
+                  className="border-gray-300 bg-white text-gray-900 focus:border-green-500 focus:ring-green-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Height (%)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Height (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -194,11 +196,11 @@ export function CropConfiguration({
                   value={customHeight}
                   onChange={(e) => handleCustomDimensionChange('height', e.target.value)}
                   placeholder="100"
-                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
+                  className="border-gray-300 bg-white text-gray-900 focus:border-green-500 focus:ring-green-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">X Position (%)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">X Position (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -206,11 +208,11 @@ export function CropConfiguration({
                   value={customX}
                   onChange={(e) => handleCustomDimensionChange('x', e.target.value)}
                   placeholder="0"
-                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
+                  className="border-gray-300 bg-white text-gray-900 focus:border-green-500 focus:ring-green-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Y Position (%)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Y Position (%)</label>
                 <Input
                   type="number"
                   min="0"
@@ -218,30 +220,30 @@ export function CropConfiguration({
                   value={customY}
                   onChange={(e) => handleCustomDimensionChange('y', e.target.value)}
                   placeholder="0"
-                  className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
+                  className="border-gray-300 bg-white text-gray-900 focus:border-green-500 focus:ring-green-500"
                 />
               </div>
             </div>
 
-            <p className="text-[11px] text-gray-500 leading-relaxed">
+            <p className="text-[11px] text-gray-600 leading-relaxed">
               Enter values as percentages (0-100). Final crop region must stay within video boundaries.
             </p>
           </div>
         )}
 
         {/* Additional Options */}
-        <div className="space-y-4 pt-4 border-t border-white/10">
+        <div className="space-y-4 pt-4 border-t border-gray-200">
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">Output Suffix</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Output Suffix</label>
             <Input
               type="text"
               value={outputSuffix}
               onChange={(e) => handleOutputSuffixChange(e.target.value)}
               placeholder="_cropped"
-              className="bg-black/20 border-white/10 text-white focus:border-blue-500/50 focus:ring-blue-500/20"
+              className="border-gray-300 bg-white text-gray-900 focus:border-green-500 focus:ring-green-500"
             />
-            <p className="text-[11px] text-gray-500 mt-1.5">
-              Resulting filename: <span className="text-gray-400">video{outputSuffix || '_cropped'}.mp4</span>
+            <p className="text-[11px] text-gray-600 mt-1.5">
+              Resulting filename: <span className="text-gray-900 font-medium">video{outputSuffix || '_cropped'}.mp4</span>
             </p>
           </div>
 
@@ -251,10 +253,10 @@ export function CropConfiguration({
                 type="checkbox"
                 checked={cropConfig.preserveAudio || false}
                 onChange={togglePreserveAudio}
-                className="w-4 h-4 rounded border-white/20 bg-black/20 text-blue-500 focus:ring-blue-500/20 focus:ring-offset-0 transition-all cursor-pointer"
+                className="w-4 h-4 rounded border-gray-300 bg-white text-green-600 focus:ring-green-500 focus:ring-offset-2 transition-all cursor-pointer"
               />
             </div>
-            <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Preserve Audio Track</span>
+            <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Preserve Audio Track</span>
           </label>
         </div>
       </div>
