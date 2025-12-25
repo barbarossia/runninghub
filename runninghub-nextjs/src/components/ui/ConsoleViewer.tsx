@@ -30,10 +30,10 @@ interface ConsoleViewerProps {
   autoRefreshInterval?: number; // Optional auto-refresh interval
 }
 
-export function ConsoleViewer({ onRefresh, taskId, defaultVisible = true }: ConsoleViewerProps) {
+export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: ConsoleViewerProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
-  const [isMinimized, setIsMinimized] = useState(() => !taskId && !defaultVisible); // Auto-expand if taskId exists or defaultVisible
+  const [isMinimized, setIsMinimized] = useState(!taskId); // Default to minimized, auto-expand if taskId exists
   const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
 
   const scrollRef = useRef<HTMLDivElement>(null);
