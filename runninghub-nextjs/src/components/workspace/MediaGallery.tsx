@@ -655,158 +655,149 @@ export function MediaGallery({
             setShowMoreDetails(false);
           }
         }}>
-          <DialogContent className="max-w-4xl">
+          <DialogContent className="max-w-6xl w-full">
             <DialogHeader>
-              <DialogTitle>{previewFile.name}</DialogTitle>
-              <DialogDescription>
-                {previewFile.path} • {(previewFile.size / 1024).toFixed(1)} KB
+              <DialogTitle className="line-clamp-1">{previewFile.name}</DialogTitle>
+              <DialogDescription className="line-clamp-1">
+                {previewFile.type === 'image' ? 'Image' : 'Video'} • {previewFile.extension?.toUpperCase() || 'N/A'}
               </DialogDescription>
             </DialogHeader>
-            <div className="relative bg-black rounded-lg overflow-hidden">
-              {previewFile.type === 'video' ? (
-                <video
-                  src={previewFile.blobUrl || ''}
-                  controls
-                  className="w-full max-h-[70vh]"
-                  autoPlay
-                />
-              ) : (
-                <Image
-                  src={previewFile.thumbnail || previewFile.blobUrl || ''}
-                  alt={previewFile.name}
-                  width={previewFile.width || 800}
-                  height={previewFile.height || 600}
-                  className="w-full h-auto object-contain max-h-[70vh]"
-                />
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-sm mt-4">
-              <div>
-                <span className="font-semibold">Type:</span>{' '}
-                {previewFile.type === 'image' ? 'Image' : 'Video'}
-              </div>
-              <div>
-                <span className="font-semibold">Extension:</span>{' '}
-                {previewFile.extension?.toUpperCase() || 'N/A'}
-              </div>
-              {previewFile.width && (
-                <div>
-                  <span className="font-semibold">Dimensions:</span>{' '}
-                  {previewFile.width} × {previewFile.height}
-                </div>
-              )}
-              {previewFile.duration && (
-                <div>
-                  <span className="font-semibold">Duration:</span>{' '}
-                  {previewFile.duration.toFixed(2)}s
-                </div>
-              )}
-              {previewFile.fps && (
-                <div>
-                  <span className="font-semibold">FPS:</span>{' '}
-                  {previewFile.fps}
-                </div>
-              )}
-            </div>
 
-            {/* More Details Toggle */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowMoreDetails(!showMoreDetails)}
-              className="mt-4 w-full"
-            >
-              {showMoreDetails ? (
-                <>
-                  <ChevronUp className="h-4 w-4 mr-2" />
-                  Hide Details
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4 mr-2" />
-                  More Details
-                </>
-              )}
-            </Button>
+            {/* Two-column layout: Preview on left, Details on right */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left: Preview (2/3 width on large screens) */}
+              <div className="lg:col-span-2">
+                <div className="relative bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[400px]">
+                  {previewFile.type === 'video' ? (
+                    <video
+                      src={previewFile.blobUrl || ''}
+                      controls
+                      className="w-full max-h-[60vh]"
+                      autoPlay
+                    />
+                  ) : (
+                    <Image
+                      src={previewFile.thumbnail || previewFile.blobUrl || ''}
+                      alt={previewFile.name}
+                      width={previewFile.width || 800}
+                      height={previewFile.height || 600}
+                      className="w-full h-auto object-contain max-h-[60vh]"
+                    />
+                  )}
+                </div>
+              </div>
 
-            {/* Collapsible Details Section */}
-            <AnimatePresence>
-              {showMoreDetails && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="mt-4 p-4 bg-gray-50 rounded-lg border"
-                >
-                  <h4 className="font-semibold text-sm mb-3">File Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              {/* Right: Details (1/3 width on large screens) */}
+              <div className="lg:col-span-1 space-y-4">
+                {/* Basic Info */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-gray-700">File Information</h3>
+
+                  <div className="space-y-2 text-sm">
                     <div>
-                      <span className="text-gray-600">Full Path:</span>
-                      <p className="font-mono text-xs break-all mt-1">{previewFile.path}</p>
+                      <span className="text-gray-600 text-xs">Type</span>
+                      <p className="font-medium capitalize">{previewFile.type}</p>
                     </div>
+
                     <div>
-                      <span className="text-gray-600">File Size:</span>
-                      <p className="font-medium mt-1">
-                        {(previewFile.size / 1024).toFixed(2)} KB ({previewFile.size.toLocaleString()} bytes)
+                      <span className="text-gray-600 text-xs">Extension</span>
+                      <p className="font-medium">{previewFile.extension?.toUpperCase() || 'N/A'}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-600 text-xs">File Size</span>
+                      <p className="font-medium">
+                        {(previewFile.size / 1024).toFixed(2)} KB
+                        <span className="text-gray-500 text-xs ml-1">({previewFile.size.toLocaleString()} bytes)</span>
                       </p>
                     </div>
-                    <div>
-                      <span className="text-gray-600">MIME Type:</span>
-                      <p className="font-medium mt-1">
-                        {previewFile.type === 'image' ? 'image/' : 'video/'}{previewFile.extension?.replace('.', '')}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">File ID:</span>
-                      <p className="font-mono text-xs break-all mt-1">{previewFile.id}</p>
-                    </div>
-                    {previewFile.type === 'video' && (
-                      <>
-                        {previewFile.duration && (
-                          <div>
-                            <span className="text-gray-600">Video Duration:</span>
-                            <p className="font-medium mt-1">
-                              {Math.floor(previewFile.duration / 60)}:{(previewFile.duration % 60).toFixed(2).padStart(5, '0')}
-                            </p>
-                          </div>
-                        )}
-                        {previewFile.fps && (
-                          <div>
-                            <span className="text-gray-600">Frame Rate:</span>
-                            <p className="font-medium mt-1">{previewFile.fps} FPS</p>
-                          </div>
-                        )}
-                      </>
-                    )}
+
                     {previewFile.width && previewFile.height && (
                       <div>
-                        <span className="text-gray-600">Resolution:</span>
-                        <p className="font-medium mt-1">
-                          {previewFile.width} × {previewFile.height} pixels
-                          {previewFile.type === 'image' && ` (${(previewFile.width / previewFile.height).toFixed(2)}:1 aspect ratio)`}
+                        <span className="text-gray-600 text-xs">Dimensions</span>
+                        <p className="font-medium">
+                          {previewFile.width} × {previewFile.height}
+                          {previewFile.type === 'image' && (
+                            <span className="text-gray-500 text-xs ml-1">
+                              ({(previewFile.width / previewFile.height).toFixed(2)}:1)
+                            </span>
+                          )}
                         </p>
                       </div>
                     )}
-                  </div>
 
-                  {/* Additional Info Section */}
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="font-semibold text-sm mb-2">Technical Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    {previewFile.duration && (
                       <div>
-                        <span className="text-gray-600">Format:</span>
-                        <p className="font-medium mt-1">{previewFile.extension?.replace('.', '').toUpperCase()}</p>
+                        <span className="text-gray-600 text-xs">Duration</span>
+                        <p className="font-medium">
+                          {Math.floor(previewFile.duration / 60)}:{(previewFile.duration % 60).toFixed(2).padStart(5, '0')}
+                        </p>
                       </div>
+                    )}
+
+                    {previewFile.fps && (
                       <div>
-                        <span className="text-gray-600">Category:</span>
-                        <p className="font-medium mt-1 capitalize">{previewFile.type}</p>
+                        <span className="text-gray-600 text-xs">Frame Rate</span>
+                        <p className="font-medium">{previewFile.fps} FPS</p>
                       </div>
-                    </div>
+                    )}
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+
+                {/* Path Info (collapsible) */}
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMoreDetails(!showMoreDetails)}
+                    className="w-full justify-start"
+                  >
+                    {showMoreDetails ? (
+                      <>
+                        <ChevronUp className="h-4 w-4 mr-2" />
+                        Hide Path
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4 mr-2" />
+                        Show Path
+                      </>
+                    )}
+                  </Button>
+
+                  <AnimatePresence>
+                    {showMoreDetails && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-2 text-sm"
+                      >
+                        <div>
+                          <span className="text-gray-600 text-xs">File Path</span>
+                          <p className="font-mono text-xs break-all bg-gray-50 p-2 rounded mt-1 border">
+                            {previewFile.path}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 text-xs">File ID</span>
+                          <p className="font-mono text-xs break-all bg-gray-50 p-2 rounded mt-1 border">
+                            {previewFile.id}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600 text-xs">MIME Type</span>
+                          <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                            {previewFile.type === 'image' ? 'image/' : 'video/'}{previewFile.extension?.replace('.', '')}
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       )}

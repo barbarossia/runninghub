@@ -82,6 +82,20 @@
 - [ ] Test bulk delete operations
 - [ ] Implement actual API integration for rename/delete
 
+### 5.7: Preview Dialog Layout Optimization
+
+**Trigger**: User feedback - "the more detail should not display on preview bottom, there has no space to display, it should display on left or right"
+
+- [x] Change preview dialog to two-column layout (preview left, details right)
+- [x] Move basic file information to right sidebar (always visible)
+- [x] Convert "More Details" button to "Show Path" toggle (collapsible path/ID info)
+- [x] Use grid layout: 2/3 width for preview, 1/3 for details on large screens
+- [x] Make layout responsive: stack vertically on mobile, side-by-side on lg screens
+- [x] Increase dialog max-width to max-w-6xl for better space utilization
+- [x] Run build successfully
+- [ ] Test preview dialog on different screen sizes
+- [ ] Verify details panel displays correctly for both images and videos
+
 ---
 
 ## Progress Summary
@@ -469,10 +483,12 @@ if (!selectedFolder) {
 - [x] All active pages (Workspace, Gallery) auto-restore folder
 - [x] Folder validation working (via existing hook)
 - [x] Phase 5.1 - 3-dot menu added to all files
-- [ ] Phase 5.2-5.4 - Rename, Delete, Preview callbacks in workspace page
-- [ ] Phase 5.5 - All operations tested
+- [x] Phase 5.2-5.4 - Rename, Delete, Preview callbacks in workspace page
+- [x] Phase 5.5 - Build passes
+- [x] Phase 5.6 - Selection toolbar integrated
+- [x] Phase 5.7 - Preview dialog layout optimized (side-by-side)
 - [x] Build succeeds without errors
-- [x] Tests passing
+- [ ] Test all operations on image and video files
 - [x] Changes committed to git
 - [ ] Pull request created
 
@@ -493,13 +509,16 @@ if (!selectedFolder) {
 11. ✅ Complete Phase 4.6 - Build and test all changes
 12. ✅ Commit Phase 4 changes
 13. ✅ Complete Phase 5.1 - Add 3-dot menu to MediaGallery
-14. ⏳ Complete Phase 5.2 - Implement rename in workspace page
-15. ⏳ Complete Phase 5.3 - Implement delete in workspace page
-16. ⏳ Complete Phase 5.4 - Implement preview in workspace page
-17. ⏳ Complete Phase 5.5 - Test all operations
-18. ⏳ Commit Phase 5 changes
-19. ⏳ Create pull request
+14. ✅ Complete Phase 5.2 - Implement rename in workspace page
+15. ✅ Complete Phase 5.3 - Implement delete in workspace page
+16. ✅ Complete Phase 5.4 - Implement preview in workspace page
+17. ✅ Complete Phase 5.5 - Build verification
+18. ✅ Complete Phase 5.6 - Selection toolbar integration
+19. ✅ Complete Phase 5.7 - Preview dialog layout optimization
+20. ⏳ Test all operations on different screen sizes
+21. ⏳ Commit Phase 5.7 changes
+22. ⏳ Create pull request
 
 ---
 
-**Last Updated**: 2025-12-25 - Phase 5 in progress: Adding Rename, Delete, Preview, Details to MediaGallery
+**Last Updated**: 2025-12-25 - Phase 5.7 completed: Preview dialog now uses side-by-side layout with details panel on the right
