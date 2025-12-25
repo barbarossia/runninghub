@@ -247,18 +247,6 @@ export default function FolderSelector({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-        {/* File System API Status - Only show when not available */}
-        {!fileSystemStatus.available && (
-          <Alert className="border-yellow-200 bg-yellow-50">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-sm">
-                {fileSystemStatus.message}
-              </AlertDescription>
-            </div>
-          </Alert>
-        )}
-
         {/* File System Access API Option */}
         {fileSystemStatus.available && (
           <div className="space-y-3">

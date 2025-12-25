@@ -24,21 +24,21 @@ export function useAutoLoadFolder({
   const { lastImageFolder, lastVideoFolder, setLastImageFolder, setLastVideoFolder, setSelectedFolder } =
     useFolderStore();
 
-  const hasAttemptedLoad = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled || hasAttemptedLoad.current) {
+    if (!enabled) {
       return;
     }
-
-    hasAttemptedLoad.current = true;
 
     const lastFolder = folderType === 'images' ? lastImageFolder : lastVideoFolder;
 
-    if (!lastFolder) {
-      // No previous folder to load
+    // Only attempt load if we haven't loaded yet AND we have a folder to load
+    if (hasLoadedRef.current || !lastFolder) {
       return;
     }
+
+    hasLoadedRef.current = true;
 
     // Validate and load the last folder
     const validateAndLoadFolder = async () => {
