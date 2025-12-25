@@ -221,6 +221,7 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option("--node", required=True, help="Node ID to use")
+@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
@@ -230,7 +231,7 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
 @click.pass_context
-def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup):
+def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup, params):
     """Upload a file and process it in one command."""
     source_file_path = file_path
     cfg = ctx.obj["config"]
@@ -242,16 +243,38 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup)
         file_id = client.upload_file(file_path)
         print_success(f"File uploaded successfully! File ID: {file_id}")
 
-        # Step 2: Submit task
+        # Step 2: Build node configs
         print_info(f"Submitting task to node: {node}")
-        node_config = {
+        node_configs = []
+
+        # Add image node config
+        node_configs.append({
             "nodeId": node,
             "fieldName": "image",
             "fieldValue": file_id,
             "description": "image",
-        }
+        })
 
-        task_id = client.submit_task(cfg.workflow_id, [node_config])
+        # Add additional parameter node configs
+        for param in params:
+            try:
+                parts = param.split(':', 2)
+                if len(parts) != 3:
+                    print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                    continue
+
+                node_id, field_type, value = parts
+                node_configs.append({
+                    "nodeId": node_id,
+                    "fieldName": "input" if field_type == "text" else "value",
+                    "fieldValue": value,
+                    "description": field_type,
+                })
+                print_info(f"  Added parameter: node {node_id} = {value}")
+            except Exception as e:
+                print_error(f"Failed to parse parameter '{param}': {e}")
+
+        task_id = client.submit_task(cfg.workflow_id, node_configs)
         print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 3: Wait for completion
