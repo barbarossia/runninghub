@@ -38,21 +38,6 @@ def cli(ctx, env_file):
         sys.exit(1)
 
 
-def resolve_node_id(node_id_or_alias: str, mapping: dict) -> str:
-    """Resolve a node ID or alias to a node ID."""
-    # First check if it's already a node ID (key in mapping)
-    if node_id_or_alias in mapping:
-        return node_id_or_alias
-    
-    # Check if it's an alias (value in mapping)
-    for node_id, alias in mapping.items():
-        if alias.lower() == node_id_or_alias.lower():
-            return node_id
-            
-    # Return as is if not found
-    return node_id_or_alias
-
-
 @cli.command()
 @click.pass_context
 def config(ctx):
@@ -65,11 +50,6 @@ def config(ctx):
     print(f"  API Key: {'*' * len(cfg.api_key)} (hidden)")
     print(f"  Download Directory: {cfg.download_dir}")
     print(f"  Image Folder: {cfg.image_folder}")
-    
-    if cfg.node_mapping:
-        print_info("Node Mapping:")
-        for node_id, alias in cfg.node_mapping.items():
-            print(f"  {node_id}: {alias}")
 
 
 @cli.command()
@@ -112,71 +92,33 @@ def upload(ctx, file_path):
 
 
 @cli.command()
-@click.option("--node", required=True, help="Node ID or alias to use")
-@click.option("--input", "input_value", help="Primary input value for the node")
+@click.option("--node", required=True, help="Node ID to use")
+@click.option("--input", "input_value", required=True, help="Input value for the node")
 @click.option(
     "--type",
     "input_type",
     default="STRING",
     type=click.Choice(["STRING", "IMAGE", "LIST"]),
-    help="Primary input type (default: STRING)",
-)
-@click.option(
-    "--param",
-    "-p",
-    multiple=True,
-    help="Additional parameters in format 'nodeId:fieldName:value'",
+    help="Input type (default: STRING)",
 )
 @click.pass_context
-def invoke(ctx, node, input_value, input_type, param):
-    """Invoke a workflow by submitting a task to specific nodes.
-
-    You can pass a primary node and input, plus additional parameters:
-    example: runninghub invoke --node image --input file_id --type IMAGE -p "trigger word:text:naran"
-    """
+def run(ctx, node, input_value, input_type):
+    """Submit a task to RunningHub."""
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
 
     try:
-        # Resolve main node ID
-        resolved_node = resolve_node_id(node, cfg.node_mapping)
-        
-        node_config_list = []
-        
-        # Add primary node if input_value is provided
-        if input_value:
-            node_config_list.append({
-                "nodeId": resolved_node,
-                "fieldName": "image" if input_type == "IMAGE" else "input",
-                "fieldValue": input_value,
-                "description": "image" if input_type == "IMAGE" else "input",
-            })
+        # Prepare node configuration using RunningHub API format
+        # Based on API response: nodeId, fieldName, fieldValue
+        node_config = {
+            "nodeId": node,
+            "fieldName": "image" if input_type == "IMAGE" else "input",
+            "fieldValue": input_value,
+            "description": "image" if input_type == "IMAGE" else "input",
+        }
 
-        # Add additional parameters
-        for p in param:
-            try:
-                parts = p.split(":", 2)
-                if len(parts) != 3:
-                    raise ValueError("Format must be nodeId:fieldName:value")
-
-                p_node_id_or_alias, p_field_name, p_value = parts
-                p_node_id = resolve_node_id(p_node_id_or_alias, cfg.node_mapping)
-                
-                node_config_list.append({
-                    "nodeId": p_node_id,
-                    "fieldName": p_field_name,
-                    "fieldValue": p_value,
-                    "description": p_field_name,
-                })
-            except ValueError as e:
-                print_warning(f"Skipping invalid parameter '{p}': {e}")
-
-        if not node_config_list:
-            print_error("No node configurations provided. Use --input or -p.")
-            return
-
-        print_info(f"Submitting task with {len(node_config_list)} node configurations")
-        task_id = client.submit_task(cfg.workflow_id, node_config_list)
+        print_info(f"Submitting task to node: {node}")
+        task_id = client.submit_task(cfg.workflow_id, [node_config])
 
         print_success(f"Task submitted successfully!")
         print(f"Task ID: {task_id}")
@@ -184,7 +126,6 @@ def invoke(ctx, node, input_value, input_type, param):
 
     except Exception as e:
         print_error(f"Failed to submit task: {e}")
-
 
 
 @cli.command()
@@ -280,12 +221,6 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option("--node", required=True, help="Node ID to use")
-@click.option(
-    "--param",
-    "-p",
-    multiple=True,
-    help="Additional parameters in format 'nodeId:fieldName:value'",
-)
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
@@ -295,14 +230,8 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
 @click.pass_context
-def process(
-    ctx, file_path, node, param, timeout, output_json, no_download, no_cleanup
-):
-    """Upload a file and process it in one command.
-
-    You can pass additional parameters using -p/--param:
-    example: runninghub process image.png --node 203 -p 231:text:hello -p 235:value:512
-    """
+def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup):
+    """Upload a file and process it in one command."""
     source_file_path = file_path
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
@@ -313,50 +242,16 @@ def process(
         file_id = client.upload_file(file_path)
         print_success(f"File uploaded successfully! File ID: {file_id}")
 
-        # Resolve main node ID
-        resolved_node = resolve_node_id(node, cfg.node_mapping)
-
         # Step 2: Submit task
-        print_info(f"Submitting task to node: {resolved_node}")
+        print_info(f"Submitting task to node: {node}")
+        node_config = {
+            "nodeId": node,
+            "fieldName": "image",
+            "fieldValue": file_id,
+            "description": "image",
+        }
 
-        # Start with the main image node
-        node_config_list = [
-            {
-                "nodeId": resolved_node,
-                "fieldName": "image",
-                "fieldValue": file_id,
-                "description": "image",
-            }
-        ]
-
-        # Add additional parameters
-        for p in param:
-            try:
-                # Split by first 2 colons only to allow value to contain colons
-                parts = p.split(":", 2)
-                if len(parts) != 3:
-                    raise ValueError("Format must be nodeId:fieldName:value")
-
-                p_node_id_or_alias, p_field_name, p_value = parts
-                
-                # Resolve node ID if it's an alias
-                p_node_id = resolve_node_id(p_node_id_or_alias, cfg.node_mapping)
-                
-                node_config_list.append(
-                    {
-                        "nodeId": p_node_id,
-                        "fieldName": p_field_name,
-                        "fieldValue": p_value,
-                        "description": p_field_name,
-                    }
-                )
-                print_info(
-                    f"Added param: Node {p_node_id} ({p_field_name}) = {p_value}"
-                )
-            except ValueError as e:
-                print_warning(f"Skipping invalid parameter '{p}': {e}")
-
-        task_id = client.submit_task(cfg.workflow_id, node_config_list)
+        task_id = client.submit_task(cfg.workflow_id, [node_config])
         print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 3: Wait for completion
@@ -429,12 +324,6 @@ def process(
     help="File pattern to match (default: * processes all files)",
 )
 @click.option(
-    "--param",
-    "-p",
-    multiple=True,
-    help="Additional parameters in format 'nodeId:fieldName:value'",
-)
-@click.option(
     "--timeout", default=600, help="Timeout per file in seconds (default: 600)"
 )
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
@@ -453,18 +342,13 @@ def batch(
     input_dir,
     node,
     pattern,
-    param,
     timeout,
     output_json,
     no_download,
     no_cleanup,
     max_concurrent,
 ):
-    """Batch process all files in a directory.
-
-    You can pass additional parameters using -p/--param:
-    example: runninghub batch ./images --node 203 -p 231:text:hello
-    """
+    """Batch process all files in a directory."""
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
 
@@ -488,31 +372,6 @@ def batch(
     successful_count = 0
     failed_count = 0
 
-    # Parse additional parameters once
-    extra_params = []
-    for p in param:
-        try:
-            parts = p.split(":", 2)
-            if len(parts) != 3:
-                raise ValueError("Format must be nodeId:fieldName:value")
-            
-            p_node_id_or_alias = parts[0]
-            p_node_id = resolve_node_id(p_node_id_or_alias, cfg.node_mapping)
-            
-            extra_params.append(
-                {
-                    "nodeId": p_node_id,
-                    "fieldName": parts[1],
-                    "fieldValue": parts[2],
-                    "description": parts[1],
-                }
-            )
-        except ValueError as e:
-            print_warning(f"Skipping invalid parameter '{p}': {e}")
-
-    # Resolve main node ID
-    resolved_main_node = resolve_node_id(node, cfg.node_mapping)
-
     for i, file_path in enumerate(files_to_process, 1):
         print(f"\n{'=' * 60}")
         print_info(f"Processing file {i}/{len(files_to_process)}: {file_path.name}")
@@ -525,21 +384,15 @@ def batch(
             print_success(f"File uploaded successfully! File ID: {file_id}")
 
             # Step 2: Submit task
-            print_info(f"Submitting task to node: {resolved_main_node}")
-            
-            # Construct node config list
-            node_config_list = [
-                {
-                    "nodeId": resolved_main_node,
-                    "fieldName": "image",
-                    "fieldValue": file_id,
-                    "description": "image",
-                }
-            ]
-            # Add extra params
-            node_config_list.extend(extra_params)
+            print_info(f"Submitting task to node: {node}")
+            node_config = {
+                "nodeId": node,
+                "fieldName": "image",
+                "fieldValue": file_id,
+                "description": "image",
+            }
 
-            task_id = client.submit_task(cfg.workflow_id, node_config_list)
+            task_id = client.submit_task(cfg.workflow_id, [node_config])
             print_success(f"Task submitted successfully! Task ID: {task_id}")
 
             # Step 3: Wait for completion
@@ -926,46 +779,146 @@ def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
 
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
-@click.option("--mode", required=True, type=click.Choice(['left', 'right', 'center', 'custom']), help="Crop mode")
-@click.option("--width", help="Width percentage (0-100)")
-@click.option("--height", help="Height percentage (0-100)")
-@click.option("--x", help="X position percentage (0-100)")
-@click.option("--y", help="Y position percentage (0-100)")
-@click.option("--suffix", default="_cropped", help="Output filename suffix")
-@click.option("--preserve-audio", is_flag=True, help="Keep audio track")
-@click.option("--timeout", default=3600, help="Timeout in seconds")
+@click.option(
+    "--mode",
+    type=click.Choice(['left', 'right', 'center', 'top', 'bottom', 'custom'],
+                      case_sensitive=False),
+    default='left',
+    help="Crop mode: left, right, center, top, bottom, or custom"
+)
+@click.option(
+    "--output-suffix",
+    default="_cropped",
+    help="Suffix for output file (default: _cropped)"
+)
+@click.option(
+    "--width",
+    help="Custom width (for custom mode, e.g., iw*0.5 for 50%)"
+)
+@click.option(
+    "--height",
+    help="Custom height (for custom mode, e.g., ih*0.5 for 50%)"
+)
+@click.option(
+    "--x",
+    help="Custom X position (for custom mode, e.g., iw*0.25 for 25%)"
+)
+@click.option(
+    "--y",
+    help="Custom Y position (for custom mode, e.g., ih*0.25 for 25%)"
+)
+@click.option(
+    "--preserve-audio",
+    is_flag=True,
+    help="Preserve audio track"
+)
+@click.option(
+    "--timeout",
+    default=3600,
+    help="Timeout in seconds (default: 3600)"
+)
 @click.pass_context
-def crop(ctx, file_path, mode, width, height, x, y, suffix, preserve_audio, timeout):
-    """Crop a video file."""
+def crop(ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audio, timeout):
+    """Crop a single video file using FFmpeg."""
     from .video_utils import crop_video, check_ffmpeg_available
 
     video_path = Path(file_path)
 
+    # Check FFmpeg availability
     if not check_ffmpeg_available():
         print_error("FFmpeg is not installed or not accessible.")
+        print_info("Install with: brew install ffmpeg (macOS)")
         sys.exit(1)
 
+    # Validate custom mode parameters
+    if mode == 'custom':
+        if not all([width, height]):
+            print_error("Custom mode requires --width and --height")
+            sys.exit(1)
+
     try:
-        success, stdout, stderr, output_path = crop_video(
+        print_info(f"Cropping: {video_path.name} (mode: {mode})")
+        print_info(f"Output: {video_path.stem}{output_suffix}{video_path.suffix}")
+
+        success, stdout, stderr = crop_video(
             video_path,
             mode=mode,
+            output_suffix=output_suffix,
             width=width,
             height=height,
             x=x,
             y=y,
-            output_suffix=suffix,
             preserve_audio=preserve_audio,
             timeout=timeout
         )
 
         if success:
-            print_success(f"Video cropped successfully: {output_path}")
+            print_success(f"Successfully cropped: {video_path.name}")
         else:
-            print_error(f"Failed to crop video: {stderr}")
+            print_error(f"Failed to crop: {video_path.name}")
+            if stderr:
+                print(f"Error output: {stderr[-500:]}")  # Last 500 chars
+            sys.exit(1)
+
+    except TimeoutError as e:
+        print_error(f"Cropping timed out: {e}")
+        sys.exit(1)
+
+    except Exception as e:
+        print_error(f"Failed to crop: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--mode", default="last_frame", help="Extraction mode")
+@click.option("--format", "image_format", default="png", type=click.Choice(["png", "jpg"]), help="Output image format")
+@click.option("--quality", default=95, type=int, help="Image quality (for JPG)")
+@click.option("--frame-count", default=5, type=int, help="Number of frames (for last_frames mode)")
+@click.option("--interval", "interval_seconds", default=10, type=float, help="Interval in seconds")
+@click.option("--frame-interval", default=1, type=int, help="Interval in frames")
+@click.option("--organize/--no-organize", default=True, help="Organize images by video name")
+@click.option("--delete/--no-delete", default=False, help="Delete video after processing")
+@click.option("--output-dir", type=click.Path(), required=True, help="Output directory")
+@click.option("--timeout", default=3600, help="Timeout in seconds")
+@click.pass_context
+def clip(ctx, file_path, mode, image_format, quality, frame_count, interval_seconds, 
+         frame_interval, organize, delete, output_dir, timeout):
+    """Extract frames from a video file."""
+    from .video_utils import clip_video
+
+    video_path = Path(file_path)
+    out_dir = Path(output_dir)
+
+    clip_config = {
+        'mode': mode,
+        'imageFormat': image_format,
+        'quality': quality,
+        'frameCount': frame_count,
+        'intervalSeconds': interval_seconds,
+        'intervalFrames': frame_interval,
+        'organizeByVideo': organize,
+        'deleteOriginal': delete
+    }
+
+    try:
+        success, stdout, stderr = clip_video(
+            video_path,
+            clip_config,
+            out_dir,
+            timeout=timeout
+        )
+
+        if success:
+            if stdout:
+                print(stdout)
+        else:
+            if stderr:
+                print_error(stderr)
             sys.exit(1)
 
     except Exception as e:
-        print_error(f"Error: {e}")
+        print_error(f"Failed to clip: {e}")
         sys.exit(1)
 
 

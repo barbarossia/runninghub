@@ -16,10 +16,15 @@ export default function Home() {
     missing: string[];
     warnings: string[];
   } | null>(null);
+  const [mounted, setMounted] = useState(false);
 
+  // Run validation only after client-side hydration
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
+    setMounted(true);
     setEnvValidation(validateEnvironment());
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
@@ -86,12 +91,31 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 mb-4">
-                Crop videos to specific aspect ratios or custom dimensions. Ideal for social media and focused content.
+                Crop videos to specific regions using FFmpeg. Support for preset ratios and custom dimensions.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Presets</Badge>
-                <Badge variant="secondary">Custom UI</Badge>
-                <Badge variant="secondary">Fast Processing</Badge>
+                <Badge variant="secondary">FFmpeg</Badge>
+                <Badge variant="secondary">Custom Crop</Badge>
+                <Badge variant="secondary">Preset Ratios</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-2xl">📸</span>
+                Video Clipping
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-4">
+                Extract frames from videos as images. Supports multiple extraction modes and high-quality output.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">Python</Badge>
+                <Badge variant="secondary">Batch Extract</Badge>
+                <Badge variant="secondary">Multi-mode</Badge>
               </div>
             </CardContent>
           </Card>
@@ -164,7 +188,11 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {envValidation ? (
+            {!mounted ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : envValidation ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${envValidation.isValid ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -241,6 +269,11 @@ export default function Home() {
             <Link href="/videos/crop">
               <Button variant="default" className="bg-green-600 hover:bg-green-700">
                 Video Cropping
+              </Button>
+            </Link>
+            <Link href="/videos/clip">
+              <Button variant="default" className="bg-orange-600 hover:bg-orange-700">
+                Video Clipping
               </Button>
             </Link>
             <Button variant="outline" disabled>

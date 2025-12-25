@@ -1,34 +1,8 @@
-/**
- * File System Access API utilities for modern folder selection
- * Provides cross-browser compatibility and fallback mechanisms
- */
-
-export interface FileHandleInfo {
-  handle: FileSystemFileHandle | FileSystemDirectoryHandle;
-  file?: File;
-}
-
-export interface FileSystemDirectoryHandle {
-  name: string;
-  entries(): AsyncIterableIterator<[string, FileSystemHandle]>;
-  getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FileSystemDirectoryHandle>;
-  getFileHandle(name: string): Promise<FileSystemFileHandle>;
-}
-
-export interface FileSystemFileHandle {
-  name: string;
-  kind: 'file';
-  getFile(): Promise<File>;
-}
-
-export interface FileSystemHandle {
-  name: string;
-  kind: 'file' | 'directory';
-}
+import type { FileHandleInfo, ImageFile, VideoFile, FolderItem } from '@/types';
 
 declare global {
   interface Window {
-    showDirectoryPicker?: (options?: { mode?: string; startIn?: string }) => Promise<FileSystemDirectoryHandle>;
+    showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite'; startIn?: WellKnownDirectory | FileSystemHandle }) => Promise<FileSystemDirectoryHandle>;
   }
 }
 
@@ -229,8 +203,6 @@ export async function getDirectoryInfo(
   };
 }
 
-import { ImageFile, VideoFile, FolderItem } from '@/types';
-
 /**
  * Convert directory entries to processable format
  */
@@ -242,8 +214,7 @@ export interface ProcessableFormatResult {
 }
 
 export function convertToProcessableFormat(
-  entries: DirectoryEntry[],
-  _basePath: string = ''
+  entries: DirectoryEntry[]
 ): ProcessableFormatResult {
   const images: ImageFile[] = [];
   const videos: VideoFile[] = [];
@@ -253,7 +224,7 @@ export function convertToProcessableFormat(
   entries.forEach(entry => {
     if (entry.kind === 'file' && entry.file) {
       const extension = entry.name.split('.').pop()?.toLowerCase() || '';
-      
+
       // Create blob URL for the file
       let blobUrl: string | undefined;
       if (entry.file) {
@@ -261,22 +232,31 @@ export function convertToProcessableFormat(
         blobUrls.push(blobUrl);
       }
 
-      const fileObj = {
-        name: entry.name,
-        path: entry.path,
-        size: entry.size || 0,
-        type: (entry.type === 'video' ? 'video' : 'image') as 'video' | 'image',
-        extension: `.${extension}`,
-        is_virtual: true,
-        file_handle_info: entry.file_handle_info as FileHandleInfo,
-        blob_url: blobUrl
-      };
-
       if (entry.type === 'video') {
-        videos.push(fileObj as VideoFile);
+        const fileObj: VideoFile = {
+          name: entry.name,
+          path: entry.path,
+          size: entry.size || 0,
+          type: 'video',
+          extension: `.${extension}`,
+          is_virtual: true,
+          file_handle_info: entry.file_handle_info,
+          blob_url: blobUrl
+        };
+        videos.push(fileObj);
       } else {
         // Default to image or if type is image
-        images.push(fileObj as ImageFile);
+        const fileObj: ImageFile = {
+          name: entry.name,
+          path: entry.path,
+          size: entry.size || 0,
+          type: 'image',
+          extension: `.${extension}`,
+          is_virtual: true,
+          file_handle_info: entry.file_handle_info,
+          blob_url: blobUrl
+        };
+        images.push(fileObj);
       }
     } else if (entry.kind === 'directory') {
       folders.push({

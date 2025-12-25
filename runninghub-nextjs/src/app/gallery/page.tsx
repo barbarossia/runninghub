@@ -1,8 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import FolderSelector, { FolderInfo as FolderSelectorFolderInfo } from '@/components/folder/FolderSelector';
-import { ImageGallery, ImageProcessConfig } from '@/components/images';
+import { useFolderStore } from '@/store/folder-store';
+import { useImageStore } from '@/store/image-store';
+import { useSelectionStore } from '@/store/selection-store';
+import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
+import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
+import { ImageGallery } from '@/components/images';
+import { ImageProcessConfig } from '@/components/images';
 import { ImageGallerySkeleton } from '@/components/images/ImageGallerySkeleton';
 import { SelectionToolbar } from '@/components/selection';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
@@ -17,26 +23,22 @@ import {
   Home,
   Images,
   ArrowLeft,
-  RefreshCw,
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import {
-  useFolderStore,
-  useImageStore,
-  useSelectionStore,
-  useProcessStore,
-} from '@/store';
+import { useFolderStore as useLegacyFolderStore, useImageStore as useLegacyImageStore, useSelectionStore as useLegacySelectionStore, useProcessStore } from '@/store';
 import { useFileSystem } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
 import type { ImageFile } from '@/types';
 
 export default function GalleryPage() {
-  // Store state
+  // Store state - use new modular stores
   const { selectedFolder, isLoadingFolder } = useFolderStore();
   const { images, isLoadingImages, error: imageError } = useImageStore();
   const { deselectAll } = useSelectionStore();
+
+  // Use legacy stores for process config (until migrated)
   const { config: processConfig, setConfig: setProcessConfig } = useProcessStore();
 
   // Local state
@@ -49,6 +51,17 @@ export default function GalleryPage() {
 
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
+
+  const handleRefresh = async (silent = false) => {
+    if (selectedFolder) {
+      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id, silent);
+    }
+  };
+
+  // Use folder selection hook with error handling
+  const { handleFolderSelected } = useFolderSelection({
+    folderType: 'images',
+  });
 
   // Combine errors
   const error = localError || imageError;
@@ -79,48 +92,6 @@ export default function GalleryPage() {
     }
   };
 
-  const handleFolderSelected = (folderInfo: FolderSelectorFolderInfo) => {
-    setLocalError('');
-
-    // Set the selected folder in the store
-    const { setSelectedFolder, addRecentFolder } = useFolderStore.getState();
-    setSelectedFolder({
-      success: true,
-      folder_name: folderInfo.name,
-      folder_path: folderInfo.path,
-      session_id: folderInfo.session_id,
-      is_virtual: folderInfo.is_virtual,
-      message: 'Folder selected',
-    });
-
-    // Add to recent folders if we have a path
-    if (folderInfo.path) {
-      addRecentFolder({
-        name: folderInfo.name,
-        path: folderInfo.path,
-        source: folderInfo.source as 'filesystem_api' | 'manual_input',
-      });
-    }
-
-    // If File System Access API provided images directly, load them into the store
-    if (folderInfo.images && folderInfo.images.length > 0) {
-      const { setImages } = useImageStore.getState();
-      setImages(folderInfo.images);
-
-      // Also set folder contents
-      const { setFolderContents } = useFolderStore.getState();
-      setFolderContents({
-        current_path: folderInfo.path,
-        parent_path: undefined,
-        images: folderInfo.images,
-        folders: (folderInfo.folders || []).map(f => ({ ...f, type: 'folder' as const })),
-        videos: [], // Initialize empty videos array for gallery
-        is_direct_access: true,
-      });
-    }
-    // Otherwise, the useEffect will load contents via API
-  };
-
   const handleError = (errorMessage: string) => {
     setLocalError(errorMessage);
   };
@@ -131,12 +102,6 @@ export default function GalleryPage() {
     useImageStore.getState().setImages([]);
     deselectAll();
     setLocalError('');
-  };
-
-  const handleRefresh = async (silent = false) => {
-    if (selectedFolder) {
-      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id, silent);
-    }
   };
 
   const handleDelete = async (selectedPaths: string[]) => {
@@ -219,6 +184,53 @@ export default function GalleryPage() {
     console.log('Image double clicked:', image);
   }, []);
 
+  // Feature cards for gallery
+  const featureCards = (
+    <div className="grid md:grid-cols-2 gap-6 mt-12">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FolderOpen className="h-5 w-5 text-blue-600" />
+            File System Access
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Modern, secure folder selection directly in your browser.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="text-xs">Secure</Badge>
+              <Badge variant="secondary" className="text-xs">Cross-platform</Badge>
+              <Badge variant="secondary" className="text-xs">No Upload</Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Settings className="h-5 w-5 text-green-600" />
+            Manual Input
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Direct folder path input for advanced users and server deployment.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="text-xs">Flexible</Badge>
+              <Badge variant="secondary" className="text-xs">Server-ready</Badge>
+              <Badge variant="secondary" className="text-xs">Absolute paths</Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
@@ -265,113 +277,29 @@ export default function GalleryPage() {
 
         {/* Main Content */}
         {!selectedFolder ? (
-          /* Folder Selection */
-          <div className="space-y-8">
-            <div className="text-center">
-              <h1 className="text-3xl font-bold text-gray-900 mb-4">
-                Select Image Folder
-              </h1>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Choose a folder containing images to process using RunningHub AI workflows.
-                You can use modern File System Access API or manual folder input.
-              </p>
-            </div>
-
-            <FolderSelector
-              onFolderSelected={handleFolderSelected}
-              onError={handleError}
-            />
-
-            {/* Feature Cards */}
-            <div className="grid md:grid-cols-2 gap-6 mt-12">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <FolderOpen className="h-5 w-5 text-blue-600" />
-                    File System Access
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <p className="text-sm text-gray-600">
-                      Modern, secure folder selection directly in your browser.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary" className="text-xs">Secure</Badge>
-                      <Badge variant="secondary" className="text-xs">Cross-platform</Badge>
-                      <Badge variant="secondary" className="text-xs">No Upload</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Settings className="h-5 w-5 text-green-600" />
-                    Manual Input
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <p className="text-sm text-gray-600">
-                      Direct folder path input for advanced users and server deployment.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary" className="text-xs">Flexible</Badge>
-                      <Badge variant="secondary" className="text-xs">Server-ready</Badge>
-                      <Badge variant="secondary" className="text-xs">Absolute paths</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          <FolderSelectionLayout
+            title="Select Image Folder"
+            description="Choose a folder containing images to process using RunningHub AI workflows. You can use modern File System Access API or manual folder input."
+            icon={Images}
+            iconBgColor="bg-blue-50"
+            iconColor="text-blue-600"
+            onFolderSelected={handleFolderSelected}
+            onError={handleError}
+            features={featureCards}
+          />
         ) : (
           /* Selected Folder Display */
           <div className="space-y-6">
-            {/* Compact Header */}
-            <div className="flex items-center justify-between bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="p-2 bg-blue-50 rounded-lg">
-                  <FolderOpen className="h-6 w-6 text-blue-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-bold text-gray-900 truncate">
-                    {selectedFolder.folder_name}
-                  </h2>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span 
-                      className="truncate max-w-[300px] sm:max-w-[500px]" 
-                      title={selectedFolder.folder_path}
-                    >
-                      {selectedFolder.folder_path}
-                    </span>
-                    <Badge variant="secondary" className="h-5 px-1.5 font-normal text-[10px]">
-                      {images.length} images
-                    </Badge>
-                    {selectedFolder.is_virtual && (
-                      <Badge variant="outline" className="h-5 px-1.5 font-normal text-[10px]">
-                        FS API
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 ml-4">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 hover:bg-gray-100"
-                  onClick={() => handleRefresh(false)}
-                  disabled={isLoadingImages}
-                  title="Refresh folder"
-                >
-                  <RefreshCw className={`h-4 w-4 text-gray-600 ${isLoadingImages ? 'animate-spin' : ''}`} />
-                </Button>
-              </div>
-            </div>
+            <SelectedFolderHeader
+              folderName={selectedFolder.folder_name}
+              folderPath={selectedFolder.folder_path}
+              itemCount={images.length}
+              itemType="images"
+              isVirtual={selectedFolder.is_virtual}
+              isLoading={isLoadingImages}
+              onRefresh={() => handleRefresh(false)}
+              colorVariant="blue"
+            />
 
             {/* Selection Toolbar */}
             <SelectionToolbar
@@ -401,10 +329,10 @@ export default function GalleryPage() {
         )}
 
         {/* Console Viewer */}
-        <ConsoleViewer 
-          onRefresh={handleRefresh} 
-          autoRefreshInterval={5000} 
+        <ConsoleViewer
+          onRefresh={handleRefresh}
           taskId={activeConsoleTaskId}
+          defaultVisible={true}
         />
       </div>
     </div>

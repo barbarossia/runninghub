@@ -1,246 +1,246 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useVideoSelectionStore, useCropStore, useVideoStore, useFolderStore } from '@/store';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
+import { useState, useEffect, useCallback } from 'react';
+import { useFolderStore } from '@/store/folder-store';
+import { useVideoStore } from '@/store/video-store';
+import { useVideoSelectionStore } from '@/store/video-selection-store';
+import { useProgressStore } from '@/store/progress-store';
+import { useCropStore } from '@/store/crop-store';
+import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
+import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
+import { VideoGallery } from '@/components/videos/VideoGallery';
+import { VideoSelectionToolbar } from '@/components/videos/VideoSelectionToolbar';
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
-import FolderSelector, { FolderInfo } from '@/components/folder/FolderSelector';
-import { ArrowLeft, Video, Crop, Loader2, CheckSquare, Square, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
+import { ProgressModal } from '@/components/progress/ProgressModal';
+import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
+import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
+import type { VideoFile } from '@/types';
+import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
 import { toast } from 'sonner';
-import { API_ENDPOINTS } from '@/constants';
+import { ArrowLeft, Crop } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-export default function CropPage() {
-  const { selectedVideos, toggleVideo, selectAll, deselectAll } = useVideoSelectionStore();
-  const { videos, setVideos } = useVideoStore();
-  const { selectedFolder, setSelectedFolder, addRecentFolder } = useFolderStore();
+export default function VideoCropPage() {
+  const { selectedFolder, clearFolder } = useFolderStore();
+  const { videos, setVideos, filteredVideos } = useVideoStore();
+  const { deselectAll } = useVideoSelectionStore();
+  const { isProgressModalOpen } = useProgressStore();
   const { cropConfig } = useCropStore();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
-  const [taskId, setTaskId] = useState<string | null>(null);
 
-  const selectedPaths = Array.from(selectedVideos.keys());
-  const hasVideos = videos.length > 0;
-  const isAllSelected = hasVideos && selectedPaths.length === videos.length;
+  const [isLoadingFolder, setIsLoadingFolder] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
 
-  // Load videos if store is empty but folder is selected
-  useEffect(() => {
-    const loadVideos = async () => {
-      if (videos.length === 0 && selectedFolder && !selectedFolder.is_virtual) {
-        setIsLoadingVideos(true);
-        try {
-          const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              folder_path: selectedFolder.folder_path, 
-              session_id: selectedFolder.session_id 
-            }),
-          });
+  const { handleFolderSelected } = useFolderSelection({
+    folderType: 'videos',
+  });
 
-          const data = await response.json();
-          if (data.videos) {
-            setVideos(data.videos);
-          }
-        } catch (error) {
-          console.error('Error loading folder contents:', error);
-          toast.error('Failed to load videos from folder');
-        } finally {
-          setIsLoadingVideos(false);
-        }
-      }
-    };
-
-    loadVideos();
-  }, [videos.length, selectedFolder, setVideos]);
-
-  const handleFolderSelected = (folderInfo: FolderInfo) => {
-    setSelectedFolder({
-      success: true,
-      folder_name: folderInfo.name,
-      folder_path: folderInfo.path,
-      session_id: folderInfo.session_id,
-      is_virtual: folderInfo.is_virtual,
-      message: 'Folder selected',
-    });
-
-    if (folderInfo.path) {
-      addRecentFolder({
-        name: folderInfo.name,
-        path: folderInfo.path,
-        source: (folderInfo.source || (folderInfo.is_virtual ? 'filesystem_api' : 'manual_input')) as 'filesystem_api' | 'manual_input',
-      });
-    }
-
-    if (folderInfo.videos) {
-      setVideos(folderInfo.videos);
-    } else {
-        // If no videos provided directly, trigger reload via useEffect or manual fetch
-        // Setting selectedFolder will trigger useEffect, but useEffect checks if videos.length === 0
-        // So we might need to manually trigger if folderInfo.videos is undefined
-        // Actually, FolderSelector typically returns videos if using FS API.
-        // If manual input, it validates but might not return videos immediately in `select` response
-        // Wait, FolderSelector `handleManualInput` calls `/api/folder/select`.
-        // `/api/folder/select` returns folder info.
-        // It doesn't return videos.
-        // So we rely on useEffect to load videos.
-        // But useEffect depends on [videos.length, selectedFolder].
-        // If videos.length is 0, it runs.
-    }
-  };
-
-  const handleStartCrop = async () => {
-    if (selectedPaths.length === 0) {
-      toast.error('No videos selected');
-      return;
-    }
-
-    setIsProcessing(true);
+  const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string) => {
+    setIsLoadingFolder(true);
     try {
+      const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_path: folderPath, session_id: sessionId }),
+      });
+
+      const data = await response.json();
+
+      if (data.videos) {
+        // Show all videos
+        setVideos(data.videos);
+      }
+    } catch (error) {
+      console.error('Error loading folder contents:', error);
+      toast.error(ERROR_MESSAGES.FOLDER_NOT_FOUND);
+    } finally {
+      setIsLoadingFolder(false);
+    }
+  }, [setVideos]);
+
+  // Load folder contents when folder is selected
+  useEffect(() => {
+    if (selectedFolder && !selectedFolder.is_virtual) {
+      loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+    }
+  }, [selectedFolder, loadFolderContents]);
+
+  // Track modal state
+  useEffect(() => {
+    setIsModalOpen(isProgressModalOpen);
+  }, [isProgressModalOpen]);
+
+  const handleCropVideos = async (selectedPaths: string[]) => {
+    // Validate crop configuration
+    if (cropConfig.mode === 'custom') {
+      const config = {
+        x: parseFloat(cropConfig.customX || '0') || 0,
+        y: parseFloat(cropConfig.customY || '0') || 0,
+        width: parseFloat(cropConfig.customWidth || '50') || 0,
+        height: parseFloat(cropConfig.customHeight || '100') || 0,
+      };
+
+      const validation = validateCropConfig(config);
+      if (!validation.valid) {
+        toast.error(validation.error || ERROR_MESSAGES.INVALID_CROP_CONFIG);
+        return;
+      }
+    }
+
+    try {
+      // Build crop config for API
+      const crop_config = {
+        mode: cropConfig.mode,
+      };
+
+      // Add custom dimensions if in custom mode
+      if (cropConfig.mode === 'custom') {
+        const customWidth = cropConfig.customWidth ? parseFloat(cropConfig.customWidth) : undefined;
+        const customHeight = cropConfig.customHeight ? parseFloat(cropConfig.customHeight) : undefined;
+        const customX = cropConfig.customX ? parseFloat(cropConfig.customX) : undefined;
+        const customY = cropConfig.customY ? parseFloat(cropConfig.customY) : undefined;
+
+        const params = buildCustomCropParams({
+          customWidth,
+          customHeight,
+          customX,
+          customY,
+        });
+        Object.assign(crop_config, params);
+      }
+
       const response = await fetch(API_ENDPOINTS.VIDEOS_CROP, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videos: selectedPaths,
-          crop_config: {
-            mode: cropConfig.mode,
-            width: cropConfig.customWidth,
-            height: cropConfig.customHeight,
-            x: cropConfig.customX,
-            y: cropConfig.customY,
-          },
-          output_suffix: cropConfig.outputSuffix,
-          preserve_audio: cropConfig.preserveAudio,
+          crop_config,
+          output_suffix: cropConfig.outputSuffix || '_cropped',
+          preserve_audio: cropConfig.preserveAudio || false,
+          timeout: 3600,
         }),
       });
 
       const data = await response.json();
+
       if (data.success) {
-        setTaskId(data.task_id);
-        toast.success('Video cropping started');
+        if (data.task_id) {
+          setCurrentTaskId(data.task_id);
+        }
+
+        // Refresh folder contents after cropping completes
+        setTimeout(() => {
+          if (selectedFolder && !selectedFolder.is_virtual) {
+            loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+          }
+        }, 2000);
       } else {
-        throw new Error(data.error || 'Failed to start cropping');
+        toast.error(data.error || ERROR_MESSAGES.CROP_FAILED);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error starting crop');
-    } finally {
-      setIsProcessing(false);
+      console.error('Error cropping videos:', error);
+      toast.error(ERROR_MESSAGES.CROP_FAILED);
     }
   };
 
-  const handleSelectAll = () => {
-    if (isAllSelected) {
-      deselectAll();
-    } else {
-      selectAll(videos);
+  const handleRefresh = async (silent = false) => {
+    if (selectedFolder && !selectedFolder.is_virtual) {
+      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+      if (!silent) {
+        toast.success('Folder contents refreshed');
+      }
+    } else if (!silent) {
+      toast.info('Cannot refresh virtual folder');
     }
+  };
+
+  const handleBackToSelection = () => {
+    clearFolder();
+    setVideos([]);
+    deselectAll();
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <Link href="/videos">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Videos
-          </Button>
-        </Link>
-        <h1 className="text-2xl font-bold">Crop Videos</h1>
-        <div className="w-20" />
-      </div>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto p-6 max-w-7xl">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Video Cropping</h1>
+            <p className="text-muted-foreground mt-1">
+              Crop videos to specific regions using FFmpeg
+            </p>
+          </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-1 space-y-6">
-          <CropConfiguration disabled={isProcessing} />
-          
-          <Button
-            className="w-full h-12 text-lg font-bold"
-            disabled={isProcessing || selectedPaths.length === 0}
-            onClick={handleStartCrop}
-          >
-            {isProcessing ? (
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            ) : (
-              <Crop className="h-5 w-5 mr-2" />
-            )}
-            Start Cropping {selectedPaths.length > 0 && `(${selectedPaths.length})`}
-          </Button>
+          {selectedFolder && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBackToSelection}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Selection
+            </Button>
+          )}
         </div>
 
-        <div className="md:col-span-2 space-y-4">
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold flex items-center">
-                <Video className="h-4 w-4 mr-2" />
-                Select Videos ({videos.length})
-              </h3>
-              {hasVideos && (
-                <Button variant="ghost" size="sm" onClick={handleSelectAll} className="h-8">
-                  {isAllSelected ? (
-                    <>
-                      <Square className="h-4 w-4 mr-2" /> Deselect All
-                    </>
-                  ) : (
-                    <>
-                      <CheckSquare className="h-4 w-4 mr-2" /> Select All
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
+        {!selectedFolder ? (
+          <FolderSelectionLayout
+            title="Select Video Folder"
+            description="Choose a folder containing videos you want to crop. Supports drag & drop and modern file system access."
+            icon={Crop}
+            iconBgColor="bg-green-50"
+            iconColor="text-green-600"
+            onFolderSelected={handleFolderSelected}
+          />
+        ) : (
+          /* Selected Folder Display */
+          <div className="space-y-6">
+            <SelectedFolderHeader
+              folderName={selectedFolder.folder_name}
+              folderPath={selectedFolder.folder_path}
+              itemCount={videos.length}
+              itemType="videos"
+              isVirtual={selectedFolder.is_virtual}
+              isLoading={isLoadingFolder}
+              onRefresh={handleRefresh}
+              colorVariant="green"
+            />
 
-            <div className="space-y-2 max-h-[400px] overflow-y-auto border rounded-md p-2 bg-gray-50/50">
-              {isLoadingVideos ? (
-                <div className="flex items-center justify-center py-8 text-gray-500 gap-2">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <p>Loading videos...</p>
-                </div>
-              ) : !hasVideos ? (
-                <div className="p-4">
-                  <p className="text-sm text-gray-500 mb-4 text-center">
-                    Select a folder to load videos for cropping.
-                  </p>
-                  <FolderSelector onFolderSelected={handleFolderSelected} />
-                </div>
-              ) : (
-                videos.map((video) => {
-                  const isSelected = selectedVideos.has(video.path);
-                  return (
-                    <div
-                      key={video.path}
-                      className={`flex items-center gap-3 p-2 rounded border transition-colors cursor-pointer ${
-                        isSelected ? 'bg-purple-50 border-purple-200' : 'bg-white border-gray-100 hover:bg-gray-50'
-                      }`}
-                      onClick={() => toggleVideo(video)}
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleVideo(video)}
-                        className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate" title={video.name}>
-                          {video.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate" title={video.path}>
-                          {video.path}
-                        </p>
-                      </div>
-                      <div className="text-xs text-gray-400 whitespace-nowrap">
-                        {(video.size / (1024 * 1024)).toFixed(1)} MB
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </Card>
+            {/* Crop Configuration */}
+            <CropConfiguration disabled={isLoadingFolder} />
 
-          <ConsoleViewer taskId={taskId} />
-        </div>
+            {/* Selection Toolbar */}
+            <VideoSelectionToolbar
+              onCrop={handleCropVideos}
+              onRefresh={handleRefresh}
+              disabled={isLoadingFolder}
+            />
+
+            {/* Video Gallery */}
+            <VideoGallery
+              videos={filteredVideos}
+              isLoading={isLoadingFolder}
+              onRefresh={handleRefresh}
+            />
+          </div>
+        )}
+
+        {/* Progress Modal */}
+        {isModalOpen && (
+          <ProgressModal
+            open={isModalOpen}
+            onOpenChange={setIsModalOpen}
+          />
+        )}
+
+        {/* Console Viewer */}
+        <ConsoleViewer
+          taskId={currentTaskId}
+          defaultVisible={true}
+          autoRefreshInterval={undefined}
+        />
       </div>
     </div>
   );

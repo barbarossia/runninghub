@@ -2,20 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import { writeLog } from "@/lib/logger";
 import { initTask, updateTask } from "@/lib/task-store";
-
-interface CropRequest {
-  videos: string[];
-  crop_config: {
-    mode: 'left' | 'right' | 'center' | 'custom';
-    width?: string;
-    height?: string;
-    x?: string;
-    y?: string;
-  };
-  output_suffix?: string;
-  preserve_audio?: boolean;
-  timeout?: number;
-}
+import { CropRequest } from "@/types/crop";
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,12 +22,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create a background task
+    if (!crop_config || !crop_config.mode) {
+      return NextResponse.json(
+        { error: "Invalid crop configuration" },
+        { status: 400 }
+      );
+    }
+
+    // Validate required environment variables
+    const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+    const workflowId = process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID;
+    const apiHost =
+      process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
+
+    if (!apiKey || !workflowId) {
+      return NextResponse.json(
+        { error: "RunningHub API configuration missing" },
+        { status: 500 }
+      );
+    }
+
+    // Create a background task for video cropping
     const taskId = `crop_${videos.length}_videos_${Date.now()}`;
     await initTask(taskId, videos.length);
 
-    // Start background processing
-    cropVideosInBackground(videos, crop_config, output_suffix, preserve_audio, timeout, taskId);
+    // Start background cropping using Python CLI
+    cropVideosInBackground(
+      videos,
+      crop_config,
+      output_suffix,
+      preserve_audio,
+      timeout,
+      taskId
+    );
 
     return NextResponse.json({
       success: true,
@@ -56,6 +70,109 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Crop a single video using RunningHub Python CLI
+ */
+function cropSingleVideo(
+  videoPath: string,
+  cropConfig: CropRequest["crop_config"],
+  outputSuffix: string,
+  timeout: number,
+  env: NodeJS.ProcessEnv
+): Promise<{
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  error?: string;
+}> {
+  return new Promise((resolve) => {
+    const args = [
+      "-m",
+      "runninghub_cli.cli",
+      "crop",
+      videoPath,
+      "--mode",
+      cropConfig.mode,
+      "--output-suffix",
+      outputSuffix,
+      "--timeout",
+      String(timeout),
+    ];
+
+    // Add custom dimensions if provided
+    if (cropConfig.mode === "custom") {
+      if (cropConfig.width) args.push("--width", cropConfig.width);
+      if (cropConfig.height) args.push("--height", cropConfig.height);
+      if (cropConfig.x) args.push("--x", cropConfig.x);
+      if (cropConfig.y) args.push("--y", cropConfig.y);
+    }
+
+    console.log(`Running command: python ${args.join(" ")}`);
+
+    const childProcess = spawn("python", args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    // Collect stdout
+    childProcess.stdout?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stdout += text;
+      console.log(`[${videoPath}] STDOUT: ${text.trim()}`);
+    });
+
+    // Collect stderr
+    childProcess.stderr?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stderr += text;
+      console.log(`[${videoPath}] STDERR: ${text.trim()}`);
+    });
+
+    // Set timeout
+    const timeoutHandle = setTimeout(
+      () => {
+        console.error(
+          `[${videoPath}] Process timed out after ${timeout} seconds`
+        );
+        childProcess.kill("SIGKILL");
+        resolve({
+          success: false,
+          stdout,
+          stderr,
+          error: `Cropping timed out after ${timeout} seconds`,
+        });
+      },
+      timeout * 1000
+    );
+
+    // Handle process exit
+    childProcess.on("close", (code) => {
+      clearTimeout(timeoutHandle);
+      const success = code === 0;
+      console.log(`[${videoPath}] Process exited with code: ${code}`);
+      resolve({ success, stdout, stderr });
+    });
+
+    // Handle process errors
+    childProcess.on("error", (error) => {
+      clearTimeout(timeoutHandle);
+      console.error(`[${videoPath}] Process error:`, error);
+      resolve({
+        success: false,
+        stdout,
+        stderr,
+        error: error.message,
+      });
+    });
+  });
+}
+
+/**
+ * Crop multiple videos in background
+ */
 async function cropVideosInBackground(
   videos: string[],
   config: CropRequest['crop_config'],
@@ -66,48 +183,71 @@ async function cropVideosInBackground(
 ) {
   await writeLog(`=== VIDEO CROPPING STARTED for task: ${taskId} ===`, 'info', taskId);
 
+  // Get environment variables for Python CLI
+  const env = {
+    ...process.env,
+    RUNNINGHUB_API_KEY: process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY,
+    RUNNINGHUB_WORKFLOW_ID: process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID,
+    RUNNINGHUB_API_HOST: process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn",
+  };
+
   let successCount = 0;
   let failureCount = 0;
 
-  for (const videoPath of videos) {
-    try {
-      await writeLog(`Cropping: ${videoPath}`, 'info', taskId);
-      
-      const args = [
-        "-m", "runninghub_cli.cli", "crop",
+  try {
+    for (let i = 0; i < videos.length; i++) {
+      const videoPath = videos[i];
+      await writeLog(
+        `Cropping video ${i + 1}/${videos.length}: ${videoPath}`,
+        "info",
+        taskId
+      );
+      await updateTask(taskId, { currentImage: videoPath });
+
+      // Check if file exists
+      try {
+        const fs = await import("fs/promises");
+        await fs.access(videoPath);
+      } catch {
+        await writeLog(
+          `Video file does not exist: ${videoPath}`,
+          "error",
+          taskId
+        );
+        failureCount++;
+        await updateTask(taskId, { failedCount: failureCount });
+        continue;
+      }
+
+      // Crop the video
+      const result = await cropSingleVideo(
         videoPath,
-        "--mode", config.mode,
-        "--suffix", suffix,
-        "--timeout", String(timeout),
-      ];
+        config,
+        suffix,
+        timeout,
+        env
+      );
 
-      if (config.width) args.push("--width", config.width);
-      if (config.height) args.push("--height", config.height);
-      if (config.x) args.push("--x", config.x);
-      if (config.y) args.push("--y", config.y);
-      if (preserveAudio) args.push("--preserve-audio");
-
-      const success = await new Promise<boolean>((resolve) => {
-        const proc = spawn("python", args, { env: process.env });
-        proc.on("close", (code) => resolve(code === 0));
-      });
-
-      if (success) {
+      if (result.success) {
         successCount++;
-        await writeLog(`✓ Success: ${videoPath}`, 'success', taskId);
+        await writeLog(
+          `✓ Cropped: ${videoPath}`,
+          "success",
+          taskId
+        );
+        await updateTask(taskId, { completedCount: successCount });
       } else {
         failureCount++;
         await writeLog(`✗ Failed: ${videoPath}`, 'error', taskId);
+        await updateTask(taskId, { failedCount: failureCount });
       }
-      
-      await updateTask(taskId, { completedCount: successCount, failedCount: failureCount });
-    } catch (err) {
-      failureCount++;
-      await writeLog(`✗ Error: ${err instanceof Error ? err.message : 'Unknown'}`, 'error', taskId);
-      await updateTask(taskId, { failedCount: failureCount });
     }
-  }
 
-  await writeLog(`=== VIDEO CROPPING COMPLETED: ${successCount} success, ${failureCount} failed ===`, 'info', taskId);
-  await updateTask(taskId, { status: 'completed', endTime: Date.now() });
+    await writeLog(`=== VIDEO CROPPING COMPLETED: ${successCount} success, ${failureCount} failed ===`, 'info', taskId);
+    await updateTask(taskId, { status: 'completed', endTime: Date.now() });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "Unknown error";
+    await writeLog(`Task crashed: ${error}`, 'error', taskId);
+    await updateTask(taskId, { status: 'failed', error });
+  }
 }

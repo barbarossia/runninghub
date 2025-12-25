@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Video, RefreshCw, Pencil, Crop, Loader2 } from 'lucide-react';
+import { Video, RefreshCw, Pencil, Scissors, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useVideoSelectionStore, useVideoStore } from '@/store';
 import { toast } from 'sonner';
@@ -10,21 +10,19 @@ import { RenameVideoDialog } from './RenameVideoDialog';
 import { VideoFile } from '@/types';
 import { BaseSelectionToolbar } from '@/components/selection/BaseSelectionToolbar';
 
-interface VideoSelectionToolbarProps {
-  onConvert?: (selectedPaths: string[]) => void;
-  onCrop?: (selectedPaths: string[]) => void;
+interface VideoClipSelectionToolbarProps {
+  onClip?: (selectedPaths: string[]) => void;
   onRefresh?: () => void;
   disabled?: boolean;
   className?: string;
 }
 
-export function VideoSelectionToolbar({
-  onConvert,
-  onCrop,
+export function VideoClipSelectionToolbar({
+  onClip,
   onRefresh,
   disabled = false,
   className = '',
-}: VideoSelectionToolbarProps) {
+}: VideoClipSelectionToolbarProps) {
   const store = useVideoSelectionStore();
   const videoStore = useVideoStore();
   const selectedCount = store.selectedVideos.size;
@@ -43,33 +41,19 @@ export function VideoSelectionToolbar({
     return store.selectedVideos.values().next().value || null;
   }, [selectedCount, store.selectedVideos]);
 
-  // Handle convert
-  const handleConvert = useCallback(async () => {
-    if (!onConvert) return;
+  // Handle clip
+  const handleClip = useCallback(async () => {
+    if (!onClip) return;
 
     setIsProcessing(true);
     try {
-      await onConvert(selectedPaths);
+      await onClip(selectedPaths);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to convert videos');
+      toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
     } finally {
       setIsProcessing(false);
     }
-  }, [onConvert, selectedPaths]);
-
-  // Handle crop
-  const handleCrop = useCallback(async () => {
-    if (!onCrop) return;
-
-    setIsProcessing(true);
-    try {
-      await onCrop(selectedPaths);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to crop videos');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [onCrop, selectedPaths]);
+  }, [onClip, selectedPaths]);
 
   // Handle rename
   const handleRename = async (video: VideoFile, newName: string) => {
@@ -87,17 +71,11 @@ export function VideoSelectionToolbar({
 
       if (data.success) {
         toast.success(`Renamed to ${data.new_name}`);
-
-        // Update video in store
         videoStore.updateVideo(video.path, {
           path: data.new_path,
           name: data.new_name,
         });
-
-        // Update selection: deselect old, (optionally) select new
         store.deselectVideo(video.path);
-
-        // Refresh folder to ensure sync
         onRefresh?.();
       } else {
         throw new Error(data.error || 'Failed to rename video');
@@ -131,7 +109,7 @@ export function VideoSelectionToolbar({
           if (mode === 'expanded') {
             return (
               <span className="text-sm text-muted-foreground hidden sm:inline-block">
-                Select videos to convert or crop
+                Select videos to extract images
               </span>
             );
           }
@@ -139,14 +117,13 @@ export function VideoSelectionToolbar({
           if (mode === 'expanded-actions') {
             return (
               <>
-                {/* Rename Button (Only for single selection) */}
                 {selectedCount === 1 && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setIsRenameDialogOpen(true)}
                     disabled={toolbarDisabled}
-                    className="h-9 px-3 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+                    className="h-9 px-3 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
                     title="Rename video"
                   >
                     <Pencil className="h-4 w-4 mr-2" />
@@ -154,29 +131,16 @@ export function VideoSelectionToolbar({
                   </Button>
                 )}
 
-                {onConvert && (
+                {onClip && (
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={handleConvert}
-                    disabled={toolbarDisabled}
-                    className="h-9 px-6 bg-blue-600 hover:bg-blue-700 shadow-md"
+                    onClick={handleClip}
+                    disabled={toolbarDisabled || selectedCount === 0}
+                    className="h-9 px-6 bg-purple-600 hover:bg-purple-700 shadow-md"
                   >
-                    {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Video className="h-4 w-4 mr-2" />}
-                    {isProcessing ? 'Converting...' : 'Convert to MP4'}
-                  </Button>
-                )}
-
-                {onCrop && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleCrop}
-                    disabled={toolbarDisabled}
-                    className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
-                  >
-                    {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Crop className="h-4 w-4 mr-2" />}
-                    {isProcessing ? 'Cropping...' : 'Crop Videos'}
+                    {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scissors className="h-4 w-4 mr-2" />}
+                    {isProcessing ? 'Processing...' : 'Clip Images'}
                   </Button>
                 )}
 
@@ -199,7 +163,6 @@ export function VideoSelectionToolbar({
           if (mode === 'floating') {
             return (
               <>
-                {/* Rename Button (Compact) */}
                 {selectedCount === 1 && (
                   <Button
                     variant="ghost"
@@ -213,29 +176,16 @@ export function VideoSelectionToolbar({
                   </Button>
                 )}
 
-                {onConvert && (
+                {onClip && (
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={handleConvert}
-                    disabled={toolbarDisabled}
-                    className="h-8 bg-blue-600 hover:bg-blue-500 text-white rounded-full px-4 shadow-lg shadow-blue-900/20"
+                    onClick={handleClip}
+                    disabled={toolbarDisabled || selectedCount === 0}
+                    className="h-8 bg-purple-600 hover:bg-purple-500 text-white rounded-full px-4 shadow-lg shadow-purple-900/20"
                   >
-                    {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Video className="h-3.5 w-3.5 mr-1.5 fill-current" />}
-                    <span className="text-xs font-bold">{isProcessing ? '...' : 'Convert'}</span>
-                  </Button>
-                )}
-
-                {onCrop && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleCrop}
-                    disabled={toolbarDisabled}
-                    className="h-8 bg-green-600 hover:bg-green-500 text-white rounded-full px-4 shadow-lg shadow-green-900/20"
-                  >
-                    {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crop className="h-3.5 w-3.5 mr-1.5 fill-current" />}
-                    <span className="text-xs font-bold">{isProcessing ? '...' : 'Crop'}</span>
+                    {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-1.5 fill-current" />}
+                    <span className="text-xs font-bold">{isProcessing ? '...' : 'Clip'}</span>
                   </Button>
                 )}
               </>
@@ -246,7 +196,6 @@ export function VideoSelectionToolbar({
         }}
       </BaseSelectionToolbar>
 
-      {/* Rename Dialog */}
       <RenameVideoDialog
         video={selectedVideo}
         isOpen={isRenameDialogOpen}

@@ -5,49 +5,35 @@ import { useFolderStore } from '@/store/folder-store';
 import { useVideoStore } from '@/store/video-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
+import { useVideoClipStore } from '@/store/video-clip-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { useProgressTracking } from '@/hooks/useProgressTracking';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { VideoGallery } from '@/components/videos/VideoGallery';
-import { VideoSelectionToolbar } from '@/components/videos/VideoSelectionToolbar';
+import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectionToolbar';
+import { VideoClipConfiguration } from '@/components/videos/VideoClipConfiguration';
 import { ProgressModal } from '@/components/progress/ProgressModal';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
-import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
+import { API_ENDPOINTS, ERROR_MESSAGES, SUPPORTED_VIDEO_EXTENSIONS } from '@/constants';
 import type { VideoFile } from '@/types';
 import { toast } from 'sonner';
-import { ArrowLeft, Video } from 'lucide-react';
+import { ArrowLeft, Scissors } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export default function VideosPage() {
+export default function VideoClipPage() {
   const { selectedFolder, clearFolder } = useFolderStore();
-  const { videos, setVideos, filteredVideos, updateVideo } = useVideoStore();
+  const { videos, setVideos, filteredVideos } = useVideoStore();
   const { deselectAll, deselectVideo } = useVideoSelectionStore();
   const { isProgressModalOpen } = useProgressStore();
+  const { clipConfig } = useVideoClipStore();
 
   const [isLoadingFolder, setIsLoadingFolder] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
 
-  const { handleFolderSelected } = useFolderSelection({
-    folderType: 'videos',
-  });
-
-  const handleRefresh = async (silent = false) => {
-    if (selectedFolder && !selectedFolder.is_virtual) {
-      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
-      if (!silent) {
-        toast.success('Folder contents refreshed');
-      }
-    } else if (!silent) {
-      toast.info('Cannot refresh virtual folder');
-    }
-  };
-
-  const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string, silent = false) => {
-    if (!silent) {
-      setIsLoadingFolder(true);
-    }
+  const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string) => {
+    setIsLoadingFolder(true);
     try {
       const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
         method: 'POST',
@@ -58,21 +44,52 @@ export default function VideosPage() {
       const data = await response.json();
 
       if (data.videos) {
-        // Filter out MP4 files since they're already in the target format
-        const nonMp4Videos = data.videos.filter((video: VideoFile) => video.extension !== '.mp4');
-        setVideos(nonMp4Videos);
+        // Show all supported videos
+        setVideos(data.videos);
       }
     } catch (error) {
       console.error('Error loading folder contents:', error);
-      if (!silent) {
-        toast.error(ERROR_MESSAGES.FOLDER_NOT_FOUND);
-      }
+      toast.error(ERROR_MESSAGES.FOLDER_NOT_FOUND);
     } finally {
-      if (!silent) {
-        setIsLoadingFolder(false);
-      }
+      setIsLoadingFolder(false);
     }
   }, [setVideos]);
+
+  const handleRefresh = useCallback(async (silent = false) => {
+    if (selectedFolder && !selectedFolder.is_virtual) {
+      await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+      if (!silent) {
+        toast.success('Folder contents refreshed');
+      }
+    } else if (!silent) {
+      toast.info('Cannot refresh virtual folder');
+    }
+  }, [selectedFolder, loadFolderContents]);
+
+  // Track progress and refresh on completion
+  useProgressTracking({
+    onTaskComplete: (taskId) => {
+      if (taskId === currentTaskId) {
+        toast.success('Clipping task completed');
+        handleRefresh(true);
+        
+        // If delete original was enabled, we should clear the selection
+        // since the original files are now gone
+        if (clipConfig.deleteOriginal) {
+          deselectAll();
+        }
+      }
+    },
+    onTaskFail: (taskId, error) => {
+      if (taskId === currentTaskId) {
+        toast.error(`Clipping task failed: ${error}`);
+      }
+    }
+  });
+
+  const { handleFolderSelected } = useFolderSelection({
+    folderType: 'videos',
+  });
 
   // Load folder contents when folder is selected
   useEffect(() => {
@@ -86,14 +103,14 @@ export default function VideosPage() {
     setIsModalOpen(isProgressModalOpen);
   }, [isProgressModalOpen]);
 
-  const handleConvertVideos = async (selectedPaths: string[]) => {
+  const handleClipVideos = async (selectedPaths: string[]) => {
     try {
-      const response = await fetch(API_ENDPOINTS.VIDEOS_CONVERT, {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_CLIP, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videos: selectedPaths,
-          overwrite: true,
+          clip_config: clipConfig,
           timeout: 3600,
         }),
       });
@@ -105,12 +122,18 @@ export default function VideosPage() {
           setCurrentTaskId(data.task_id);
         }
       } else {
-        toast.error(data.error || ERROR_MESSAGES.CONVERSION_FAILED);
+        toast.error(data.error || ERROR_MESSAGES.CLIP_FAILED);
       }
     } catch (error) {
-      console.error('Error converting videos:', error);
-      toast.error(ERROR_MESSAGES.CONVERSION_FAILED);
+      console.error('Error clipping videos:', error);
+      toast.error(ERROR_MESSAGES.CLIP_FAILED);
     }
+  };
+
+  const handleBackToSelection = () => {
+    clearFolder();
+    setVideos([]);
+    deselectAll();
   };
 
   const handleRenameVideo = async (video: VideoFile, newName: string) => {
@@ -128,24 +151,15 @@ export default function VideosPage() {
 
       if (data.success) {
         toast.success(`Renamed to ${data.new_name}`);
-        
-        // Update video in store
-        updateVideo(video.path, {
-          path: data.new_path,
-          name: data.new_name,
-        });
-
-        // Update selection: deselect old
-        deselectVideo(video.path);
-
-        // Refresh to ensure sync with disk
-        handleRefresh(true);
+        if (selectedFolder && !selectedFolder.is_virtual) {
+          await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+        }
       } else {
-        throw new Error(data.error || 'Failed to rename video');
+        toast.error(data.error || ERROR_MESSAGES.UNKNOWN_ERROR);
       }
     } catch (error) {
       console.error('Error renaming video:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to rename video');
+      toast.error(ERROR_MESSAGES.UNKNOWN_ERROR);
     }
   };
 
@@ -163,25 +177,16 @@ export default function VideosPage() {
 
       if (data.success) {
         toast.success(`Deleted ${video.name}`);
-        
-        // Refresh folder
-        handleRefresh(true);
-        
-        // Deselect if it was selected
-        deselectVideo(video.path);
+        if (selectedFolder && !selectedFolder.is_virtual) {
+          await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+        }
       } else {
-        throw new Error(data.error || 'Failed to delete video');
+        toast.error(data.error || ERROR_MESSAGES.UNKNOWN_ERROR);
       }
     } catch (error) {
       console.error('Error deleting video:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to delete video');
+      toast.error(ERROR_MESSAGES.UNKNOWN_ERROR);
     }
-  };
-
-  const handleBackToSelection = () => {
-    clearFolder();
-    setVideos([]);
-    deselectAll();
   };
 
   return (
@@ -190,9 +195,9 @@ export default function VideosPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Video Conversion</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Video Clipping</h1>
             <p className="text-muted-foreground mt-1">
-              Convert video files to MP4 format using FFmpeg
+              Extract images from videos using Python Video Clip tool
             </p>
           </div>
 
@@ -211,8 +216,8 @@ export default function VideosPage() {
         {!selectedFolder ? (
           <FolderSelectionLayout
             title="Select Video Folder"
-            description="Choose a folder containing videos you want to convert. Supports drag & drop and modern file system access."
-            icon={Video}
+            description="Choose a folder containing videos you want to clip images from."
+            icon={Scissors}
             iconBgColor="bg-purple-50"
             iconColor="text-purple-600"
             onFolderSelected={handleFolderSelected}
@@ -231,10 +236,13 @@ export default function VideosPage() {
               colorVariant="purple"
             />
 
+            {/* Clip Configuration */}
+            <VideoClipConfiguration disabled={isLoadingFolder} />
+
             {/* Selection Toolbar */}
-            <VideoSelectionToolbar
-              onConvert={handleConvertVideos}
-              onRefresh={handleRefresh}
+            <VideoClipSelectionToolbar
+              onClip={handleClipVideos}
+              onRefresh={() => handleRefresh(true)}
               disabled={isLoadingFolder}
             />
 
@@ -242,7 +250,7 @@ export default function VideosPage() {
             <VideoGallery
               videos={filteredVideos}
               isLoading={isLoadingFolder}
-              onRefresh={handleRefresh}
+              onRefresh={() => handleRefresh(true)}
               onRename={handleRenameVideo}
               onDelete={handleDeleteVideo}
             />

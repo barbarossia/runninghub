@@ -6,3 +6,4 @@ export { useVideoStore } from './video-store';
 export { useVideoSelectionStore } from './video-selection-store';
 export { useCropStore } from './crop-store';
 export * from './process-store';
+export * from './video-clip-store';

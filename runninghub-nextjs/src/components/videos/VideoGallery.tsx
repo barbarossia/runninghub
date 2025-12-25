@@ -12,16 +12,34 @@ import {
   FileVideo,
   RefreshCw,
   PlayCircle,
+  MoreVertical,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
-import { useVideoStore, useVideoSelectionStore } from '@/store';
+import { useVideoStore } from '@/store';
 import { useVideoSelection } from '@/hooks/useVideoSelection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { SUPPORTED_VIDEO_EXTENSIONS, VIEW_MODES, API_ENDPOINTS } from '@/constants';
 import type { VideoFile } from '@/types';
 import { VideoPlayerModal } from './VideoPlayerModal';
 
@@ -29,6 +47,8 @@ interface VideoGalleryProps {
   videos?: VideoFile[];
   isLoading?: boolean;
   onRefresh?: () => void;
+  onRename?: (video: VideoFile, newName: string) => Promise<void>;
+  onDelete?: (video: VideoFile) => Promise<void>;
   className?: string;
 }
 
@@ -36,6 +56,8 @@ export function VideoGallery({
   videos: propVideos,
   isLoading = false,
   onRefresh,
+  onRename,
+  onDelete,
   className = '',
 }: VideoGalleryProps) {
   const store = useVideoStore();
@@ -49,7 +71,6 @@ export function VideoGallery({
 
   // Selection hook
   const {
-    selectedVideos,
     selectedCount,
     isAllSelected,
     hasSelection,
@@ -296,6 +317,8 @@ export function VideoGallery({
               viewMode={viewMode}
               onToggle={() => toggleVideo(video)}
               onPlay={() => handlePlayVideo(video)}
+              onRename={onRename}
+              onDelete={onDelete}
             />
           ))}
         </motion.div>
@@ -319,11 +342,16 @@ interface VideoCardProps {
   viewMode: 'grid' | 'list' | 'large';
   onToggle: () => void;
   onPlay: () => void;
+  onRename?: (video: VideoFile, newName: string) => Promise<void>;
+  onDelete?: (video: VideoFile) => Promise<void>;
 }
 
-function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay }: VideoCardProps) {
+function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay, onRename, onDelete }: VideoCardProps) {
   const isListMode = viewMode === 'list';
-  
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [newName, setNewName] = useState(video.name);
+
   const videoSrc = useMemo(() => {
     if (video.blob_url) {
       return video.blob_url;
@@ -334,6 +362,30 @@ function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay }: Vid
   const handlePlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onPlay();
+  };
+
+  const handleRenameClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsRenameDialogOpen(true);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleRenameConfirm = async () => {
+    if (onRename && newName.trim() && newName !== video.name) {
+      await onRename(video, newName.trim());
+      setIsRenameDialogOpen(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (onDelete) {
+      await onDelete(video);
+      setIsDeleteDialogOpen(false);
+    }
   };
 
   return (
@@ -361,6 +413,37 @@ function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay }: Vid
             aria-label={`Select ${video.name}`}
           />
         </div>
+
+        {/* More menu */}
+        {(onRename || onDelete) && (
+          <div className="absolute top-2 right-2 z-10">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 bg-background/50 backdrop-blur-sm hover:bg-background/80"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onRename && (
+                  <DropdownMenuItem onClick={handleRenameClick}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Rename
+                  </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <DropdownMenuItem onClick={handleDeleteClick} className="text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
         {/* Video thumbnail */}
         <div
@@ -418,6 +501,69 @@ function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay }: Vid
           <div className="absolute inset-0 bg-primary/10 pointer-events-none rounded-lg" />
         )}
       </Card>
+
+      {/* Rename Dialog */}
+      {onRename && (
+        <AlertDialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rename Video</AlertDialogTitle>
+              <AlertDialogDescription>
+                Enter a new name for the video. The file extension will be preserved automatically.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder={video.name}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleRenameConfirm();
+                  } else if (e.key === 'Escape') {
+                    setIsRenameDialogOpen(false);
+                    setNewName(video.name);
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                setIsRenameDialogOpen(false);
+                setNewName(video.name);
+              }}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleRenameConfirm}>
+                Rename
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {onDelete && (
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Video?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{video.name}</strong>? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </motion.div>
   );
 }

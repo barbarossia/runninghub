@@ -144,3 +144,6 @@ export interface VideoConversionTask extends ProcessingTask {
   completed_videos?: string[];
   failed_videos?: Array<{ path: string; error: string }>;
 }
+
+export * from './crop';
+export * from './video-clip';

@@ -5,6 +5,7 @@ import type { ProcessingTask } from '@/types';
 interface UseProgressTrackingOptions {
   onTaskComplete?: (taskId: string) => void;
   onTaskFail?: (taskId: string, error: string) => void;
+  onTaskProgress?: (taskId: string, progress: number, currentImage?: string) => void;
   autoOpenModal?: boolean;
   pollInterval?: number;
 }
@@ -45,6 +46,7 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
   const {
     onTaskComplete,
     onTaskFail,
+    onTaskProgress,
     autoOpenModal = true,
     pollInterval = 1000,
   } = options;
@@ -66,7 +68,7 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
     if (autoOpenModal && hasActiveTask && !store.isProgressModalOpen) {
       store.openProgressModal();
     }
-  }, [hasActiveTask, autoOpenModal, store.isProgressModalOpen]);
+  }, [hasActiveTask, autoOpenModal, store.isProgressModalOpen, store]);
 
   // Clean up polling on unmount
   useEffect(() => {
@@ -77,18 +79,19 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
     };
   }, []);
 
-  const startTask = useCallback((task: ProcessingTask) => {
-    store.addTask(task);
-    store.setActiveTask(task.task_id);
-    store.startTask(task.task_id);
-  }, [store]);
-
   const updateTaskProgress = useCallback((
     taskId: string,
     progress: number,
     current_image?: string
   ) => {
     store.updateProgress(taskId, progress, current_image);
+    onTaskProgress?.(taskId, progress, current_image);
+  }, [store, onTaskProgress]);
+
+  const startTask = useCallback((task: ProcessingTask) => {
+    store.addTask(task);
+    store.setActiveTask(task.task_id);
+    store.startTask(task.task_id);
   }, [store]);
 
   const completeTask = useCallback((taskId: string) => {
@@ -148,6 +151,14 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
     store.clearCompletedTasks();
   }, [store]);
 
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    pollingTaskIdRef.current = null;
+  }, []);
+
   // Polling for task status
   const startPolling = useCallback((taskId: string) => {
     // Stop existing polling
@@ -188,15 +199,16 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
         // Don't stop polling on network errors, just log them
       }
     }, pollInterval);
-  }, [pollInterval, completeTask, failTask, updateTaskProgress]);
+  }, [pollInterval, completeTask, failTask, updateTaskProgress, stopPolling]);
 
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
+  // Auto-start polling when activeTaskId changes in store
+  useEffect(() => {
+    if (store.activeTaskId && store.activeTaskId !== pollingTaskIdRef.current) {
+      startPolling(store.activeTaskId);
+    } else if (!store.activeTaskId && pollingTaskIdRef.current) {
+      stopPolling();
     }
-    pollingTaskIdRef.current = null;
-  }, []);
+  }, [store.activeTaskId, startPolling, stopPolling]);
 
   return {
     tasks: store.tasks,
