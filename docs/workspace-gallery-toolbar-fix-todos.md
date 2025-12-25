@@ -67,6 +67,21 @@
 - [ ] Test state cleanup after operations
 - [ ] Fix any build errors or test failures
 
+### 5.6: Selection Toolbar Integration
+
+- [x] Create MediaSelectionToolbar component
+- [x] Add BaseSelectionToolbar integration with expanded/floating modes
+- [x] Add Preview, Rename, Delete buttons (Rename only for single selection)
+- [x] Add rename dialog with input field
+- [x] Add delete confirmation dialog (supports single/multiple)
+- [x] Update workspace page to integrate toolbar
+- [x] Fix preview functionality (set previewFile state on menu click)
+- [x] Update onDelete to accept array of files
+- [x] Run build successfully
+- [ ] Test toolbar floating and inline modes
+- [ ] Test bulk delete operations
+- [ ] Implement actual API integration for rename/delete
+
 ---
 
 ## Progress Summary
