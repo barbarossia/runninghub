@@ -151,8 +151,6 @@ export default function GalleryPage() {
             '231:text': processConfig.triggerWord,
             '235:value': processConfig.width.toString(),
             '236:value': processConfig.height.toString(),
-            // TODO: Add color parameter with correct node ID
-            // 'XXX:value': processConfig.color,
           },
         }),
       });

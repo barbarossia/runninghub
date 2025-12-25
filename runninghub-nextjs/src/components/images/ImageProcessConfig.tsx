@@ -17,7 +17,6 @@ export interface ProcessConfig {
   triggerWord: string;
   width: number;
   height: number;
-  color: string;
 }
 
 interface ImageProcessConfigProps {
@@ -45,19 +44,19 @@ export function ImageProcessConfig({
     }
   };
 
-  const currentResolutionLabel = 
+  const currentResolutionLabel =
     RESOLUTION_OPTIONS.find(
       (opt) => opt.width === config.width && opt.height === config.height
     )?.label || '';
 
   return (
-    <Card className={`p-4 space-y-4 ${className}`}>
+    <Card className={`p-4 space-y-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Settings className="h-5 w-5 text-gray-500" />
+          <Settings className="h-5 w-5 text-blue-600" />
           <div>
-            <h3 className="font-medium">Processing Configuration</h3>
-            <p className="text-sm text-gray-500">
+            <h3 className="font-medium text-gray-900">Processing Configuration</h3>
+            <p className="text-sm text-gray-600">
               Configure parameters for the image processing workflow.
             </p>
           </div>
@@ -66,21 +65,22 @@ export function ImageProcessConfig({
           variant="ghost"
           size="sm"
           onClick={() => setIsExpanded(!isExpanded)}
+          className="text-blue-600 hover:text-blue-700 hover:bg-blue-100"
         >
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
       </div>
 
       {isExpanded && (
-        <div className="grid gap-4 sm:grid-cols-3 pt-2 border-t">
+        <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t border-blue-200">
           {/* Trigger Word */}
           <div className="space-y-2">
-            <label htmlFor="trigger-word" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            <label htmlFor="trigger-word" className="text-sm font-medium leading-none text-gray-900 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
               Trigger Word
             </label>
             <input
               id="trigger-word"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="e.g. naran"
               value={config.triggerWord}
               onChange={(e) =>
@@ -91,11 +91,11 @@ export function ImageProcessConfig({
 
           {/* Resolution Selection */}
           <div className="space-y-2">
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            <label className="text-sm font-medium leading-none text-gray-900 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
               Resolution
             </label>
             <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               value={currentResolutionLabel}
               onChange={handleResolutionChange}
             >
@@ -106,22 +106,6 @@ export function ImageProcessConfig({
                 </option>
               ))}
             </select>
-          </div>
-
-          {/* Color */}
-          <div className="space-y-2">
-            <label htmlFor="color" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Color
-            </label>
-            <input
-              id="color"
-              type="color"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-1 py-1 text-sm ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              value={config.color || '#000000'}
-              onChange={(e) =>
-                onConfigChange({ ...config, color: e.target.value })
-              }
-            />
           </div>
         </div>
       )}
