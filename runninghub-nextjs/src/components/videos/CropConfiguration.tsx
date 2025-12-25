@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Crop, ChevronDown, ChevronUp } from 'lucide-react';
+import { Crop } from 'lucide-react';
 import { CropMode, CropConfig } from '@/types/crop';
 import { useCropStore } from '@/store/crop-store';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ConfigurationCard } from '@/components/ui/ConfigurationCard';
 import { cn } from '@/lib/utils';
 import { CROP_PRESETS } from '@/constants';
 
@@ -22,8 +22,6 @@ export function CropConfiguration({
 }: CropConfigurationProps) {
   const { cropConfig, setCropMode, setCustomDimensions, setOutputSuffix, togglePreserveAudio } =
     useCropStore();
-
-  const [isExpanded, setIsExpanded] = useState(false);
 
   // Derive values from state, reset when mode is not custom
   const isCustomMode = cropConfig.mode === CROP_PRESETS.CUSTOM;
@@ -64,40 +62,20 @@ export function CropConfiguration({
   };
 
   return (
-    <Card
-      className={cn(
-        'p-4 bg-transparent border-white/10',
-        disabled && 'opacity-50 pointer-events-none',
-        className
-      )}
+    <ConfigurationCard
+      title="Crop Configuration"
+      icon={Crop}
+      variant="dark"
+      disabled={disabled}
+      className={className}
+      subtitle={
+        <>
+          Mode: {cropConfig.mode.charAt(0).toUpperCase() + cropConfig.mode.slice(1)}
+          {cropConfig.preserveAudio && ' • Audio Preserved'}
+        </>
+      }
     >
       <div className="space-y-4">
-        {/* Header */}
-        <div 
-          className="flex items-center justify-between cursor-pointer group/header"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 group-hover/header:bg-blue-500/20 transition-colors">
-              <Crop className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-white group-hover/header:text-blue-400 transition-colors">Crop Configuration</h3>
-              {!isExpanded && (
-                <p className="text-xs text-blue-500/80 font-medium">
-                  Mode: {cropConfig.mode.charAt(0).toUpperCase() + cropConfig.mode.slice(1)}
-                  {cropConfig.preserveAudio && ' • Audio Preserved'}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="text-gray-500 group-hover/header:text-white transition-colors">
-            {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-          </div>
-        </div>
-
-        {isExpanded && (
-          <>
         {/* Crop Mode Presets */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
           <button
@@ -184,7 +162,7 @@ export function CropConfiguration({
                 : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10 hover:border-white/20'
             }`}
           >
-            <div className="w-12 h-8 border border-current rounded mb-2 relative flex items-center justify-center">
+            <div className="w-12 h-8 border border-current rounded mb-2 flex items-center justify-center">
               <div className={`w-6 h-4 border border-dashed border-current ${cropConfig.mode === CROP_PRESETS.CUSTOM ? 'opacity-80' : 'opacity-30'}`}></div>
             </div>
             <span className="text-sm font-medium">Custom</span>
@@ -279,9 +257,7 @@ export function CropConfiguration({
             <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Preserve Audio Track</span>
           </label>
         </div>
-        </>
-        )}
       </div>
-    </Card>
+    </ConfigurationCard>
   );
 }
