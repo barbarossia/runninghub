@@ -167,12 +167,24 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
     // Get the most recent 1-3 logs for display in minimized state
     const recentLogs = [...logs].slice(0, 3);
 
+    // Softer contrast colors for minimized state
+    const minHeaderBg = isDark ? 'bg-gray-900/80' : 'bg-gray-200/80';
+    const minBodyBg = isDark ? 'bg-gray-950/60' : 'bg-gray-50/60';
+    const minIconColor = 'text-blue-500';
+    const minLogTimestamp = isDark ? 'text-gray-500' : 'text-gray-400';
+    const minLogText = isDark ? 'text-gray-400' : 'text-gray-500';
+    const minLogHover = isDark ? 'hover:bg-gray-800/50' : 'hover:bg-gray-200/50';
+    const minLogBorder = isDark ? 'border-gray-700/50' : 'border-gray-200/50';
+    const minStatusText = isDark ? 'text-gray-400' : 'text-gray-500';
+    const minProgressBg = isDark ? 'bg-gray-800/50' : 'bg-gray-300/50';
+    const minBorder = isDark ? 'border-gray-800/60' : 'border-gray-300/60';
+
     return (
-      <Card className={`fixed bottom-4 right-4 z-50 w-[320px] shadow-2xl ${consoleBg} ${consoleBorder} ${opacity} hover:opacity-100 transition-all`}>
-        <div className="p-2">
+      <Card className={`fixed bottom-4 right-4 z-50 w-[320px] shadow-lg ${consoleBg} ${minBorder} ${opacity} hover:opacity-100 transition-all`}>
+        <div className="overflow-hidden">
           {/* Header with icon and controls */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-mono font-bold text-blue-400">{'>_'}</span>
+          <div className={`flex items-center justify-between p-2 ${minHeaderBg} backdrop-blur-sm`}>
+            <span className={`text-xs font-mono font-semibold ${minIconColor}`}>{'>_'}</span>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
@@ -193,43 +205,49 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
             </div>
           </div>
 
-          {/* Progress bar if task is running */}
-          {taskStatus && (
-            <Progress value={getProgress()} className={`h-1 mb-2 ${progressBg}`} />
-          )}
+          {/* Body with softer contrast */}
+          <div className={`p-2 ${minBodyBg} backdrop-blur-sm`}>
+            {/* Progress bar if task is running */}
+            {taskStatus && (
+              <Progress value={getProgress()} className={`h-0.5 mb-2 ${minProgressBg}`} />
+            )}
 
-          {/* Recent logs preview */}
-          {recentLogs.length > 0 && (
-            <div className="space-y-1">
-              {recentLogs.map((log, i) => (
-                <div key={i} className={`flex gap-2 ${consoleHover} p-1 rounded transition-colors border-l-2 ${consoleHoverBorder} text-[9px] font-mono`}>
-                  <span className={`${consoleTimestamp} shrink-0 tabular-nums`}>
-                    {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
-                  </span>
-                  <span className={`${getLevelColor(log.level)} break-all leading-tight line-clamp-1`}>
-                    {log.message}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+            {/* Recent logs preview */}
+            {recentLogs.length > 0 && (
+              <div className="space-y-0.5 mb-2">
+                {recentLogs.map((log, i) => (
+                  <div
+                    key={i}
+                    className={`flex gap-2 ${minLogHover} p-1 rounded transition-colors border-l-2 ${minLogBorder} text-[9px] font-mono`}
+                  >
+                    <span className={`${minLogTimestamp} shrink-0 tabular-nums`}>
+                      {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
+                    </span>
+                    <span className={`${minLogText} break-all leading-tight line-clamp-1`}>
+                      {log.message}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
-          {/* Task status summary */}
-          {taskStatus && (
-            <div className={`flex items-center justify-between mt-2 pt-2 border-t ${consoleBorder} text-[9px] ${badgeText}`}>
-              <span className="flex items-center gap-1">
-                {taskStatus.status === 'processing' && <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-400" />}
-                {taskStatus.status === 'completed' && <CheckCircle2 className="w-2.5 h-2.5 text-green-400" />}
-                {taskStatus.status === 'failed' && <XCircle className="w-2.5 h-2.5 text-red-400" />}
-                <span className="font-medium truncate max-w-[200px]">
-                  {taskStatus.currentImage ? taskStatus.currentImage.split('/').pop() : 'Initializing...'}
+            {/* Task status summary */}
+            {taskStatus && (
+              <div className={`flex items-center justify-between pt-1.5 border-t ${minLogBorder} text-[9px] ${minStatusText}`}>
+                <span className="flex items-center gap-1">
+                  {taskStatus.status === 'processing' && <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-400" />}
+                  {taskStatus.status === 'completed' && <CheckCircle2 className="w-2.5 h-2.5 text-green-400" />}
+                  {taskStatus.status === 'failed' && <XCircle className="w-2.5 h-2.5 text-red-400" />}
+                  <span className="font-medium truncate max-w-[200px]">
+                    {taskStatus.currentImage ? taskStatus.currentImage.split('/').pop() : 'Initializing...'}
+                  </span>
                 </span>
-              </span>
-              <span className="font-mono">
-                {taskStatus.completedCount + taskStatus.failedCount}/{taskStatus.totalImages}
-              </span>
-            </div>
-          )}
+                <span className="font-mono">
+                  {taskStatus.completedCount + taskStatus.failedCount}/{taskStatus.totalImages}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
     );
