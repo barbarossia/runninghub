@@ -14,12 +14,12 @@ import { VideoSelectionToolbar } from '@/components/videos/VideoSelectionToolbar
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
 import { ProgressModal } from '@/components/progress/ProgressModal';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
+import { PageHeader } from '@/components/navigation/PageHeader';
 import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
 import type { VideoFile } from '@/types';
 import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
 import { toast } from 'sonner';
-import { ArrowLeft, Crop } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Crop } from 'lucide-react';
 
 export default function VideoCropPage() {
   const { selectedFolder, clearFolder } = useFolderStore();
@@ -165,26 +165,13 @@ export default function VideoCropPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Video Cropping</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Crop videos to specific regions using FFmpeg
-            </p>
-          </div>
-
-          {selectedFolder && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBackToSelection}
-              className="border-green-300 text-green-700 hover:bg-green-50"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Selection
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          title="Video Cropping"
+          description="Crop videos to specific regions using FFmpeg"
+          showBackButton={!!selectedFolder}
+          onBackClick={handleBackToSelection}
+          colorVariant="green"
+        />
 
         {!selectedFolder ? (
           <FolderSelectionLayout

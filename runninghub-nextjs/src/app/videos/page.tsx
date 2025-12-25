@@ -13,11 +13,11 @@ import { VideoGallery } from '@/components/videos/VideoGallery';
 import { VideoSelectionToolbar } from '@/components/videos/VideoSelectionToolbar';
 import { ProgressModal } from '@/components/progress/ProgressModal';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
+import { PageHeader } from '@/components/navigation/PageHeader';
 import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
 import type { VideoFile } from '@/types';
 import { toast } from 'sonner';
-import { ArrowLeft, Video } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Video } from 'lucide-react';
 
 export default function VideosPage() {
   const { selectedFolder, clearFolder } = useFolderStore();
@@ -188,26 +188,13 @@ export default function VideosPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Video Conversion</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Convert video files to MP4 format using FFmpeg
-            </p>
-          </div>
-
-          {selectedFolder && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBackToSelection}
-              className="border-purple-300 text-purple-700 hover:bg-purple-50"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Selection
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          title="Video Conversion"
+          description="Convert video files to MP4 format using FFmpeg"
+          showBackButton={!!selectedFolder}
+          onBackClick={handleBackToSelection}
+          colorVariant="purple"
+        />
 
         {!selectedFolder ? (
           <FolderSelectionLayout
