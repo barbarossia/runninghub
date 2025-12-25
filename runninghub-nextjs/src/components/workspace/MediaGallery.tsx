@@ -59,7 +59,7 @@ export interface MediaGalleryProps {
   onFileClick?: (file: MediaFile) => void;
   onFileDoubleClick?: (file: MediaFile) => void;
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
-  onDelete?: (file: MediaFile) => Promise<void>;
+  onDelete?: (files: MediaFile[]) => Promise<void>;
   onPreview?: (file: MediaFile) => void;
   className?: string;
 }
@@ -178,7 +178,7 @@ export function MediaGallery({
   const handleDeleteConfirm = async () => {
     if (!deleteDialogFile || !onDelete) return;
     try {
-      await onDelete(deleteDialogFile);
+      await onDelete([deleteDialogFile]);
       setDeleteDialogFile(null);
     } catch (error) {
       console.error('Failed to delete file:', error);
@@ -528,12 +528,10 @@ export function MediaGallery({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {onPreview && (
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onPreview(file); }}>
-                                <Eye className="h-4 w-4 mr-2" />
-                                Preview
-                              </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPreviewFile(file); onPreview?.(file); }}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Preview
+                            </DropdownMenuItem>
                             {onRename && (
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameDialogOpen(file); }}>
                                 <Pencil className="h-4 w-4 mr-2" />
@@ -648,7 +646,7 @@ export function MediaGallery({
       )}
 
       {/* Preview Dialog */}
-      {onPreview && previewFile && (
+      {previewFile && (
         <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
           <DialogContent className="max-w-4xl">
             <DialogHeader>

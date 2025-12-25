@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore } from '@/store/folder-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaGallery } from '@/components/workspace/MediaGallery';
+import { MediaSelectionToolbar } from '@/components/workspace/MediaSelectionToolbar';
 import { WorkflowList } from '@/components/workspace/WorkflowList';
 import { WorkflowEditor } from '@/components/workspace/WorkflowEditor';
 import { WorkflowSelector } from '@/components/workspace/WorkflowSelector';
@@ -59,6 +60,8 @@ export default function WorkspacePage() {
     addJob,
     setSelectedJob,
     clearJobInputs,
+    getSelectedMediaFiles,
+    deselectAllMediaFiles,
   } = useWorkspaceStore();
 
   // Local state
@@ -67,6 +70,9 @@ export default function WorkspacePage() {
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
+
+  // Get selected files from store
+  const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
 
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
@@ -268,10 +274,10 @@ export default function WorkspacePage() {
     }
   };
 
-  const handleDeleteFile = async (file: MediaFile) => {
+  const handleDeleteFile = async (files: MediaFile[]) => {
     try {
       // For now, just show a toast - actual API integration to be added
-      toast.success(`Delete "${file.name}" - API integration pending`);
+      toast.success(`Delete ${files.length} file${files.length !== 1 ? 's' : ''} - API integration pending`);
       // TODO: Implement actual delete API call
       // Then reload folder contents
     } catch (err) {
@@ -426,6 +432,16 @@ export default function WorkspacePage() {
                     )}
                   </div>
                 </div>
+
+                {/* Media Selection Toolbar */}
+                {selectedFiles.length > 0 && (
+                  <MediaSelectionToolbar
+                    selectedFiles={selectedFiles}
+                    onRename={handleRenameFile}
+                    onDelete={handleDeleteFile}
+                    onPreview={handlePreviewFile}
+                  />
+                )}
 
                 {/* Media Gallery */}
                 <MediaGallery
