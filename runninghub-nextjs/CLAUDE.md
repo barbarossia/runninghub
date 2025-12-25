@@ -9,7 +9,8 @@ This document outlines the frontend development rules, coding standards, and des
 2. [Component Reusability Standards](#component-reusability-standards)
 3. [Global Console Requirement](#global-console-requirement)
 4. [Data Refresh Policy](#data-refresh-policy)
-5. [Styling Tokens Reference](#styling-tokens-reference)
+5. [Hydration Best Practices](#hydration-best-practices)
+6. [Styling Tokens Reference](#styling-tokens-reference)
 
 ---
 
@@ -308,6 +309,190 @@ Use `silent: true` for background updates that don't need user notification:
 
 ---
 
+## Hydration Best Practices
+
+**RULE 5**: Prevent hydration errors by ensuring server-rendered HTML matches client-rendered HTML.
+
+Hydration errors occur when React's server-rendered HTML doesn't match the client's initial render. This is common with:
+- Theme-dependent components (dark mode)
+- Components using browser APIs (`localStorage`, `window`)
+- Components with client-only state
+- Components using `next-themes` or similar libraries
+
+### Common Hydration Pitfalls
+
+**❌ DON'T: Conditional early return**
+```tsx
+export function MyComponent() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // ❌ BAD: Different HTML structure on server vs client
+  if (!mounted) {
+    return <div>Loading...</div>;
+  }
+
+  return <div>Content</div>;
+}
+```
+
+**✅ DO: Unified render with state-based attributes**
+```tsx
+export function MyComponent() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // ✅ GOOD: Same HTML structure, different content/attributes
+  return (
+    <div>
+      <button disabled={!mounted}>
+        {mounted ? 'Click me' : 'Loading...'}
+      </button>
+    </div>
+  );
+}
+```
+
+### Theme Toggle Pattern (with next-themes)
+
+**Standard Pattern**:
+```tsx
+'use client';
+
+import { useTheme } from 'next-themes';
+import { useState, useEffect } from 'react';
+
+export function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Default to light mode before mounting
+  const isDark = mounted && theme === 'dark';
+
+  return (
+    <button
+      onClick={() => mounted && setTheme(isDark ? 'light' : 'dark')}
+      disabled={!mounted}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {isDark ? '🌙' : '☀️'}
+    </button>
+  );
+}
+```
+
+**Key Points**:
+1. **Never use early return** based on `mounted` state
+2. **Default to predictable values** before mounting (e.g., light mode)
+3. **Always render the same structure** - only change content/attributes
+4. **Use `disabled={!mounted}`** to prevent interactions before hydration
+5. **Keep `aria-label` consistent** - calculate it based on `mounted` state
+
+### localStorage and Browser APIs
+
+**❌ DON'T: Access localStorage directly**
+```tsx
+export function Settings() {
+  // ❌ BAD: localStorage is not available on server
+  const value = localStorage.getItem('settings');
+  return <div>{value}</div>;
+}
+```
+
+**✅ DO: Use useEffect with mounted state**
+```tsx
+export function Settings() {
+  const [mounted, setMounted] = useState(false);
+  const [value, setValue] = useState<string>('');
+
+  useEffect(() => {
+    setMounted(true);
+    setValue(localStorage.getItem('settings') || '');
+  }, []);
+
+  if (!mounted) {
+    return <div>Loading settings...</div>;
+  }
+
+  return <div>{value}</div>;
+}
+```
+
+### Random Values and Dates
+
+**❌ DON'T: Use random values or dates in render**
+```tsx
+export function RandomComponent() {
+  // ❌ BAD: Different value on server vs client
+  const id = Math.random();
+  const time = Date.now();
+
+  return <div id={id}>{time}</div>;
+}
+```
+
+**✅ DO: Generate in useEffect**
+```tsx
+export function RandomComponent() {
+  const [id, setId] = useState<string>('');
+  const [time, setTime] = useState<number>(0);
+
+  useEffect(() => {
+    setId(Math.random().toString());
+    setTime(Date.now());
+  }, []);
+
+  if (!id) {
+    return <div>Loading...</div>;
+  }
+
+  return <div id={id}>{time}</div>;
+}
+```
+
+### Checklist for Hydration Safety
+
+Before committing components that use client-only features, verify:
+
+- [ ] No conditional returns based on `mounted` state
+- [ ] Server and client render identical HTML structure
+- [ ] Browser APIs only accessed in `useEffect`
+- [ ] Default values are predictable and consistent
+- [ ] `aria-label` and other attributes are always present
+- [ ] Components using `next-themes` follow the pattern above
+- [ ] No `Math.random()`, `Date.now()`, or similar in render
+- [ ] Test with JavaScript disabled to verify SSR
+
+### Common Error Messages
+
+**"Hydration failed because the server rendered HTML didn't match the client"**
+- **Cause**: Different HTML structure between server and client
+- **Solution**: Ensure same structure, only change content/attributes
+
+**"Text content did not match"**
+- **Cause**: Different text content between server and client
+- **Solution**: Use default values that match server render
+
+**"Attribute ... did not match"**
+- **Cause**: Different attribute values (className, aria-label, etc.)
+- **Solution**: Calculate attributes based on `mounted` state
+
+### Reference Implementation
+
+See `src/components/theme/ThemeToggle.tsx` for the correct pattern implementation.
+
+---
+
 ## Styling Tokens Reference
 
 ### Color Palette (OKLCH)
@@ -447,6 +632,7 @@ Before committing frontend changes, verify:
 - [ ] Styling matches design system (colors, fonts, spacing)
 - [ ] Components follow import order pattern
 - [ ] TypeScript types properly defined
+- [ ] No hydration errors (follow [Hydration Best Practices](#hydration-best-practices))
 
 **Note**: For Git workflow rules (branch management, commit messages), see the global [CLAUDE.md](../CLAUDE.md)
 
@@ -459,6 +645,7 @@ Before committing frontend changes, verify:
 - **Console component**: `src/components/ui/ConsoleViewer.tsx`
 - **Selection toolbar**: `src/components/selection/BaseSelectionToolbar.tsx`
 - **Folder components**: `src/components/folder/`
+- **Theme toggle (hydration reference)**: `src/components/theme/ThemeToggle.tsx`
 - **Global styles**: `src/app/globals.css`
 - **Type definitions**: `src/types/`
 - **Constants**: `src/constants/`
