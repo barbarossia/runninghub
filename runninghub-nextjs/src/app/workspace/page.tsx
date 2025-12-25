@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore } from '@/store/folder-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { useFileSystem } from '@/hooks';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
@@ -83,6 +84,15 @@ export default function WorkspacePage() {
   // Use folder selection hook (using 'images' type for workspace)
   const { handleFolderSelected } = useFolderSelection({
     folderType: 'images',
+  });
+
+  // Auto-load last opened folder on mount
+  useAutoLoadFolder({
+    folderType: 'images',
+    onFolderLoaded: (folder) => {
+      // Folder is automatically set as selected by the hook
+      // The useEffect below will load contents when selectedFolder changes
+    },
   });
 
   // Load folder contents when folder is selected
