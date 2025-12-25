@@ -12,6 +12,7 @@ const DEFAULT_CONFIG: ProcessConfig = {
   triggerWord: 'naran',
   width: 512,
   height: 768,
+  deleteOriginal: false,
 };
 
 export const useProcessStore = create<ProcessStore>()(

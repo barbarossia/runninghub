@@ -159,6 +159,7 @@ export default function GalleryPage() {
             '235:value': processConfig.width.toString(),
             '236:value': processConfig.height.toString(),
           },
+          deleteOriginal: processConfig.deleteOriginal,
         }),
       });
 

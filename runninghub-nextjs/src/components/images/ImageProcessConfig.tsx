@@ -3,6 +3,8 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import { ConfigurationCard } from '@/components/ui/ConfigurationCard';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 const RESOLUTION_OPTIONS = [
   { label: '512 x 512', width: 512, height: 512 },
@@ -16,6 +18,7 @@ export interface ProcessConfig {
   triggerWord: string;
   width: number;
   height: number;
+  deleteOriginal: boolean;
 }
 
 interface ImageProcessConfigProps {
@@ -56,9 +59,7 @@ export function ImageProcessConfig({
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Trigger Word */}
         <div className="space-y-2">
-          <label htmlFor="trigger-word" className="text-sm font-medium leading-none text-gray-900 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-            Trigger Word
-          </label>
+          <Label htmlFor="trigger-word">Trigger Word</Label>
           <input
             id="trigger-word"
             className="flex h-10 w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -72,9 +73,7 @@ export function ImageProcessConfig({
 
         {/* Resolution Selection */}
         <div className="space-y-2">
-          <label className="text-sm font-medium leading-none text-gray-900 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-            Resolution
-          </label>
+          <Label>Resolution</Label>
           <select
             className="flex h-10 w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             value={currentResolutionLabel}
@@ -87,6 +86,20 @@ export function ImageProcessConfig({
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Delete Original Checkbox */}
+        <div className="flex items-center space-x-2 pt-8 sm:pt-0">
+          <Checkbox 
+            id="delete-original" 
+            checked={config.deleteOriginal ?? false}
+            onCheckedChange={(checked) => 
+              onConfigChange({ ...config, deleteOriginal: checked === true })
+            }
+          />
+          <Label htmlFor="delete-original" className="font-normal cursor-pointer">
+            Delete original images after processing
+          </Label>
         </div>
       </div>
     </ConfigurationCard>
