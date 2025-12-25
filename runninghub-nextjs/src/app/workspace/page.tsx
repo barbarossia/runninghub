@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
-import type { Workflow, Job } from '@/types/workspace';
+import type { Workflow, Job, MediaFile } from '@/types/workspace';
 
 export default function WorkspacePage() {
   // Folder store state - selectedFolder comes from here
@@ -250,6 +250,42 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleRenameFile = async (file: MediaFile, newName: string) => {
+    try {
+      // For now, just show a toast - actual API integration to be added
+      toast.success(`Rename "${file.name}" to "${newName}" - API integration pending`);
+      // TODO: Implement actual rename API call
+      // const response = await fetch(API_ENDPOINTS.WORKSPACE_RENAME, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ path: file.path, newName }),
+      // });
+      // Then reload folder contents
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to rename file';
+      toast.error(errorMessage);
+      throw err;
+    }
+  };
+
+  const handleDeleteFile = async (file: MediaFile) => {
+    try {
+      // For now, just show a toast - actual API integration to be added
+      toast.success(`Delete "${file.name}" - API integration pending`);
+      // TODO: Implement actual delete API call
+      // Then reload folder contents
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
+      toast.error(errorMessage);
+      throw err;
+    }
+  };
+
+  const handlePreviewFile = (file: MediaFile) => {
+    // Preview is handled internally by MediaGallery component
+    console.log('Preview file:', file);
+  };
+
   // Feature cards for workspace
   const featureCards = (
     <div className="grid md:grid-cols-2 gap-6 mt-12">
@@ -392,7 +428,11 @@ export default function WorkspacePage() {
                 </div>
 
                 {/* Media Gallery */}
-                <MediaGallery />
+                <MediaGallery
+                  onRename={handleRenameFile}
+                  onDelete={handleDeleteFile}
+                  onPreview={handlePreviewFile}
+                />
               </TabsContent>
 
               {/* Workflows Tab */}
