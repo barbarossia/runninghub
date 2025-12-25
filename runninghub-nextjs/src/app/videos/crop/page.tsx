@@ -162,13 +162,13 @@ export default function VideoCropPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 max-w-7xl">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Video Cropping</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl font-bold text-gray-900">Video Cropping</h1>
+            <p className="text-sm text-gray-600 mt-1">
               Crop videos to specific regions using FFmpeg
             </p>
           </div>
@@ -178,6 +178,7 @@ export default function VideoCropPage() {
               variant="outline"
               size="sm"
               onClick={handleBackToSelection}
+              className="border-green-300 text-green-700 hover:bg-green-50"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Selection
