@@ -712,7 +712,7 @@ export function MediaGallery({
                       </p>
                     </div>
 
-                    {previewFile.width && previewFile.height && (
+                    {previewFile.width && previewFile.height ? (
                       <div>
                         <span className="text-gray-600 text-xs">Dimensions</span>
                         <p className="font-medium">
@@ -724,23 +724,38 @@ export function MediaGallery({
                           )}
                         </p>
                       </div>
+                    ) : (
+                      <div>
+                        <span className="text-gray-600 text-xs">Dimensions</span>
+                        <p className="font-medium text-gray-400">N/A</p>
+                      </div>
                     )}
 
-                    {previewFile.duration && (
+                    {previewFile.duration ? (
                       <div>
                         <span className="text-gray-600 text-xs">Duration</span>
                         <p className="font-medium">
                           {Math.floor(previewFile.duration / 60)}:{(previewFile.duration % 60).toFixed(2).padStart(5, '0')}
                         </p>
                       </div>
-                    )}
+                    ) : previewFile.type === 'video' ? (
+                      <div>
+                        <span className="text-gray-600 text-xs">Duration</span>
+                        <p className="font-medium text-gray-400">N/A</p>
+                      </div>
+                    ) : null}
 
-                    {previewFile.fps && (
+                    {previewFile.fps ? (
                       <div>
                         <span className="text-gray-600 text-xs">Frame Rate</span>
                         <p className="font-medium">{previewFile.fps} FPS</p>
                       </div>
-                    )}
+                    ) : previewFile.type === 'video' ? (
+                      <div>
+                        <span className="text-gray-600 text-xs">Frame Rate</span>
+                        <p className="font-medium text-gray-400">N/A</p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -780,39 +795,82 @@ export function MediaGallery({
                             {previewFile.path}
                           </p>
                         </div>
-                        {previewFile.width && previewFile.height && (
-                          <>
-                            <div>
-                              <span className="text-gray-600 text-xs">Width</span>
-                              <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
-                                {previewFile.width} pixels
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600 text-xs">Height</span>
-                              <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
-                                {previewFile.height} pixels
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600 text-xs">Aspect Ratio</span>
-                              <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
-                                {(previewFile.width / previewFile.height).toFixed(3)}:1
-                                <span className="text-gray-500 text-xs ml-1">
-                                  ({previewFile.width}×{previewFile.height})
-                                </span>
-                              </p>
-                            </div>
-                          </>
-                        )}
-                        {previewFile.fps && (
+
+                        {/* Width - always show */}
+                        {previewFile.width ? (
                           <div>
-                            <span className="text-gray-600 text-xs">Frame Rate</span>
+                            <span className="text-gray-600 text-xs">Width</span>
                             <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
-                              {previewFile.fps} FPS
+                              {previewFile.width} pixels
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="text-gray-600 text-xs">Width</span>
+                            <p className="font-medium text-gray-400 bg-gray-50 p-2 rounded mt-1 border">
+                              N/A
                             </p>
                           </div>
                         )}
+
+                        {/* Height - always show */}
+                        {previewFile.height ? (
+                          <div>
+                            <span className="text-gray-600 text-xs">Height</span>
+                            <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                              {previewFile.height} pixels
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="text-gray-600 text-xs">Height</span>
+                            <p className="font-medium text-gray-400 bg-gray-50 p-2 rounded mt-1 border">
+                              N/A
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Aspect Ratio - always show if we have dimensions */}
+                        {previewFile.width && previewFile.height ? (
+                          <div>
+                            <span className="text-gray-600 text-xs">Aspect Ratio</span>
+                            <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                              {(previewFile.width / previewFile.height).toFixed(3)}:1
+                              <span className="text-gray-500 text-xs ml-1">
+                                ({previewFile.width}×{previewFile.height})
+                              </span>
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="text-gray-600 text-xs">Aspect Ratio</span>
+                            <p className="font-medium text-gray-400 bg-gray-50 p-2 rounded mt-1 border">
+                              N/A
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Frame Rate in More Details for videos */}
+                        {previewFile.type === 'video' && (
+                          <>
+                            {previewFile.fps ? (
+                              <div>
+                                <span className="text-gray-600 text-xs">Frame Rate</span>
+                                <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                                  {previewFile.fps} FPS
+                                </p>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-gray-600 text-xs">Frame Rate</span>
+                                <p className="font-medium text-gray-400 bg-gray-50 p-2 rounded mt-1 border">
+                                  N/A
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
                         <div>
                           <span className="text-gray-600 text-xs">MIME Type</span>
                           <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
