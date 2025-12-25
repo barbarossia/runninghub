@@ -43,84 +43,92 @@ export default function Home() {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">🖼️</span>
-                Image Gallery
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Browse and manage your images with multiple view modes.
-                Select, delete, and process images with keyboard shortcuts.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Grid View</Badge>
-                <Badge variant="secondary">List View</Badge>
-                <Badge variant="secondary">Large View</Badge>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/gallery">
+            <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-blue-400 border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-2xl">🖼️</span>
+                  Image Gallery
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Browse and manage your images with multiple view modes.
+                  Select, delete, and process images with keyboard shortcuts.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">Grid View</Badge>
+                  <Badge variant="secondary">List View</Badge>
+                  <Badge variant="secondary">Large View</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">🎬</span>
-                Video Conversion
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Convert video files to MP4 format using FFmpeg. Supports WebM, MKV, AVI, MOV, and FLV formats.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">FFmpeg</Badge>
-                <Badge variant="secondary">Batch Conversion</Badge>
-                <Badge variant="secondary">MP4 Output</Badge>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/videos">
+            <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-purple-400 border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-2xl">🎬</span>
+                  Video Conversion
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Convert video files to MP4 format using FFmpeg. Supports WebM, MKV, AVI, MOV, and FLV formats.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">FFmpeg</Badge>
+                  <Badge variant="secondary">Batch Conversion</Badge>
+                  <Badge variant="secondary">MP4 Output</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">✂️</span>
-                Video Cropping
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Crop videos to specific regions using FFmpeg. Support for preset ratios and custom dimensions.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">FFmpeg</Badge>
-                <Badge variant="secondary">Custom Crop</Badge>
-                <Badge variant="secondary">Preset Ratios</Badge>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/videos/crop">
+            <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-green-400 border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-2xl">✂️</span>
+                  Video Cropping
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Crop videos to specific regions using FFmpeg. Support for preset ratios and custom dimensions.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">FFmpeg</Badge>
+                  <Badge variant="secondary">Custom Crop</Badge>
+                  <Badge variant="secondary">Preset Ratios</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">📸</span>
-                Video Clipping
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Extract frames from videos as images. Supports multiple extraction modes and high-quality output.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Python</Badge>
-                <Badge variant="secondary">Batch Extract</Badge>
-                <Badge variant="secondary">Multi-mode</Badge>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/videos/clip">
+            <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-orange-400 border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-2xl">📸</span>
+                  Video Clipping
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Extract frames from videos as images. Supports multiple extraction modes and high-quality output.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">Python</Badge>
+                  <Badge variant="secondary">Batch Extract</Badge>
+                  <Badge variant="secondary">Multi-mode</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-          <Card>
+          <Card className="opacity-60 cursor-not-allowed border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="text-2xl">🚀</span>
@@ -139,7 +147,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="opacity-60 cursor-not-allowed border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="text-2xl">📁</span>
@@ -157,7 +165,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="opacity-60 cursor-not-allowed border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="text-2xl">⚡</span>
@@ -253,33 +261,8 @@ export default function Home() {
         <div className="mt-12 text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Getting Started</h2>
           <p className="text-gray-600 mb-6">
-            The application migration is progressing well. API routes are complete and the File System Access integration is ready for testing.
+            Click on any feature card above to get started. The application provides various tools for image and video processing.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/gallery">
-              <Button variant="default">
-                Launch Gallery
-              </Button>
-            </Link>
-            <Link href="/videos">
-              <Button variant="default" className="bg-purple-600 hover:bg-purple-700">
-                Video Conversion
-              </Button>
-            </Link>
-            <Link href="/videos/crop">
-              <Button variant="default" className="bg-green-600 hover:bg-green-700">
-                Video Cropping
-              </Button>
-            </Link>
-            <Link href="/videos/clip">
-              <Button variant="default" className="bg-orange-600 hover:bg-orange-700">
-                Video Clipping
-              </Button>
-            </Link>
-            <Button variant="outline" disabled>
-              View Documentation
-            </Button>
-          </div>
         </div>
       </div>
     </div>
