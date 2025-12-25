@@ -164,42 +164,72 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
   }
 
   if (isMinimized) {
+    // Get the most recent 1-3 logs for display in minimized state
+    const recentLogs = [...logs].slice(0, 3);
+
     return (
       <Card className={`fixed bottom-4 right-4 z-50 w-[320px] shadow-2xl ${consoleBg} ${consoleBorder} ${opacity} hover:opacity-100 transition-all`}>
-        <div className="p-3 flex items-center gap-3">
-          <div className="flex-1">
-             <div className="flex items-center justify-between mb-1">
-               <span className="text-[10px] font-mono font-bold text-blue-400">
-                 {taskStatus?.status === 'processing' ? 'PROCESSING' : 'CONSOLE'}
-               </span>
-               <div className="flex items-center gap-1">
-                 {taskStatus && (
-                   <span className={`text-[10px] ${badgeText} mr-2`}>
-                     {taskStatus.completedCount}/{taskStatus.totalImages}
-                   </span>
-                 )}
-                 <Button
-                   variant="ghost"
-                   size="icon"
-                   className={`h-5 w-5 ${buttonHover} ${buttonText}`}
-                   onClick={() => setIsMinimized(false)}
-                 >
-                   <Maximize2 className="w-3 h-3" />
-                 </Button>
-                 <Button
-                   variant="ghost"
-                   size="icon"
-                   className={`h-5 w-5 ${buttonHover} ${buttonText} hover:text-red-400`}
-                   onClick={() => setIsVisible(false)}
-                 >
-                   <X className="w-3 h-3" />
-                 </Button>
-               </div>
-             </div>
-             {taskStatus && (
-               <Progress value={getProgress()} className={`h-1 ${progressBg}`} />
-             )}
+        <div className="p-2">
+          {/* Header with icon and controls */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-mono font-bold text-blue-400">{'>_'}</span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-5 w-5 ${buttonHover} ${buttonText}`}
+                onClick={() => setIsMinimized(false)}
+              >
+                <Maximize2 className="w-3 h-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-5 w-5 ${buttonHover} ${buttonText} hover:text-red-400`}
+                onClick={() => setIsVisible(false)}
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
           </div>
+
+          {/* Progress bar if task is running */}
+          {taskStatus && (
+            <Progress value={getProgress()} className={`h-1 mb-2 ${progressBg}`} />
+          )}
+
+          {/* Recent logs preview */}
+          {recentLogs.length > 0 && (
+            <div className="space-y-1">
+              {recentLogs.map((log, i) => (
+                <div key={i} className={`flex gap-2 ${consoleHover} p-1 rounded transition-colors border-l-2 ${consoleHoverBorder} text-[9px] font-mono`}>
+                  <span className={`${consoleTimestamp} shrink-0 tabular-nums`}>
+                    {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
+                  </span>
+                  <span className={`${getLevelColor(log.level)} break-all leading-tight line-clamp-1`}>
+                    {log.message}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Task status summary */}
+          {taskStatus && (
+            <div className={`flex items-center justify-between mt-2 pt-2 border-t ${consoleBorder} text-[9px] ${badgeText}`}>
+              <span className="flex items-center gap-1">
+                {taskStatus.status === 'processing' && <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-400" />}
+                {taskStatus.status === 'completed' && <CheckCircle2 className="w-2.5 h-2.5 text-green-400" />}
+                {taskStatus.status === 'failed' && <XCircle className="w-2.5 h-2.5 text-red-400" />}
+                <span className="font-medium truncate max-w-[200px]">
+                  {taskStatus.currentImage ? taskStatus.currentImage.split('/').pop() : 'Initializing...'}
+                </span>
+              </span>
+              <span className="font-mono">
+                {taskStatus.completedCount + taskStatus.failedCount}/{taskStatus.totalImages}
+              </span>
+            </div>
+          )}
         </div>
       </Card>
     );
