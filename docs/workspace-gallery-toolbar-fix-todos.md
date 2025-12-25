@@ -4,6 +4,66 @@
 
 ---
 
+## Phase 5: MediaGallery Operations (Rename, Delete, Preview, Details)
+
+**Trigger**: User feedback during implementation - "toolbar still missing, check image gallery, it missing the rename, delete operation and i need add the preview, detail information is missing also"
+
+### 5.1: Add 3-Dot Menu to All Files
+
+- [x] Import required icons (MoreVertical, Pencil, Trash2, Eye, Info)
+- [x] Import DropdownMenu and Dialog components
+- [x] Add menu trigger button to file cards (top-right corner)
+- [x] Add menu items: Preview, Rename, Delete
+- [x] Style menu button to appear on hover/selection
+
+### 5.2: Rename Functionality
+
+- [x] Add onRename prop to MediaGalleryProps interface
+- [x] Add renameDialogFile state
+- [x] Add newFileName state
+- [x] Create RenameDialog component
+- [x] Add handleRenameConfirm function
+- [x] Update workspace page to pass handleRename callback
+- [ ] Test rename with image files
+- [ ] Test rename with video files
+- [ ] Verify extension is preserved during rename
+
+### 5.3: Delete Functionality
+
+- [x] Add onDelete prop to MediaGalleryProps interface
+- [x] Add deleteDialogFile state
+- [x] Create DeleteConfirmationDialog component
+- [x] Add handleDeleteConfirm function
+- [x] Update workspace page to pass handleDelete callback
+- [ ] Test delete with image files
+- [ ] Test delete with video files
+- [ ] Verify files are removed from gallery after delete
+
+### 5.4: Preview Functionality
+
+- [x] Add onPreview prop to MediaGalleryProps interface
+- [x] Add previewFile state
+- [x] Create PreviewDialog component
+- [x] Display image preview in dialog
+- [x] Display video preview in dialog with controls
+- [x] Show file metadata (dimensions, size, type, extension, duration, fps)
+- [x] Update workspace page to pass handlePreview callback
+- [ ] Test image preview
+- [ ] Test video preview with controls
+- [ ] Verify metadata display is correct
+
+### 5.5: Build & Test
+
+- [x] Run `npm run build` - verify TypeScript compilation
+- [ ] Test all menu operations on image files
+- [ ] Test all menu operations on video files
+- [ ] Test keyboard navigation (Enter to confirm rename)
+- [ ] Test dialog open/close behavior
+- [ ] Test state cleanup after operations
+- [ ] Fix any build errors or test failures
+
+---
+
 ## Progress Summary
 
 - **Branch**: `fix/workspace`
@@ -388,6 +448,9 @@ if (!selectedFolder) {
 - [x] All Phase 4 tasks complete (except Pages page which doesn't exist)
 - [x] All active pages (Workspace, Gallery) auto-restore folder
 - [x] Folder validation working (via existing hook)
+- [x] Phase 5.1 - 3-dot menu added to all files
+- [ ] Phase 5.2-5.4 - Rename, Delete, Preview callbacks in workspace page
+- [ ] Phase 5.5 - All operations tested
 - [x] Build succeeds without errors
 - [x] Tests passing
 - [x] Changes committed to git
@@ -409,8 +472,14 @@ if (!selectedFolder) {
 10. ⏸️ Complete Phase 4.5 - Update Pages page (page doesn't exist yet)
 11. ✅ Complete Phase 4.6 - Build and test all changes
 12. ✅ Commit Phase 4 changes
-13. ⏳ Create pull request
+13. ✅ Complete Phase 5.1 - Add 3-dot menu to MediaGallery
+14. ⏳ Complete Phase 5.2 - Implement rename in workspace page
+15. ⏳ Complete Phase 5.3 - Implement delete in workspace page
+16. ⏳ Complete Phase 5.4 - Implement preview in workspace page
+17. ⏳ Complete Phase 5.5 - Test all operations
+18. ⏳ Commit Phase 5 changes
+19. ⏳ Create pull request
 
 ---
 
-**Last Updated**: 2025-12-25 - Phase 4 completed for Workspace and Gallery pages
+**Last Updated**: 2025-12-25 - Phase 5 in progress: Adding Rename, Delete, Preview, Details to MediaGallery

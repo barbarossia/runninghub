@@ -159,6 +159,108 @@ Fixes #456
 - [ ] No merge conflicts with main
 ```
 
+## Folder Selection Rules
+
+### Folder Selection Persistence
+**RULE 4**: All pages with folder selectors must automatically restore the last opened folder on page load, unless that folder no longer exists.
+
+**Applies To**:
+- Gallery page (`/gallery`)
+- Workspace page (`/workspace`)
+- Pages page (`/pages`)
+- Any other page with folder selection functionality
+
+**Implementation Requirements**:
+1. **Persist folder selection**: Store the selected folder in localStorage when user selects a folder
+2. **Auto-restore on load**: When the page loads, check if there's a previously selected folder in localStorage
+3. **Validate folder existence**: Before restoring, verify the folder still exists
+4. **Fallback to selection screen**: If the folder no longer exists or validation fails, show the folder selection screen
+
+**Process**:
+```typescript
+// Example implementation pattern
+useEffect(() => {
+  const loadLastFolder = async () => {
+    // 1. Get last selected folder from localStorage
+    const lastFolder = useFolderStore.getState().selectedFolder;
+
+    if (lastFolder) {
+      // 2. Validate folder still exists
+      try {
+        const exists = await validateFolderExists(lastFolder.folder_path);
+
+        if (exists) {
+          // 3. Restore the folder
+          // Folder is already in store, just need to load contents
+          await loadFolderContents(lastFolder.folder_path, lastFolder.session_id);
+        } else {
+          // 4. Folder doesn't exist, clear selection
+          useFolderStore.getState().setSelectedFolder(null);
+          toast.info('Previously selected folder no longer exists');
+        }
+      } catch (error) {
+        // Validation failed, show selection screen
+        console.error('Folder validation failed:', error);
+      }
+    }
+    // If no last folder, show selection screen (default behavior)
+  };
+
+  loadLastFolder();
+}, []);
+```
+
+**Validation Implementation**:
+```typescript
+// API endpoint to validate folder exists
+// GET /api/folder/validate?path=/path/to/folder
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const path = searchParams.get('path');
+
+  if (!path) {
+    return NextResponse.json({ exists: false }, { status: 400 });
+  }
+
+  try {
+    const exists = await checkDirectoryExists(path);
+    return NextResponse.json({ exists });
+  } catch (error) {
+    return NextResponse.json({ exists: false, error: 'Validation failed' });
+  }
+}
+```
+
+**Store Configuration**:
+Ensure folder selection is persisted in store:
+```typescript
+// In folder-store.ts
+export const useFolderStore = create<FolderStore>()(
+  persist(
+    (set) => ({
+      selectedFolder: null,
+      setSelectedFolder: (folder) => set({ selectedFolder: folder }),
+      // ... other actions
+    }),
+    {
+      name: 'runninghub-folder-storage',
+      partialize: (state) => ({
+        selectedFolder: state.selectedFolder, // Persist folder selection
+      }),
+    }
+  )
+);
+```
+
+**User Experience Considerations**:
+- **Loading state**: Show a loading indicator while validating the folder
+- **Error handling**: If validation fails, gracefully fallback to folder selection screen
+- **Clear indication**: Show which folder is being restored (e.g., "Restoring /path/to/folder...")
+- **Manual override**: Always allow user to manually select a different folder via "Change Folder" button
+
+**Rationale**: Improves user experience by automatically restoring the user's work context. Returning to the app should feel seamless - users shouldn't have to re-select folders every time. However, we must validate the folder still exists to avoid errors.
+
 ## Project Structure
 
 ```
@@ -196,6 +298,15 @@ Before committing any changes, verify:
 - [ ] Commit message follows format guidelines
 - [ ] Tests pass (if applicable)
 - [ ] Documentation updated (if needed)
+
+When implementing pages with folder selectors, verify:
+
+- [ ] Folder selection persists in localStorage
+- [ ] Last opened folder auto-restores on page load
+- [ ] Folder existence is validated before restoring
+- [ ] Fallback to selection screen if folder doesn't exist
+- [ ] Loading state shown during validation
+- [ ] User can manually change folder at any time
 
 ---
 

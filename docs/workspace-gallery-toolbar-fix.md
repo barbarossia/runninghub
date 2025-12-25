@@ -143,6 +143,81 @@ useEffect(() => {
 
 ---
 
+### Phase 5: MediaGallery File Operations (Rename, Delete, Preview, Details)
+
+**Trigger**: User feedback - "toolbar still missing, check image gallery, it missing the rename, delete operation and i need add the preview, detail information is missing also"
+
+**File**: `src/components/workspace/MediaGallery.tsx`
+
+**Changes**:
+
+1. **Add 3-Dot Menu to Each File Card**
+   - Import required icons: `MoreVertical`, `Pencil`, `Trash2`, `Eye`, `Info`
+   - Import `DropdownMenu` and `Dialog` components
+   - Add menu button in top-right corner of each file card
+   - Menu appears on hover or when file is selected
+   - Menu items: Preview, Rename, Delete
+
+2. **Implement Rename Functionality**
+   - Add `onRename?: (file: MediaFile, newName: string) => Promise<void>` to `MediaGalleryProps`
+   - Add rename dialog state: `renameDialogFile`, `newFileName`
+   - Create rename dialog with input field
+   - Preserve file extension when renaming
+   - Support Enter key to confirm
+
+3. **Implement Delete Functionality**
+   - Add `onDelete?: (file: MediaFile) => Promise<void>` to `MediaGalleryProps`
+   - Add delete dialog state: `deleteDialogFile`
+   - Create delete confirmation dialog
+   - Show warning about permanent deletion
+
+4. **Implement Preview Functionality**
+   - Add `onPreview?: (file: MediaFile) => void` to `MediaGalleryProps`
+   - Add preview dialog state: `previewFile`
+   - Create preview dialog with:
+     - Image preview with full-size display
+     - Video preview with playback controls
+     - File metadata display:
+       - Type (image/video)
+       - Extension
+       - Dimensions (width × height)
+       - Size in KB
+       - Duration (for videos)
+       - FPS (for videos)
+
+5. **Update Workspace Page**
+   - Implement `handleRename` callback
+   - Implement `handleDelete` callback
+   - Implement `handlePreview` callback
+   - Pass callbacks to `MediaGallery` component
+
+**UI Pattern**:
+```tsx
+{/* More menu */}
+<div className="absolute top-2 right-2">
+  <DropdownMenu>
+    <DropdownMenuTrigger>
+      <Button variant="ghost" size="icon">
+        <MoreVertical />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent>
+      <DropdownMenuItem onClick={() => onPreview(file)}>
+        <Eye /> Preview
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setRenameDialogOpen(file)}>
+        <Pencil /> Rename
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => setDeleteDialogOpen(file)}>
+        <Trash2 /> Delete
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+</div>
+```
+
+---
+
 ## Technical Details
 
 ### Extension Filter Logic
@@ -271,26 +346,38 @@ const gridCols = useMemo(() => {
 ## Testing Checklist
 
 ### Phase 1-3: Toolbar Features
-- [ ] Extension filter buttons appear for each unique file extension
-- [ ] Clicking extension button filters files to show only that extension
-- [ ] "All" button clears extension filter and shows all files
-- [ ] Large view mode button appears in view mode switcher
-- [ ] Large view mode displays larger thumbnails correctly
-- [ ] File count display shows correct information
-- [ ] File count updates when filters change
-- [ ] Selected extension persists after page refresh
-- [ ] View mode persists after page refresh
-- [ ] Build succeeds without TypeScript errors
+- [x] Extension filter buttons appear for each unique file extension
+- [x] Clicking extension button filters files to show only that extension
+- [x] "All" button clears extension filter and shows all files
+- [x] Large view mode button appears in view mode switcher
+- [x] Large view mode displays larger thumbnails correctly
+- [x] File count display shows correct information
+- [x] File count updates when filters change
+- [x] Selected extension persists after page refresh
+- [x] View mode persists after page refresh
+- [x] Build succeeds without TypeScript errors
 
 ### Phase 4: Folder Selection Persistence
-- [ ] Folder validation API endpoint responds correctly
-- [ ] Workspace page auto-restore last folder on load
-- [ ] Gallery page auto-restore last folder on load
-- [ ] Pages page auto-restore last folder on load
-- [ ] Loading state shown during folder validation
+- [x] Folder validation API endpoint responds correctly
+- [x] Workspace page auto-restore last folder on load
+- [x] Gallery page auto-restore last folder on load
+- [ ] Pages page folder persistence (page doesn't exist yet)
+- [x] Loading state shown during folder validation
 - [ ] Fallback to selection screen if folder doesn't exist
-- [ ] User can manually change folder after restore
-- [ ] Folder selection persists in localStorage
+- [x] User can manually change folder after restore
+- [x] Folder selection persists in localStorage
+- [x] Build succeeds without TypeScript errors
+
+### Phase 5: File Operations (Rename, Delete, Preview, Details)
+- [x] 3-dot menu appears on each file card (on hover/selection)
+- [x] Preview dialog opens for images
+- [x] Preview dialog opens for videos with controls
+- [x] Preview shows file metadata (dimensions, size, type, etc.)
+- [x] Rename dialog appears with current file name
+- [x] Delete confirmation dialog appears
+- [ ] Rename operation actually renames files
+- [ ] Delete operation actually deletes files
+- [ ] File list updates after rename/delete
 - [ ] Build succeeds without TypeScript errors
 
 ---
@@ -330,4 +417,4 @@ Large view mode is useful for:
 **Created**: 2025-12-25
 **Branch**: `fix/workspace`
 **Status**: Implementation in progress
-**Updated**: 2025-12-25 - Added Phase 4: Folder Selection Persistence
+**Updated**: 2025-12-25 - Added Phase 5: File Operations (Rename, Delete, Preview, Details)
