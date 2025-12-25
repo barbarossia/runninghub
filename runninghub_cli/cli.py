@@ -341,6 +341,7 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
     "input_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True)
 )
 @click.option("--node", required=True, help="Node ID to use")
+@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
 @click.option(
     "--pattern",
     default="*",
@@ -370,6 +371,7 @@ def batch(
     no_download,
     no_cleanup,
     max_concurrent,
+    params,
 ):
     """Batch process all files in a directory."""
     cfg = ctx.obj["config"]
@@ -406,16 +408,37 @@ def batch(
             file_id = client.upload_file(str(file_path))
             print_success(f"File uploaded successfully! File ID: {file_id}")
 
-            # Step 2: Submit task
+            # Step 2: Build node configs
             print_info(f"Submitting task to node: {node}")
-            node_config = {
+            node_configs = []
+
+            # Add image node config
+            node_configs.append({
                 "nodeId": node,
                 "fieldName": "image",
                 "fieldValue": file_id,
                 "description": "image",
-            }
+            })
 
-            task_id = client.submit_task(cfg.workflow_id, [node_config])
+            # Add additional parameter node configs
+            for param in params:
+                try:
+                    parts = param.split(':', 2)
+                    if len(parts) != 3:
+                        print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                        continue
+
+                    node_id, field_type, value = parts
+                    node_configs.append({
+                        "nodeId": node_id,
+                        "fieldName": "input" if field_type == "text" else "value",
+                        "fieldValue": value,
+                        "description": field_type,
+                    })
+                except Exception as e:
+                    print_error(f"Failed to parse parameter '{param}': {e}")
+
+            task_id = client.submit_task(cfg.workflow_id, node_configs)
             print_success(f"Task submitted successfully! Task ID: {task_id}")
 
             # Step 3: Wait for completion
@@ -488,6 +511,7 @@ def batch(
 
 @cli.command()
 @click.option("--node", required=True, help="Node ID to use")
+@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
 @click.option(
     "--pattern",
     default="*.png *.jpg *.jpeg",
@@ -504,7 +528,7 @@ def batch(
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
 @click.pass_context
-def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup):
+def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, params):
     """Process all images from the configured folder."""
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
@@ -547,16 +571,37 @@ def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup):
             file_id = client.upload_file(str(file_path))
             print_success(f"File uploaded successfully! File ID: {file_id}")
 
-            # Step 2: Submit task
+            # Step 2: Build node configs
             print_info(f"Submitting task to node: {node}")
-            node_config = {
+            node_configs = []
+
+            # Add image node config
+            node_configs.append({
                 "nodeId": node,
                 "fieldName": "image",
                 "fieldValue": file_id,
                 "description": "image",
-            }
+            })
 
-            task_id = client.submit_task(cfg.workflow_id, [node_config])
+            # Add additional parameter node configs
+            for param in params:
+                try:
+                    parts = param.split(':', 2)
+                    if len(parts) != 3:
+                        print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                        continue
+
+                    node_id, field_type, value = parts
+                    node_configs.append({
+                        "nodeId": node_id,
+                        "fieldName": "input" if field_type == "text" else "value",
+                        "fieldValue": value,
+                        "description": field_type,
+                    })
+                except Exception as e:
+                    print_error(f"Failed to parse parameter '{param}': {e}")
+
+            task_id = client.submit_task(cfg.workflow_id, node_configs)
             print_success(f"Task submitted successfully! Task ID: {task_id}")
 
             # Step 3: Wait for completion
