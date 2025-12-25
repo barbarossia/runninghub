@@ -23,7 +23,7 @@ export function CropConfiguration({
   const { cropConfig, setCropMode, setCustomDimensions, setOutputSuffix, togglePreserveAudio } =
     useCropStore();
 
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Derive values from state, reset when mode is not custom
   const isCustomMode = cropConfig.mode === CROP_PRESETS.CUSTOM;

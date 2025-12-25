@@ -32,7 +32,7 @@ export function VideoClipConfiguration({
     toggleDeleteOriginal
   } = useVideoClipStore();
 
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Notify parent of config changes
   useEffect(() => {
