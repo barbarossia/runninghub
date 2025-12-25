@@ -80,7 +80,9 @@ interface WorkspaceState {
   // NEW STATE - UI State
   // ============================================================
   // Gallery view mode
-  viewMode: 'grid' | 'list';
+  viewMode: 'grid' | 'list' | 'large';
+  // Selected file extension filter
+  selectedExtension: string | null;
   // General loading state
   isLoading: boolean;
 
@@ -185,7 +187,8 @@ interface WorkspaceActions extends WorkspaceState {
   // ============================================================
   // NEW ACTIONS - UI State
   // ============================================================
-  setViewMode: (mode: 'grid' | 'list') => void;
+  setViewMode: (mode: 'grid' | 'list' | 'large') => void;
+  setSelectedExtension: (extension: string | null) => void;
   setLoading: (loading: boolean) => void;
 }
 
@@ -232,6 +235,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       // New state - UI State
       viewMode: 'grid',
+      selectedExtension: null,
       isLoading: false,
 
       // Error state
@@ -639,6 +643,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       setViewMode: (mode) =>
         set({ viewMode: mode }),
 
+      setSelectedExtension: (extension) =>
+        set({ selectedExtension: extension }),
+
       setLoading: (loading) =>
         set({ isLoading: loading }),
     }),
@@ -658,6 +665,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
         // UI state
         viewMode: state.viewMode,
+        selectedExtension: state.selectedExtension,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

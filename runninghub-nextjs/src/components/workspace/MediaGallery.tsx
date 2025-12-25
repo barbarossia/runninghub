@@ -11,6 +11,7 @@ import Image from 'next/image';
 import {
   Grid3x3,
   List,
+  Maximize2,
   Search,
   FileImage,
   FileVideo,
@@ -40,22 +41,34 @@ export function MediaGallery({
   const {
     mediaFiles,
     viewMode,
+    selectedExtension,
     jobFiles,
     toggleMediaFileSelection,
     selectAllMediaFiles,
     deselectAllMediaFiles,
     getSelectedMediaFiles,
+    setViewMode,
+    setSelectedExtension,
   } = useWorkspaceStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
 
-  // Filter files based on search and type
+  // Get unique extensions for filter
+  const uniqueExtensions = useMemo(() => {
+    const extensions = new Set<string>();
+    mediaFiles.forEach((file) => {
+      if (file.extension) {
+        extensions.add(file.extension);
+      }
+    });
+    return Array.from(extensions).sort();
+  }, [mediaFiles]);
+
+  // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
     return mediaFiles.filter((file) => {
-      // Type filter
-      if (typeFilter === 'image' && file.type !== 'image') return false;
-      if (typeFilter === 'video' && file.type !== 'video') return false;
+      // Extension filter
+      if (selectedExtension && file.extension !== selectedExtension) return false;
 
       // Search filter
       if (searchQuery) {
@@ -68,7 +81,7 @@ export function MediaGallery({
 
       return true;
     });
-  }, [mediaFiles, searchQuery, typeFilter]);
+  }, [mediaFiles, searchQuery, selectedExtension]);
 
   // Get selected files count
   const selectedCount = useMemo(() => {
@@ -76,11 +89,6 @@ export function MediaGallery({
   }, [mediaFiles]);
 
   const isAllSelected = selectedCount > 0 && selectedCount === filteredFiles.length;
-
-  // Handle view mode toggle
-  const handleViewModeChange = useCallback((mode: 'grid' | 'list') => {
-    useWorkspaceStore.getState().setViewMode(mode);
-  }, []);
 
   // Handle select all toggle
   const handleSelectAllToggle = useCallback(() => {
@@ -110,16 +118,23 @@ export function MediaGallery({
 
   // Get grid columns based on view mode
   const gridCols = useMemo(() => {
-    return viewMode === 'grid'
-      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
-      : 'grid-cols-1';
+    switch (viewMode) {
+      case 'grid':
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
+      case 'large':
+        return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
+      case 'list':
+        return 'grid-cols-1';
+      default:
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+    }
   }, [viewMode]);
 
   // Empty state
   if (filteredFiles.length === 0) {
     return (
       <div className={cn('flex flex-col items-center justify-center py-16', className)}>
-        {typeFilter !== 'all' || searchQuery ? (
+        {selectedExtension || searchQuery ? (
           <>
             <Search className="h-16 w-16 text-gray-400 mb-4" />
             <p className="text-lg text-gray-600 mb-2">No files found</p>
@@ -155,35 +170,29 @@ export function MediaGallery({
             />
           </div>
 
-          {/* Type filter */}
-          <div className="flex gap-1" role="group" aria-label="Filter by file type">
+          {/* Extension filter */}
+          <div className="flex gap-1" role="group" aria-label="Filter by file extension">
             <Button
-              variant={typeFilter === 'all' ? 'default' : 'outline'}
+              variant={selectedExtension === null ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setTypeFilter('all')}
+              onClick={() => setSelectedExtension(null)}
               aria-label="Show all files"
-              aria-pressed={typeFilter === 'all'}
+              aria-pressed={selectedExtension === null}
             >
               All
             </Button>
-            <Button
-              variant={typeFilter === 'image' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTypeFilter('image')}
-              aria-label="Show images only"
-              aria-pressed={typeFilter === 'image'}
-            >
-              Images
-            </Button>
-            <Button
-              variant={typeFilter === 'video' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTypeFilter('video')}
-              aria-label="Show videos only"
-              aria-pressed={typeFilter === 'video'}
-            >
-              Videos
-            </Button>
+            {uniqueExtensions.slice(0, 5).map((ext) => (
+              <Button
+                key={ext}
+                variant={selectedExtension === ext ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedExtension(ext)}
+                aria-label={`Filter by ${ext} files`}
+                aria-pressed={selectedExtension === ext}
+              >
+                {ext.replace('.', '').toUpperCase()}
+              </Button>
+            ))}
           </div>
         </div>
 
@@ -209,7 +218,7 @@ export function MediaGallery({
             <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => handleViewModeChange('grid')}
+              onClick={() => setViewMode('grid')}
               aria-label="Grid view"
               aria-pressed={viewMode === 'grid'}
             >
@@ -218,11 +227,20 @@ export function MediaGallery({
             <Button
               variant={viewMode === 'list' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => handleViewModeChange('list')}
+              onClick={() => setViewMode('list')}
               aria-label="List view"
               aria-pressed={viewMode === 'list'}
             >
               <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'large' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('large')}
+              aria-label="Large grid view"
+              aria-pressed={viewMode === 'large'}
+            >
+              <Maximize2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -231,7 +249,7 @@ export function MediaGallery({
       {/* File count */}
       <div className="text-sm text-gray-600">
         {filteredFiles.length} file{filteredFiles.length !== 1 ? 's' : ''}
-        {typeFilter !== 'all' && ` (${typeFilter})`}
+        {selectedExtension && ` (${selectedExtension.replace('.', '').toUpperCase()})`}
         {searchQuery && ' matching "' + searchQuery + '"'}
       </div>
 
