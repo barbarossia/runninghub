@@ -8,12 +8,13 @@ interface ProcessRequest {
   node_id?: string;
   timeout?: number;
   params?: Record<string, string>;
+  deleteOriginal?: boolean;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const data: ProcessRequest = await request.json();
-    const { images, node_id = "203", timeout = 1800, params = {} } = data;
+    const { images, node_id = "203", timeout = 1800, params = {}, deleteOriginal = false } = data;
 
     if (!images || images.length === 0) {
       return NextResponse.json(
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     await initTask(taskId, images.length);
 
     // Start background processing (in a real implementation, you might use a job queue)
-    processImagesInBackground(images, node_id, timeout, taskId, params);
+    processImagesInBackground(images, node_id, timeout, taskId, params, deleteOriginal);
 
     const response = {
       success: true,
@@ -68,6 +69,7 @@ function processSingleImage(
   timeout: number,
   env: NodeJS.ProcessEnv,
   params: Record<string, string> = {},
+  deleteOriginal: boolean = false,
 ): Promise<{
   success: boolean;
   stdout: string;
@@ -86,6 +88,12 @@ function processSingleImage(
       "--timeout",
       String(timeout),
     ];
+
+    // If deleteOriginal is FALSE, we need to pass --no-cleanup to PREVENT deletion
+    // The CLI defaults to deleting unless --no-cleanup is present
+    if (!deleteOriginal) {
+      args.push("--no-cleanup");
+    }
 
     // Add optional params
     Object.entries(params).forEach(([key, value]) => {
@@ -171,9 +179,11 @@ async function processImagesInBackground(
   timeout: number,
   taskId: string,
   params: Record<string, string> = {},
+  deleteOriginal: boolean = false,
 ) {
   await writeLog(`=== BACKGROUND PROCESSING STARTED for task: ${taskId} ===`, 'info', taskId);
   await writeLog(`Processing ${images.length} images with node ${nodeId}`, 'info', taskId);
+  await writeLog(`Delete original images: ${deleteOriginal}`, 'info', taskId);
   
   if (Object.keys(params).length > 0) {
     await writeLog(`With params: ${JSON.stringify(params)}`, 'info', taskId);
@@ -218,7 +228,7 @@ async function processImagesInBackground(
       }
 
       // Process the image
-      const result = await processSingleImage(imagePath, nodeId, timeout, env, params);
+      const result = await processSingleImage(imagePath, nodeId, timeout, env, params, deleteOriginal);
 
       if (result.success) {
         successCount++;

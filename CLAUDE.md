@@ -2,10 +2,36 @@
 
 This document contains the global development rules that apply to the entire RunningHub project, across all subdirectories and components.
 
+## Feature Planning and Documentation Rules
+
+### Documentation-First Development
+**RULE 1**: Before implementing any new feature, check the `docs/` folder for existing plans and TODO lists.
+
+**Process**:
+1. **Search for existing documentation**:
+   ```bash
+   ls docs/                      # List all documentation files
+   grep -r "feature-name" docs/  # Search for specific feature docs
+   ```
+
+2. **If documentation exists**:
+   - Read the plan/TODO list in `docs/`
+   - Follow the implementation steps outlined
+   - Check off completed items in the TODO list
+   - Update the documentation if requirements change
+
+3. **If no documentation exists**:
+   - Create a plan document in `docs/` first
+   - Include: requirements, architecture, implementation steps, TODO list
+   - Get approval on the plan before implementing
+   - Reference: `docs/workspace-redesign-plan.md` as a template
+
+**Rationale**: Ensures all features are properly planned, documented, and tracked. Prevents duplicate work, provides context for future developers, and maintains a historical record of design decisions.
+
 ## Git Workflow Rules
 
 ### Branch Management
-**RULE 1**: Every new branch must be created from the latest `main` branch.
+**RULE 2**: Every new branch must be created from the latest `main` branch.
 
 **Process**:
 ```bash
@@ -36,7 +62,7 @@ git checkout -b fix/your-bug-fix
 **Rationale**: Ensures your branch is based on the most recent code, reducing merge conflicts and incorporating the latest changes from the team.
 
 ### Build Verification
-**RULE 2**: When a new feature or fix is applied, you must run the appropriate build command to ensure the application compiles successfully.
+**RULE 3**: When a new feature or fix is applied, you must run the appropriate build command to ensure the application compiles successfully.
 
 **For Next.js Frontend** (runninghub-nextjs/):
 ```bash
@@ -143,12 +169,24 @@ runninghub/
 │   ├── src/
 │   ├── package.json
 │   └── ...
-├── docs/                      # Project documentation
+├── docs/                      # Feature plans and documentation
+│   ├── workspace-redesign-plan.md
+│   ├── nextjs-migration-plan.md
+│   └── ...
 ├── .git/                      # Git repository
 └── README.md                  # Project overview
 ```
 
+**Important**: Always check `docs/` before implementing features. See RULE 1 above.
+
 ## Quick Reference Checklist
+
+Before implementing any feature, verify:
+
+- [ ] Checked `docs/` folder for existing plan/TODO list
+- [ ] If no plan exists, created documentation first
+- [ ] Followed implementation steps from plan
+- [ ] Updated TODO list with completed items
 
 Before committing any changes, verify:
 
@@ -163,6 +201,8 @@ Before committing any changes, verify:
 
 ## Related Documentation
 
+- **Feature Documentation**: See `docs/` folder for feature plans, architecture designs, and TODO lists
+  - Example: `docs/workspace-redesign-plan.md` - Workspace feature redesign plan
 - **Frontend Rules**: See `runninghub-nextjs/CLAUDE.md` for Next.js-specific development rules, design system, and component standards
 - **Project README**: See `README.md` for project overview and setup instructions
 

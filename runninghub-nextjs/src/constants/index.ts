@@ -11,6 +11,8 @@ export const ENVIRONMENT_VARIABLES = {
   DEFAULT_NODE_ID: process.env.DEFAULT_NODE_ID || '203',
   MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE || '10485760'), // 10MB
   MAX_FILES_COUNT: parseInt(process.env.MAX_FILES_COUNT || '100'),
+  WORKSPACE_PATH: process.env.WORKSPACE_PATH || '~/Downloads/workspace',
+  WORKSPACE_WORKFLOW_ID: process.env.WORKSPACE_WORKFLOW_ID || null,
 } as const;
 
 export const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
@@ -68,6 +70,13 @@ export const API_ENDPOINTS = {
   // Tasks
   NODES: '/api/nodes',
   SESSION_CLEAR: '/api/session/clear',
+
+  // Workspace
+  WORKSPACE_UPLOAD: '/api/workspace/upload',
+  WORKSPACE_PROCESS: '/api/workspace/process',
+  WORKSPACE_SAVE: '/api/workspace/save',
+  WORKSPACE_SERVE: '/api/workspace/serve',
+  WORKSPACE_EXECUTE: '/api/workspace/execute',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -91,6 +100,14 @@ export const ERROR_MESSAGES = {
   NETWORK_ERROR: 'Network error occurred',
   FFMPEG_NOT_AVAILABLE: 'FFmpeg is not installed or not accessible',
   UNKNOWN_ERROR: 'An unknown error occurred',
+  // Workspace errors
+  WORKSPACE_NOT_CONFIGURED: 'Workspace path not configured',
+  WORKSPACE_NOT_FOUND: 'Workspace directory does not exist',
+  NO_FILES_SELECTED: 'No files selected for processing',
+  NO_WORKFLOW_ID: 'Workflow ID not configured',
+  UPLOAD_FAILED: 'Failed to upload files to workspace',
+  SAVE_FAILED: 'Failed to save text file',
+  TRANSLATION_FAILED: 'Failed to translate text',
 } as const;
 
 export const SUCCESS_MESSAGES = {
@@ -101,6 +118,10 @@ export const SUCCESS_MESSAGES = {
   VIDEOS_CROPPED: 'Videos cropped successfully',
   VIDEOS_CLIPPED: 'Videos clipped successfully',
   SESSION_CLEARED: 'Session cleared successfully',
+  // Workspace success messages
+  FILES_UPLOADED: 'Files uploaded successfully',
+  FILES_PROCESSED: 'Files processed successfully',
+  TEXT_SAVED: 'Text saved successfully',
 } as const;
 
 export const LOADING_MESSAGES = {
