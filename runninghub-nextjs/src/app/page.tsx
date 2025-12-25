@@ -165,24 +165,26 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="opacity-60 cursor-not-allowed border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">⚡</span>
-                Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Built with Next.js 14, TypeScript, and modern web technologies for optimal performance.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Next.js 14</Badge>
-                <Badge variant="secondary">TypeScript</Badge>
-                <Badge variant="secondary">Tailwind CSS</Badge>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href="/workspace">
+            <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-indigo-400 border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-2xl">📝</span>
+                  Workspace
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Upload images, process with AI workflows, and edit bilingual text content with translation support.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">Image Upload</Badge>
+                  <Badge variant="secondary">AI Processing</Badge>
+                  <Badge variant="secondary">Translation</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         <Separator className="my-8" />

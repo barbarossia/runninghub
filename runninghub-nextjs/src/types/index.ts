@@ -147,3 +147,4 @@ export interface VideoConversionTask extends ProcessingTask {
 
 export * from './crop';
 export * from './video-clip';
+export * from './workspace';
