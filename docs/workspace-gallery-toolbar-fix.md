@@ -73,6 +73,74 @@ The workspace `MediaGallery` component is missing toolbar features compared to t
 4. Verify file count display updates correctly
 5. Test localStorage persistence
 
+### Phase 4: Folder Selection Persistence
+**Files**:
+- `src/app/api/folder/validate/route.ts` (new)
+- `src/app/workspace/page.tsx`
+- `src/app/gallery/page.tsx`
+- `src/app/pages/page.tsx`
+- `src/store/folder-store.ts`
+
+**Changes**:
+
+1. **Create Folder Validation API Endpoint**
+   - Create `src/app/api/folder/validate/route.ts`
+   - Accept `path` query parameter
+   - Return `{ exists: boolean }`
+   - Handle errors gracefully
+
+2. **Update Folder Store**
+   - Ensure `selectedFolder` is persisted in localStorage
+   - Add `validateFolder` action if needed
+
+3. **Update Workspace Page**
+   - Add `useEffect` to auto-restore last folder on load
+   - Validate folder existence before restoring
+   - Show loading state during validation
+   - Fallback to folder selection screen if folder doesn't exist
+
+4. **Update Gallery Page**
+   - Add `useEffect` to auto-restore last folder on load
+   - Validate folder existence before restoring
+   - Show loading state during validation
+   - Fallback to folder selection screen if folder doesn't exist
+
+5. **Update Pages Page**
+   - Add `useEffect` to auto-restore last folder on load
+   - Validate folder existence before restoring
+   - Show loading state during validation
+   - Fallback to folder selection screen if folder doesn't exist
+
+**Implementation Pattern**:
+```typescript
+useEffect(() => {
+  const loadLastFolder = async () => {
+    const lastFolder = useFolderStore.getState().selectedFolder;
+
+    if (lastFolder) {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/folder/validate?path=${encodeURIComponent(lastFolder.folder_path)}`);
+        const data = await response.json();
+
+        if (data.exists) {
+          await loadFolderContents(lastFolder.folder_path, lastFolder.session_id, true);
+        } else {
+          setSelectedFolder(null);
+          toast.info('Previously selected folder no longer exists');
+        }
+      } catch (error) {
+        console.error('Folder validation failed:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  loadLastFolder();
+}, []);
+```
+
 ---
 
 ## Technical Details
@@ -192,11 +260,17 @@ const gridCols = useMemo(() => {
 
 1. `src/store/workspace-store.ts` - Add extension filter state and large view mode
 2. `src/components/workspace/MediaGallery.tsx` - Update toolbar with new features
+3. `src/app/api/folder/validate/route.ts` - Create folder validation endpoint (new)
+4. `src/app/workspace/page.tsx` - Add folder auto-restore
+5. `src/app/gallery/page.tsx` - Add folder auto-restore
+6. `src/app/pages/page.tsx` - Add folder auto-restore
+7. `src/store/folder-store.ts` - Ensure folder persistence
 
 ---
 
 ## Testing Checklist
 
+### Phase 1-3: Toolbar Features
 - [ ] Extension filter buttons appear for each unique file extension
 - [ ] Clicking extension button filters files to show only that extension
 - [ ] "All" button clears extension filter and shows all files
@@ -206,6 +280,17 @@ const gridCols = useMemo(() => {
 - [ ] File count updates when filters change
 - [ ] Selected extension persists after page refresh
 - [ ] View mode persists after page refresh
+- [ ] Build succeeds without TypeScript errors
+
+### Phase 4: Folder Selection Persistence
+- [ ] Folder validation API endpoint responds correctly
+- [ ] Workspace page auto-restore last folder on load
+- [ ] Gallery page auto-restore last folder on load
+- [ ] Pages page auto-restore last folder on load
+- [ ] Loading state shown during folder validation
+- [ ] Fallback to selection screen if folder doesn't exist
+- [ ] User can manually change folder after restore
+- [ ] Folder selection persists in localStorage
 - [ ] Build succeeds without TypeScript errors
 
 ---
@@ -236,10 +321,13 @@ Large view mode is useful for:
 - **ImageGallery Component**: `src/components/images/ImageGallery.tsx` - Reference implementation
 - **MediaGallery Component**: `src/components/workspace/MediaGallery.tsx` - Component to modify
 - **Workspace Store**: `src/store/workspace-store.ts` - State management
-- **Project Rules**: `/Users/barbarossia/ai_coding/runninghub/CLAUDE.md` - Git workflow and documentation rules
+- **Folder Store**: `src/store/folder-store.ts` - Folder selection state
+- **Project Rules**: `/Users/barbarossia/ai_coding/runninghub/CLAUDE.md` - Git workflow and documentation rules, includes RULE 4 for folder selection persistence
+- **Frontend Rules**: `runninghub-nextjs/CLAUDE.md` - Next.js-specific development rules
 
 ---
 
 **Created**: 2025-12-25
 **Branch**: `fix/workspace`
 **Status**: Implementation in progress
+**Updated**: 2025-12-25 - Added Phase 4: Folder Selection Persistence
