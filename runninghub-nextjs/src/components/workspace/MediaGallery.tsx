@@ -744,7 +744,7 @@ export function MediaGallery({
                   </div>
                 </div>
 
-                {/* Path Info (collapsible) */}
+                {/* More Details (collapsible) */}
                 <div className="space-y-3">
                   <Button
                     variant="outline"
@@ -755,12 +755,12 @@ export function MediaGallery({
                     {showMoreDetails ? (
                       <>
                         <ChevronUp className="h-4 w-4 mr-2" />
-                        Hide Path
+                        Hide Details
                       </>
                     ) : (
                       <>
                         <ChevronDown className="h-4 w-4 mr-2" />
-                        Show Path
+                        More Details
                       </>
                     )}
                   </Button>
@@ -780,12 +780,39 @@ export function MediaGallery({
                             {previewFile.path}
                           </p>
                         </div>
-                        <div>
-                          <span className="text-gray-600 text-xs">File ID</span>
-                          <p className="font-mono text-xs break-all bg-gray-50 p-2 rounded mt-1 border">
-                            {previewFile.id}
-                          </p>
-                        </div>
+                        {previewFile.width && previewFile.height && (
+                          <>
+                            <div>
+                              <span className="text-gray-600 text-xs">Width</span>
+                              <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                                {previewFile.width} pixels
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-gray-600 text-xs">Height</span>
+                              <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                                {previewFile.height} pixels
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-gray-600 text-xs">Aspect Ratio</span>
+                              <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                                {(previewFile.width / previewFile.height).toFixed(3)}:1
+                                <span className="text-gray-500 text-xs ml-1">
+                                  ({previewFile.width}×{previewFile.height})
+                                </span>
+                              </p>
+                            </div>
+                          </>
+                        )}
+                        {previewFile.fps && (
+                          <div>
+                            <span className="text-gray-600 text-xs">Frame Rate</span>
+                            <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                              {previewFile.fps} FPS
+                            </p>
+                          </div>
+                        )}
                         <div>
                           <span className="text-gray-600 text-xs">MIME Type</span>
                           <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
