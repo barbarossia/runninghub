@@ -5,6 +5,7 @@ import { useFolderStore } from '@/store/folder-store';
 import { useImageStore } from '@/store/image-store';
 import { useSelectionStore } from '@/store/selection-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { ImageGallery } from '@/components/images';
@@ -12,7 +13,7 @@ import { ImageProcessConfig } from '@/components/images';
 import { ImageGallerySkeleton } from '@/components/images/ImageGallerySkeleton';
 import { SelectionToolbar } from '@/components/selection';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
-import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { PageHeader } from '@/components/navigation/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -20,12 +21,9 @@ import { Badge } from '@/components/ui/badge';
 import {
   FolderOpen,
   AlertCircle,
-  Home,
   Images,
-  ArrowLeft,
   Settings,
 } from 'lucide-react';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import { useFolderStore as useLegacyFolderStore, useImageStore as useLegacyImageStore, useSelectionStore as useLegacySelectionStore, useProcessStore } from '@/store';
 import { useFileSystem } from '@/hooks';
@@ -61,6 +59,15 @@ export default function GalleryPage() {
   // Use folder selection hook with error handling
   const { handleFolderSelected } = useFolderSelection({
     folderType: 'images',
+  });
+
+  // Auto-load last opened folder on mount
+  useAutoLoadFolder({
+    folderType: 'images',
+    onFolderLoaded: (folder) => {
+      // Load folder contents when auto-loaded
+      loadFolderContents(folder.folder_path, folder.session_id);
+    },
   });
 
   // Combine errors
@@ -235,35 +242,13 @@ export default function GalleryPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="sm">
-                <Home className="h-4 w-4 mr-2" />
-                Home
-              </Button>
-            </Link>
-
-            {selectedFolder && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleBackToSelection}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Selection
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs">
-              <Images className="h-3 w-3 mr-1" />
-              RunningHub Gallery
-            </Badge>
-            <ThemeToggle />
-          </div>
-        </div>
+        <PageHeader
+          badgeText="RunningHub Gallery"
+          icon={Images}
+          showBackButton={!!selectedFolder}
+          onBackClick={handleBackToSelection}
+          colorVariant="blue"
+        />
 
         {/* Error Display */}
         {error && (

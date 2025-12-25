@@ -7,6 +7,7 @@ import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
 import { useCropStore } from '@/store/crop-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { VideoGallery } from '@/components/videos/VideoGallery';
@@ -14,12 +15,12 @@ import { VideoSelectionToolbar } from '@/components/videos/VideoSelectionToolbar
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
 import { ProgressModal } from '@/components/progress/ProgressModal';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
+import { PageHeader } from '@/components/navigation/PageHeader';
 import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
 import type { VideoFile } from '@/types';
 import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
 import { toast } from 'sonner';
-import { ArrowLeft, Crop } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Crop } from 'lucide-react';
 
 export default function VideoCropPage() {
   const { selectedFolder, clearFolder } = useFolderStore();
@@ -58,6 +59,15 @@ export default function VideoCropPage() {
       setIsLoadingFolder(false);
     }
   }, [setVideos]);
+
+  // Auto-load last opened folder on mount
+  useAutoLoadFolder({
+    folderType: 'videos',
+    onFolderLoaded: (folder) => {
+      // Load folder contents when auto-loaded
+      loadFolderContents(folder.folder_path, folder.session_id);
+    },
+  });
 
   // Load folder contents when folder is selected
   useEffect(() => {
@@ -162,28 +172,16 @@ export default function VideoCropPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 max-w-7xl">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Video Cropping</h1>
-            <p className="text-muted-foreground mt-1">
-              Crop videos to specific regions using FFmpeg
-            </p>
-          </div>
-
-          {selectedFolder && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBackToSelection}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Selection
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          title="Video Cropping"
+          description="Crop videos to specific regions using FFmpeg"
+          showBackButton={!!selectedFolder}
+          onBackClick={handleBackToSelection}
+          colorVariant="green"
+        />
 
         {!selectedFolder ? (
           <FolderSelectionLayout

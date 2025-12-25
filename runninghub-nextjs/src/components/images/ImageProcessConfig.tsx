@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { ChevronDown, ChevronUp, Settings } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React from 'react';
+import { Settings } from 'lucide-react';
+import { ConfigurationCard } from '@/components/ui/ConfigurationCard';
 
 const RESOLUTION_OPTIONS = [
   { label: '512 x 512', width: 512, height: 512 },
@@ -30,8 +29,6 @@ export function ImageProcessConfig({
   onConfigChange,
   className = '',
 }: ImageProcessConfigProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   const handleResolutionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     const option = RESOLUTION_OPTIONS.find((opt) => opt.label === value);
@@ -44,70 +41,54 @@ export function ImageProcessConfig({
     }
   };
 
-  const currentResolutionLabel = 
+  const currentResolutionLabel =
     RESOLUTION_OPTIONS.find(
       (opt) => opt.width === config.width && opt.height === config.height
     )?.label || '';
 
   return (
-    <Card className={`p-4 space-y-4 ${className}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Settings className="h-5 w-5 text-gray-500" />
-          <div>
-            <h3 className="font-medium">Processing Configuration</h3>
-            <p className="text-sm text-gray-500">
-              Configure parameters for the image processing workflow.
-            </p>
-          </div>
+    <ConfigurationCard
+      title="Processing Configuration"
+      description="Configure parameters for the image processing workflow."
+      icon={Settings}
+      className={className}
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Trigger Word */}
+        <div className="space-y-2">
+          <label htmlFor="trigger-word" className="text-sm font-medium leading-none text-gray-900 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Trigger Word
+          </label>
+          <input
+            id="trigger-word"
+            className="flex h-10 w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder="e.g. naran"
+            value={config.triggerWord}
+            onChange={(e) =>
+              onConfigChange({ ...config, triggerWord: e.target.value })
+            }
+          />
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </Button>
+
+        {/* Resolution Selection */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none text-gray-900 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+            Resolution
+          </label>
+          <select
+            className="flex h-10 w-full rounded-md border border-blue-300 bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            value={currentResolutionLabel}
+            onChange={handleResolutionChange}
+          >
+            <option value="" disabled>Select resolution</option>
+            {RESOLUTION_OPTIONS.map((option) => (
+              <option key={option.label} value={option.label}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
-
-      {isExpanded && (
-        <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t">
-          {/* Trigger Word */}
-          <div className="space-y-2">
-            <label htmlFor="trigger-word" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Trigger Word
-            </label>
-            <input
-              id="trigger-word"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="e.g. naran"
-              value={config.triggerWord}
-              onChange={(e) =>
-                onConfigChange({ ...config, triggerWord: e.target.value })
-              }
-            />
-          </div>
-
-          {/* Resolution Selection */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              Resolution
-            </label>
-            <select
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              value={currentResolutionLabel}
-              onChange={handleResolutionChange}
-            >
-              <option value="" disabled>Select resolution</option>
-              {RESOLUTION_OPTIONS.map((option) => (
-                <option key={option.label} value={option.label}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-    </Card>
+    </ConfigurationCard>
   );
 }

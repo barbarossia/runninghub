@@ -7,6 +7,7 @@ import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
 import { useVideoClipStore } from '@/store/video-clip-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { useProgressTracking } from '@/hooks/useProgressTracking';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
@@ -15,11 +16,11 @@ import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectio
 import { VideoClipConfiguration } from '@/components/videos/VideoClipConfiguration';
 import { ProgressModal } from '@/components/progress/ProgressModal';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
+import { PageHeader } from '@/components/navigation/PageHeader';
 import { API_ENDPOINTS, ERROR_MESSAGES, SUPPORTED_VIDEO_EXTENSIONS } from '@/constants';
 import type { VideoFile } from '@/types';
 import { toast } from 'sonner';
-import { ArrowLeft, Scissors } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Scissors } from 'lucide-react';
 
 export default function VideoClipPage() {
   const { selectedFolder, clearFolder } = useFolderStore();
@@ -55,6 +56,15 @@ export default function VideoClipPage() {
     }
   }, [setVideos]);
 
+  // Auto-load last opened folder on mount
+  useAutoLoadFolder({
+    folderType: 'videos',
+    onFolderLoaded: (folder) => {
+      // Load folder contents when auto-loaded
+      loadFolderContents(folder.folder_path, folder.session_id);
+    },
+  });
+
   const handleRefresh = useCallback(async (silent = false) => {
     if (selectedFolder && !selectedFolder.is_virtual) {
       await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
@@ -68,16 +78,17 @@ export default function VideoClipPage() {
 
   // Track progress and refresh on completion
   useProgressTracking({
-    onTaskComplete: (taskId) => {
+    onTaskComplete: async (taskId) => {
       if (taskId === currentTaskId) {
-        toast.success('Clipping task completed');
-        handleRefresh(true);
-        
-        // If delete original was enabled, we should clear the selection
-        // since the original files are now gone
+        // If delete original was enabled, clear the selection first
+        // since the original files will be gone after refresh
         if (clipConfig.deleteOriginal) {
           deselectAll();
         }
+
+        // Then refresh the folder contents
+        await handleRefresh(true);
+        toast.success('Clipping task completed');
       }
     },
     onTaskFail: (taskId, error) => {
@@ -190,28 +201,16 @@ export default function VideoClipPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-6 max-w-7xl">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Video Clipping</h1>
-            <p className="text-muted-foreground mt-1">
-              Extract images from videos using Python Video Clip tool
-            </p>
-          </div>
-
-          {selectedFolder && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBackToSelection}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Selection
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          title="Video Clipping"
+          description="Extract images from videos using Python Video Clip tool"
+          showBackButton={!!selectedFolder}
+          onBackClick={handleBackToSelection}
+          colorVariant="purple"
+        />
 
         {!selectedFolder ? (
           <FolderSelectionLayout
