@@ -78,16 +78,17 @@ export default function VideoClipPage() {
 
   // Track progress and refresh on completion
   useProgressTracking({
-    onTaskComplete: (taskId) => {
+    onTaskComplete: async (taskId) => {
       if (taskId === currentTaskId) {
-        toast.success('Clipping task completed');
-        handleRefresh(true);
-        
-        // If delete original was enabled, we should clear the selection
-        // since the original files are now gone
+        // If delete original was enabled, clear the selection first
+        // since the original files will be gone after refresh
         if (clipConfig.deleteOriginal) {
           deselectAll();
         }
+
+        // Then refresh the folder contents
+        await handleRefresh(true);
+        toast.success('Clipping task completed');
       }
     },
     onTaskFail: (taskId, error) => {

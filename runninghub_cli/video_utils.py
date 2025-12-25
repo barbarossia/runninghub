@@ -107,12 +107,21 @@ def clip_video(
                 env=env,
                 timeout=timeout
             )
-            
+
             if result.returncode == 0:
                 print_success(f"Successfully clipped: {input_path.name}")
+
+                # Delete original video if requested
+                if clip_config.get('deleteOriginal', False):
+                    try:
+                        if input_path.exists():
+                            input_path.unlink()
+                            print_success(f"Deleted original video: {input_path.name}")
+                    except Exception as e:
+                        print_error(f"Failed to delete original video: {e}")
             else:
                 print_error(f"Failed to clip: {input_path.name}")
-                
+
             return result.returncode == 0, result.stdout, result.stderr
             
         except subprocess.TimeoutExpired:
