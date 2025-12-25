@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Terminal, Trash2, RefreshCw, Minimize2, Maximize2, Loader2, CheckCircle2, XCircle, X } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,12 +32,19 @@ interface ConsoleViewerProps {
 }
 
 export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: ConsoleViewerProps) {
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
   const [isMinimized, setIsMinimized] = useState(!taskId); // Default to minimized, auto-expand if taskId exists
   const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Prevent hydration errors
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Reset task status when taskId changes
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -108,13 +116,35 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
   };
 
   const getLevelColor = (level: string) => {
+    const isDark = mounted && theme === 'dark';
     switch (level) {
       case 'error': return 'text-red-500';
       case 'success': return 'text-green-500';
       case 'warning': return 'text-yellow-500';
-      default: return 'text-gray-300';
+      default: return isDark ? 'text-gray-300' : 'text-gray-600';
     }
   };
+
+  // Theme-aware color classes
+  const isDark = mounted && theme === 'dark';
+  const consoleBg = isDark ? 'bg-gray-950' : 'bg-white';
+  const consoleBorder = isDark ? 'border-gray-700' : 'border-gray-200';
+  const consoleHeaderBg = isDark ? 'bg-gray-900' : 'bg-gray-100';
+  const consoleHeaderText = isDark ? 'text-white' : 'text-gray-900';
+  const consoleTimestamp = isDark ? 'text-gray-600' : 'text-gray-400';
+  const consoleHover = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-100';
+  const consoleHoverBorder = isDark ? 'hover:border-blue-500' : 'hover:border-blue-600';
+  const buttonHover = isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-200';
+  const buttonText = isDark ? 'text-gray-400' : 'text-gray-600';
+  const buttonHoverText = isDark ? 'hover:text-white' : 'hover:text-gray-900';
+  const badgeBorder = isDark ? 'border-gray-700' : 'border-gray-300';
+  const badgeText = isDark ? 'text-gray-400' : 'text-gray-600';
+  const progressBg = isDark ? 'bg-gray-800' : 'bg-gray-300';
+  const footerBg = isDark ? 'bg-gray-900/50' : 'bg-gray-100/80';
+  const footerText = isDark ? 'text-gray-500' : 'text-gray-600';
+  const logAreaBg = isDark ? 'bg-black' : 'bg-gray-50';
+  const emptyText = isDark ? 'text-gray-600' : 'text-gray-400';
+  const opacity = isDark ? 'opacity-95' : 'opacity-100';
 
   const getProgress = () => {
     if (!taskStatus || taskStatus.totalImages === 0) return 0;
@@ -135,7 +165,7 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
 
   if (isMinimized) {
     return (
-      <Card className="fixed bottom-4 right-4 z-50 w-[320px] shadow-2xl bg-black border border-gray-700 opacity-90 hover:opacity-100 transition-all">
+      <Card className={`fixed bottom-4 right-4 z-50 w-[320px] shadow-2xl ${consoleBg} ${consoleBorder} ${opacity} hover:opacity-100 transition-all`}>
         <div className="p-3 flex items-center gap-3">
           <div className="flex-1">
              <div className="flex items-center justify-between mb-1">
@@ -144,22 +174,22 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
                </span>
                <div className="flex items-center gap-1">
                  {taskStatus && (
-                   <span className="text-[10px] text-gray-400 mr-2">
+                   <span className={`text-[10px] ${badgeText} mr-2`}>
                      {taskStatus.completedCount}/{taskStatus.totalImages}
                    </span>
                  )}
-                 <Button 
-                   variant="ghost" 
-                   size="icon" 
-                   className="h-5 w-5 hover:bg-gray-800 text-gray-400"
+                 <Button
+                   variant="ghost"
+                   size="icon"
+                   className={`h-5 w-5 ${buttonHover} ${buttonText}`}
                    onClick={() => setIsMinimized(false)}
                  >
                    <Maximize2 className="w-3 h-3" />
                  </Button>
-                 <Button 
-                   variant="ghost" 
-                   size="icon" 
-                   className="h-5 w-5 hover:bg-gray-800 text-gray-400 hover:text-red-400"
+                 <Button
+                   variant="ghost"
+                   size="icon"
+                   className={`h-5 w-5 ${buttonHover} ${buttonText} hover:text-red-400`}
                    onClick={() => setIsVisible(false)}
                  >
                    <X className="w-3 h-3" />
@@ -167,7 +197,7 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
                </div>
              </div>
              {taskStatus && (
-               <Progress value={getProgress()} className="h-1 bg-gray-800" />
+               <Progress value={getProgress()} className={`h-1 ${progressBg}`} />
              )}
           </div>
         </div>
@@ -176,13 +206,13 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
   }
 
   return (
-    <Card className="fixed bottom-4 right-4 z-50 w-[500px] h-[350px] shadow-2xl flex flex-col overflow-hidden border border-gray-700 bg-black opacity-95 transition-all">
+    <Card className={`fixed bottom-4 right-4 z-50 w-[500px] h-[350px] shadow-2xl flex flex-col overflow-hidden ${consoleBorder} ${consoleBg} ${opacity} transition-all`}>
       {/* Header */}
-      <div className="flex items-center justify-between p-2 bg-gray-900 text-white shrink-0 border-b border-gray-800">
+      <div className={`flex items-center justify-between p-2 ${consoleHeaderBg} ${consoleHeaderText} shrink-0 border-b ${consoleBorder}`}>
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-blue-400" />
+          <span className="text-sm font-mono font-bold text-blue-400">{'>_'}</span>
           <span className="text-xs font-mono font-bold tracking-tight">LOGS CONSOLE</span>
-          <Badge variant="outline" className="text-[9px] h-4 px-1 border-gray-700 text-gray-400">
+          <Badge variant="outline" className={`text-[9px] h-4 px-1 ${badgeBorder} ${badgeText}`}>
             {logs.length}
           </Badge>
           {taskStatus?.status === 'processing' && (
@@ -192,27 +222,27 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
           )}
         </div>
         <div className="flex items-center gap-1">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-6 w-6 hover:bg-gray-800 text-gray-500 hover:text-white" 
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-6 w-6 ${buttonHover} ${buttonText} ${buttonHoverText}`}
             onClick={clearLogs}
             title="Clear logs"
           >
             <Trash2 className="w-3 h-3" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-6 w-6 hover:bg-gray-800 text-gray-500 hover:text-white" 
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-6 w-6 ${buttonHover} ${buttonText} ${buttonHoverText}`}
             onClick={() => setIsMinimized(true)}
           >
             <Minimize2 className="w-3 h-3" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-6 w-6 hover:bg-gray-800 text-gray-500 hover:text-red-400" 
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-6 w-6 ${buttonHover} ${buttonText} hover:text-red-400`}
             onClick={() => setIsVisible(false)}
           >
             <X className="w-3 h-3" />
@@ -222,8 +252,8 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
 
       {/* Task Progress Section */}
       {taskStatus && (
-        <div className="bg-gray-900/50 p-3 border-b border-gray-800 space-y-2">
-          <div className="flex justify-between items-center text-xs text-gray-300">
+        <div className={`${consoleHeaderBg}/50 p-3 border-b ${consoleBorder} space-y-2`}>
+          <div className={`flex justify-between items-center text-xs ${consoleHeaderText}`}>
              <div className="flex items-center gap-2">
                {taskStatus.status === 'processing' && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
                {taskStatus.status === 'completed' && <CheckCircle2 className="w-3 h-3 text-green-400" />}
@@ -236,22 +266,22 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
                {taskStatus.completedCount + taskStatus.failedCount} / {taskStatus.totalImages}
              </span>
           </div>
-          <Progress value={getProgress()} className="h-1.5 bg-gray-800" />
+          <Progress value={getProgress()} className={`h-1.5 ${progressBg}`} />
         </div>
       )}
 
       {/* Logs Area */}
-      <div 
+      <div
         ref={scrollRef}
-        className="flex-1 bg-black p-2 font-mono text-[10px] overflow-y-auto"
+        className={`flex-1 ${logAreaBg} p-2 font-mono text-[10px] overflow-y-auto`}
       >
         {logs.length === 0 ? (
-          <div className="text-gray-600 italic text-center mt-10"></div>
+          <div className={`${emptyText} italic text-center mt-10`}></div>
         ) : (
           <div className="space-y-0.5">
             {[...logs].reverse().map((log, i) => (
-              <div key={i} className="flex gap-2 hover:bg-white/5 p-0.5 rounded transition-colors border-l-2 border-transparent hover:border-blue-500">
-                <span className="text-gray-600 shrink-0 tabular-nums">
+              <div key={i} className={`flex gap-2 ${consoleHover} p-0.5 rounded transition-colors border-l-2 border-transparent ${consoleHoverBorder}`}>
+                <span className={`${consoleTimestamp} shrink-0 tabular-nums`}>
                   {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
                 </span>
                 <span className={`${getLevelColor(log.level)} break-all leading-tight`}>
@@ -262,18 +292,18 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
           </div>
         )}
       </div>
-      
+
       {/* Footer Status */}
-      <div className="bg-gray-900/50 p-1 px-2 text-[9px] text-gray-500 flex justify-between items-center shrink-0 border-t border-gray-800">
+      <div className={`${footerBg} p-1 px-2 text-[9px] ${footerText} flex justify-between items-center shrink-0 border-t ${consoleBorder}`}>
          <span className="flex items-center gap-1 italic">
            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
            Monitoring active (1s)
          </span>
          {onRefresh && (
            <div className="flex items-center gap-2">
-             <Button 
-               variant="ghost" 
-               size="sm" 
+             <Button
+               variant="ghost"
+               size="sm"
                className="h-4 p-0 text-[9px] hover:bg-transparent text-blue-400 hover:text-blue-300"
                onClick={() => onRefresh(false)}
              >
