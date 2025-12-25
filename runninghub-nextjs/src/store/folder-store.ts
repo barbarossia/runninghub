@@ -18,6 +18,10 @@ interface FolderState {
   // Recent folders
   recentFolders: RecentFolder[];
 
+  // Persisted folders per type (for auto-load on page mount)
+  lastImageFolder: FolderSelectionResponse | null;
+  lastVideoFolder: FolderSelectionResponse | null;
+
   // Loading states
   isLoadingFolder: boolean;
   isLoadingContents: boolean;
@@ -38,6 +42,10 @@ interface FolderState {
   navigateToFolder: (folderPath: string) => void;
   navigateToParent: () => void;
   clearFolder: () => void;
+
+  // Folder type-specific actions
+  setLastImageFolder: (folder: FolderSelectionResponse | null) => void;
+  setLastVideoFolder: (folder: FolderSelectionResponse | null) => void;
 }
 
 export const useFolderStore = create<FolderState>()(
@@ -48,6 +56,8 @@ export const useFolderStore = create<FolderState>()(
       folderContents: null,
       currentPath: '',
       recentFolders: [],
+      lastImageFolder: null,
+      lastVideoFolder: null,
       isLoadingFolder: false,
       isLoadingContents: false,
       error: null,
@@ -99,11 +109,19 @@ export const useFolderStore = create<FolderState>()(
           currentPath: '',
           error: null,
         }),
+
+      // Folder type-specific setters
+      setLastImageFolder: (folder) => set({ lastImageFolder: folder }),
+      setLastVideoFolder: (folder) => set({ lastVideoFolder: folder }),
     }),
     {
       name: 'runninghub-folder-storage', // unique name
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ recentFolders: state.recentFolders }), // only persist recentFolders
+      partialize: (state) => ({
+        recentFolders: state.recentFolders,
+        lastImageFolder: state.lastImageFolder,
+        lastVideoFolder: state.lastVideoFolder,
+      }),
     }
   )
 );

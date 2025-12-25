@@ -13,21 +13,30 @@ interface UseFolderSelectionOptions {
 }
 
 export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSelectionOptions) {
-  const { setSelectedFolder, addRecentFolder } = useFolderStore();
+  const { setSelectedFolder, addRecentFolder, setLastImageFolder, setLastVideoFolder } = useFolderStore();
   const { setVideos } = useVideoStore();
   const { setImages } = useImageStore();
 
   const handleFolderSelected = useCallback(
     (folderInfo: FolderSelectorFolderInfo) => {
       // Set the selected folder in the store
-      setSelectedFolder({
+      const folderResponse = {
         success: true,
         folder_name: folderInfo.name,
         folder_path: folderInfo.path,
         session_id: folderInfo.session_id,
         is_virtual: folderInfo.is_virtual,
         message: 'Folder selected',
-      });
+      };
+
+      setSelectedFolder(folderResponse);
+
+      // Persist folder for auto-load on next visit
+      if (folderType === 'images') {
+        setLastImageFolder(folderResponse);
+      } else if (folderType === 'videos') {
+        setLastVideoFolder(folderResponse);
+      }
 
       // Add to recent folders
       if (folderInfo.path) {
@@ -65,7 +74,7 @@ export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSele
 
       onFolderLoaded?.();
     },
-    [folderType, setSelectedFolder, addRecentFolder, setVideos, setImages, onFolderLoaded]
+    [folderType, setSelectedFolder, addRecentFolder, setVideos, setImages, onFolderLoaded, setLastImageFolder, setLastVideoFolder]
   );
 
   return {

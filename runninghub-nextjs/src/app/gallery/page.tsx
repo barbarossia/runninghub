@@ -5,6 +5,7 @@ import { useFolderStore } from '@/store/folder-store';
 import { useImageStore } from '@/store/image-store';
 import { useSelectionStore } from '@/store/selection-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { ImageGallery } from '@/components/images';
@@ -58,6 +59,15 @@ export default function GalleryPage() {
   // Use folder selection hook with error handling
   const { handleFolderSelected } = useFolderSelection({
     folderType: 'images',
+  });
+
+  // Auto-load last opened folder on mount
+  useAutoLoadFolder({
+    folderType: 'images',
+    onFolderLoaded: (folder) => {
+      // Load folder contents when auto-loaded
+      loadFolderContents(folder.folder_path, folder.session_id);
+    },
   });
 
   // Combine errors

@@ -7,6 +7,7 @@ import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
 import { useCropStore } from '@/store/crop-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { VideoGallery } from '@/components/videos/VideoGallery';
@@ -58,6 +59,15 @@ export default function VideoCropPage() {
       setIsLoadingFolder(false);
     }
   }, [setVideos]);
+
+  // Auto-load last opened folder on mount
+  useAutoLoadFolder({
+    folderType: 'videos',
+    onFolderLoaded: (folder) => {
+      // Load folder contents when auto-loaded
+      loadFolderContents(folder.folder_path, folder.session_id);
+    },
+  });
 
   // Load folder contents when folder is selected
   useEffect(() => {
