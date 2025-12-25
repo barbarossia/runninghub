@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
       videos,
       crop_config,
       output_suffix = "_cropped",
+      preserve_audio = false,
       timeout = 3600,
     } = data;
 
@@ -43,8 +44,6 @@ export async function POST(request: NextRequest) {
 
     // Create a background task for video cropping
     const taskId = `crop_${videos.length}_videos_${Date.now()}`;
-
-    // Initialize task in store
     await initTask(taskId, videos.length);
 
     // Start background cropping using Python CLI
@@ -52,18 +51,16 @@ export async function POST(request: NextRequest) {
       videos,
       crop_config,
       output_suffix,
+      preserve_audio,
       timeout,
       taskId
     );
 
-    const response = {
+    return NextResponse.json({
       success: true,
       task_id: taskId,
       message: `Started cropping ${videos.length} videos`,
-      video_count: videos.length,
-    };
-
-    return NextResponse.json(response);
+    });
   } catch (error) {
     console.error("Error cropping videos:", error);
     return NextResponse.json(
@@ -178,21 +175,13 @@ function cropSingleVideo(
  */
 async function cropVideosInBackground(
   videos: string[],
-  cropConfig: CropRequest["crop_config"],
-  outputSuffix: string,
+  config: CropRequest['crop_config'],
+  suffix: string,
+  preserveAudio: boolean,
   timeout: number,
   taskId: string
 ) {
-  await writeLog(
-    `=== BACKGROUND VIDEO CROPPING STARTED for task: ${taskId} ===`,
-    "info",
-    taskId
-  );
-  await writeLog(
-    `Cropping ${videos.length} videos with mode: ${cropConfig.mode}`,
-    "info",
-    taskId
-  );
+  await writeLog(`=== VIDEO CROPPING STARTED for task: ${taskId} ===`, 'info', taskId);
 
   // Get environment variables for Python CLI
   const env = {
@@ -233,8 +222,8 @@ async function cropVideosInBackground(
       // Crop the video
       const result = await cropSingleVideo(
         videoPath,
-        cropConfig,
-        outputSuffix,
+        config,
+        suffix,
         timeout,
         env
       );
@@ -249,28 +238,16 @@ async function cropVideosInBackground(
         await updateTask(taskId, { completedCount: successCount });
       } else {
         failureCount++;
-        await writeLog(`✗ Failed to crop: ${videoPath}`, "error", taskId);
+        await writeLog(`✗ Failed: ${videoPath}`, 'error', taskId);
         await updateTask(taskId, { failedCount: failureCount });
-        if (result.error) {
-          await writeLog(`  Error: ${result.error}`, "error", taskId);
-        }
       }
     }
 
-    await writeLog(
-      `=== BACKGROUND VIDEO CROPPING COMPLETED for task: ${taskId} ===`,
-      "info",
-      taskId
-    );
-    await writeLog(
-      `Summary: ${successCount} succeeded, ${failureCount} failed out of ${videos.length} total`,
-      "info",
-      taskId
-    );
-    await updateTask(taskId, { status: "completed", endTime: Date.now() });
+    await writeLog(`=== VIDEO CROPPING COMPLETED: ${successCount} success, ${failureCount} failed ===`, 'info', taskId);
+    await updateTask(taskId, { status: 'completed', endTime: Date.now() });
   } catch (err) {
     const error = err instanceof Error ? err.message : "Unknown error";
-    await writeLog(`Task crashed: ${error}`, "error", taskId);
-    await updateTask(taskId, { status: "failed", error });
+    await writeLog(`Task crashed: ${error}`, 'error', taskId);
+    await updateTask(taskId, { status: 'failed', error });
   }
 }

@@ -27,6 +27,7 @@ interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
   taskId?: string | null;
   defaultVisible?: boolean; // Force console to be visible by default
+  autoRefreshInterval?: number; // Optional auto-refresh interval
 }
 
 export function ConsoleViewer({ onRefresh, taskId, defaultVisible = true }: ConsoleViewerProps) {

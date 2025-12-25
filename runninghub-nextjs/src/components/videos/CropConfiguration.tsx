@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Crop, ChevronDown, ChevronUp } from 'lucide-react';
-import { CropMode } from '@/types/crop';
+import { CropMode, CropConfig } from '@/types/crop';
 import { useCropStore } from '@/store/crop-store';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -47,17 +47,12 @@ export function CropConfiguration({
   const handleCustomDimensionChange = (field: 'width' | 'height' | 'x' | 'y', value: string) => {
     // Update custom dimensions directly without client-side validation
     // Python CLI will handle validation
-    const params: {
-      width?: string;
-      height?: string;
-      x?: string;
-      y?: string;
-    } = {};
+    const params: Partial<Pick<CropConfig, 'customWidth' | 'customHeight' | 'customX' | 'customY'>> = {};
 
-    if (field === 'width') params.width = value || undefined;
-    if (field === 'height') params.height = value || undefined;
-    if (field === 'x') params.x = value || undefined;
-    if (field === 'y') params.y = value || undefined;
+    if (field === 'width') params.customWidth = value || undefined;
+    if (field === 'height') params.customHeight = value || undefined;
+    if (field === 'x') params.customX = value || undefined;
+    if (field === 'y') params.customY = value || undefined;
 
     setCustomDimensions(params);
   };

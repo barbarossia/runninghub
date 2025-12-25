@@ -8,6 +8,7 @@ import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { ImageGallery } from '@/components/images';
+import { ImageProcessConfig } from '@/components/images';
 import { ImageGallerySkeleton } from '@/components/images/ImageGallerySkeleton';
 import { SelectionToolbar } from '@/components/selection';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
@@ -26,15 +27,19 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { useFileSystem, useProgressTracking } from '@/hooks';
+import { useFolderStore as useLegacyFolderStore, useImageStore as useLegacyImageStore, useSelectionStore as useLegacySelectionStore, useProcessStore } from '@/store';
+import { useFileSystem } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
 import type { ImageFile } from '@/types';
 
 export default function GalleryPage() {
-  // Store state
+  // Store state - use new modular stores
   const { selectedFolder, isLoadingFolder } = useFolderStore();
   const { images, isLoadingImages, error: imageError } = useImageStore();
   const { deselectAll } = useSelectionStore();
+
+  // Use legacy stores for process config (until migrated)
+  const { config: processConfig, setConfig: setProcessConfig } = useProcessStore();
 
   // Local state
   const [localError, setLocalError] = useState<string>('');
@@ -142,6 +147,11 @@ export default function GalleryPage() {
           node_id: selectedNode,
           folder_path: selectedFolder.folder_path,
           session_id: selectedFolder.session_id,
+          params: {
+            '231:text': processConfig.triggerWord,
+            '235:value': processConfig.width.toString(),
+            '236:value': processConfig.height.toString(),
+          },
         }),
       });
 
@@ -298,6 +308,12 @@ export default function GalleryPage() {
               nodes={nodes}
               selectedNode={selectedNode}
               onNodeChange={setSelectedNode}
+            />
+
+            {/* Process Config */}
+            <ImageProcessConfig
+              config={processConfig}
+              onConfigChange={setProcessConfig}
             />
 
             {/* Image Gallery */}

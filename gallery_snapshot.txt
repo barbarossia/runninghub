@@ -1,0 +1,78 @@
+uid=1_0 RootWebArea "RunningHub - Image Processing Platform" url="http://localhost:3000/gallery"
+  uid=1_1 link "Home" url="http://localhost:3000/"
+    uid=1_2 button "Home"
+  uid=1_3 button "Back to Selection"
+  uid=1_4 StaticText "RunningHub Gallery"
+  uid=1_5 button "Switch to dark mode"
+  uid=1_6 heading "8RPwB1U-nus" level="2"
+  uid=1_7 StaticText "/Users/barbarossia/Downloads/continue/8RPwB1U-nus"
+  uid=1_8 StaticText "11"
+  uid=1_9 StaticText " "
+  uid=1_10 StaticText "images"
+  uid=1_11 button "Refresh folder"
+  uid=1_12 textbox "Search images by name"
+  uid=1_13 button "Show all images" pressed
+  uid=1_14 button "Filter by PNG files"
+  uid=1_15 checkbox "Select all"
+  uid=1_16 StaticText "Select all"
+  uid=1_17 button "Grid view" pressed
+  uid=1_18 button "List view"
+  uid=1_19 button "Large grid view"
+  uid=1_20 generic "8RPwB1U-nus_frame_011.png - Not selected"
+    uid=1_21 image "8RPwB1U-nus_frame_011.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_011.png"
+    uid=1_22 checkbox
+    uid=1_23 button
+    uid=1_24 StaticText "8RPwB1U-nus_frame_011.png"
+  uid=1_25 generic "8RPwB1U-nus_frame_015.png - Not selected"
+    uid=1_26 image "8RPwB1U-nus_frame_015.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_015.png"
+    uid=1_27 checkbox
+    uid=1_28 button
+    uid=1_29 StaticText "8RPwB1U-nus_frame_015.png"
+  uid=1_30 generic "8RPwB1U-nus_frame_016.png - Not selected"
+    uid=1_31 image "8RPwB1U-nus_frame_016.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_016.png"
+    uid=1_32 checkbox
+    uid=1_33 button
+    uid=1_34 StaticText "8RPwB1U-nus_frame_016.png"
+  uid=1_35 generic "8RPwB1U-nus_frame_017.png - Not selected"
+    uid=1_36 image "8RPwB1U-nus_frame_017.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_017.png"
+    uid=1_37 checkbox
+    uid=1_38 button
+    uid=1_39 StaticText "8RPwB1U-nus_frame_017.png"
+  uid=1_40 generic "8RPwB1U-nus_frame_019.png - Not selected"
+    uid=1_41 image "8RPwB1U-nus_frame_019.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_019.png"
+    uid=1_42 checkbox
+    uid=1_43 button
+    uid=1_44 StaticText "8RPwB1U-nus_frame_019.png"
+  uid=1_45 generic "8RPwB1U-nus_frame_020.png - Not selected"
+    uid=1_46 image "8RPwB1U-nus_frame_020.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_020.png"
+    uid=1_47 checkbox
+    uid=1_48 button
+    uid=1_49 StaticText "8RPwB1U-nus_frame_020.png"
+  uid=1_50 generic "8RPwB1U-nus_frame_021.png - Not selected"
+    uid=1_51 image "8RPwB1U-nus_frame_021.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_021.png"
+    uid=1_52 checkbox
+    uid=1_53 button
+    uid=1_54 StaticText "8RPwB1U-nus_frame_021.png"
+  uid=1_55 generic "8RPwB1U-nus_frame_022.png - Not selected"
+    uid=1_56 image "8RPwB1U-nus_frame_022.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_022.png"
+    uid=1_57 checkbox
+    uid=1_58 button
+    uid=1_59 StaticText "8RPwB1U-nus_frame_022.png"
+  uid=1_60 generic "8RPwB1U-nus_frame_023.png - Not selected"
+    uid=1_61 image "8RPwB1U-nus_frame_023.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_023.png"
+    uid=1_62 checkbox
+    uid=1_63 button
+    uid=1_64 StaticText "8RPwB1U-nus_frame_023.png"
+  uid=1_65 generic "8RPwB1U-nus_frame_025.png - Not selected"
+    uid=1_66 image "8RPwB1U-nus_frame_025.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_025.png"
+    uid=1_67 checkbox
+    uid=1_68 button
+    uid=1_69 StaticText "8RPwB1U-nus_frame_025.png"
+  uid=1_70 generic "8RPwB1U-nus_frame_026.png - Not selected"
+    uid=1_71 image "8RPwB1U-nus_frame_026.png" url="http://localhost:3000/api/images/serve?path=%2FUsers%2Fbarbarossia%2FDownloads%2Fcontinue%2F8RPwB1U-nus%2F8RPwB1U-nus_frame_026.png"
+    uid=1_72 checkbox
+    uid=1_73 button
+    uid=1_74 StaticText "8RPwB1U-nus_frame_026.png"
+  uid=1_75 button
+  uid=1_76 region "Notifications alt+T"
+  uid=1_77 button "Open Next.js Dev Tools" expandable haspopup="menu"

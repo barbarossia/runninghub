@@ -224,7 +224,7 @@ export function convertToProcessableFormat(
   entries.forEach(entry => {
     if (entry.kind === 'file' && entry.file) {
       const extension = entry.name.split('.').pop()?.toLowerCase() || '';
-      
+
       // Create blob URL for the file
       let blobUrl: string | undefined;
       if (entry.file) {

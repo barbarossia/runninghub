@@ -16,6 +16,7 @@ import { ProgressModal } from '@/components/progress/ProgressModal';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
 import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
 import type { VideoFile } from '@/types';
+import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
 import { toast } from 'sonner';
 import { ArrowLeft, Crop } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -47,9 +48,8 @@ export default function VideoCropPage() {
       const data = await response.json();
 
       if (data.videos) {
-        // Only show MP4 files for cropping
-        const mp4Videos = data.videos.filter((video: VideoFile) => video.extension === '.mp4');
-        setVideos(mp4Videos);
+        // Show all videos
+        setVideos(data.videos);
       }
     } catch (error) {
       console.error('Error loading folder contents:', error);
@@ -72,24 +72,42 @@ export default function VideoCropPage() {
   }, [isProgressModalOpen]);
 
   const handleCropVideos = async (selectedPaths: string[]) => {
+    // Validate crop configuration
+    if (cropConfig.mode === 'custom') {
+      const config = {
+        x: parseFloat(cropConfig.customX || '0') || 0,
+        y: parseFloat(cropConfig.customY || '0') || 0,
+        width: parseFloat(cropConfig.customWidth || '50') || 0,
+        height: parseFloat(cropConfig.customHeight || '100') || 0,
+      };
+
+      const validation = validateCropConfig(config);
+      if (!validation.valid) {
+        toast.error(validation.error || ERROR_MESSAGES.INVALID_CROP_CONFIG);
+        return;
+      }
+    }
+
     try {
       // Build crop config for API
-      const crop_config: {
-        mode: string;
-        width?: string;
-        height?: string;
-        x?: string;
-        y?: string;
-      } = {
+      const crop_config = {
         mode: cropConfig.mode,
       };
 
       // Add custom dimensions if in custom mode
       if (cropConfig.mode === 'custom') {
-        if (cropConfig.customWidth) crop_config.width = cropConfig.customWidth;
-        if (cropConfig.customHeight) crop_config.height = cropConfig.customHeight;
-        if (cropConfig.customX) crop_config.x = cropConfig.customX;
-        if (cropConfig.customY) crop_config.y = cropConfig.customY;
+        const customWidth = cropConfig.customWidth ? parseFloat(cropConfig.customWidth) : undefined;
+        const customHeight = cropConfig.customHeight ? parseFloat(cropConfig.customHeight) : undefined;
+        const customX = cropConfig.customX ? parseFloat(cropConfig.customX) : undefined;
+        const customY = cropConfig.customY ? parseFloat(cropConfig.customY) : undefined;
+
+        const params = buildCustomCropParams({
+          customWidth,
+          customHeight,
+          customX,
+          customY,
+        });
+        Object.assign(crop_config, params);
       }
 
       const response = await fetch(API_ENDPOINTS.VIDEOS_CROP, {
@@ -110,6 +128,13 @@ export default function VideoCropPage() {
         if (data.task_id) {
           setCurrentTaskId(data.task_id);
         }
+
+        // Refresh folder contents after cropping completes
+        setTimeout(() => {
+          if (selectedFolder && !selectedFolder.is_virtual) {
+            loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
+          }
+        }, 2000);
       } else {
         toast.error(data.error || ERROR_MESSAGES.CROP_FAILED);
       }
@@ -134,61 +159,6 @@ export default function VideoCropPage() {
     clearFolder();
     setVideos([]);
     deselectAll();
-  };
-
-  const handleRenameVideo = async (video: VideoFile, newName: string) => {
-    try {
-      const response = await fetch(API_ENDPOINTS.VIDEOS_RENAME, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          video_path: video.path,
-          new_name: newName,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success(`Renamed to ${data.new_name}`);
-        // Refresh folder contents after renaming
-        if (selectedFolder && !selectedFolder.is_virtual) {
-          await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
-        }
-      } else {
-        toast.error(data.error || ERROR_MESSAGES.UNKNOWN_ERROR);
-      }
-    } catch (error) {
-      console.error('Error renaming video:', error);
-      toast.error(ERROR_MESSAGES.UNKNOWN_ERROR);
-    }
-  };
-
-  const handleDeleteVideo = async (video: VideoFile) => {
-    try {
-      const response = await fetch(API_ENDPOINTS.VIDEOS_DELETE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videos: [video.path],
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success(`Deleted ${video.name}`);
-        // Refresh folder contents after deleting
-        if (selectedFolder && !selectedFolder.is_virtual) {
-          await loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
-        }
-      } else {
-        toast.error(data.error || ERROR_MESSAGES.UNKNOWN_ERROR);
-      }
-    } catch (error) {
-      console.error('Error deleting video:', error);
-      toast.error(ERROR_MESSAGES.UNKNOWN_ERROR);
-    }
   };
 
   return (
@@ -253,8 +223,6 @@ export default function VideoCropPage() {
               videos={filteredVideos}
               isLoading={isLoadingFolder}
               onRefresh={handleRefresh}
-              onRename={handleRenameVideo}
-              onDelete={handleDeleteVideo}
             />
           </div>
         )}
@@ -270,8 +238,8 @@ export default function VideoCropPage() {
         {/* Console Viewer */}
         <ConsoleViewer
           taskId={currentTaskId}
-          onRefresh={handleRefresh}
           defaultVisible={true}
+          autoRefreshInterval={undefined}
         />
       </div>
     </div>
