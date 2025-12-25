@@ -17,6 +17,7 @@ export interface ProcessConfig {
   triggerWord: string;
   width: number;
   height: number;
+  color: string;
 }
 
 interface ImageProcessConfigProps {
@@ -71,7 +72,7 @@ export function ImageProcessConfig({
       </div>
 
       {isExpanded && (
-        <div className="grid gap-4 sm:grid-cols-2 pt-2 border-t">
+        <div className="grid gap-4 sm:grid-cols-3 pt-2 border-t">
           {/* Trigger Word */}
           <div className="space-y-2">
             <label htmlFor="trigger-word" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -105,6 +106,22 @@ export function ImageProcessConfig({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Color */}
+          <div className="space-y-2">
+            <label htmlFor="color" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              Color
+            </label>
+            <input
+              id="color"
+              type="color"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-1 py-1 text-sm ring-offset-background cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={config.color || '#000000'}
+              onChange={(e) =>
+                onConfigChange({ ...config, color: e.target.value })
+              }
+            />
           </div>
         </div>
       )}
