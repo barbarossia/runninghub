@@ -393,4 +393,32 @@ All 7 phases have been successfully implemented:
   - Chinese tab: Shows Chinese translation (when available)
 - Auto-translation triggers on job completion via `useOutputTranslation` hook
 - Chrome AI Translator API used for automatic translation
+- **NEW**: Manual "Translate" button added to job detail header
+  - Shows when job has text outputs
+  - Disabled while translation is in progress
+  - Shows error if Chrome AI is not available
+
+### Fix 9: Auto-translation trigger fixed with proper results tracking
+
+**Date**: 2025-12-26
+**Issue**: Auto-translation wasn't triggering when results were loaded
+**Files**:
+- `src/hooks/useOutputTranslation.ts`
+- `src/components/workspace/JobDetail.tsx`
+**Fix**:
+1. Added `resultsKey` using useMemo to create stable dependency for results changes
+2. Fixed early return conditions to properly type-guard results
+3. Added manual translation handler in JobDetail component
+4. Added "Translate" button in header (shows when text outputs exist)
+5. Translation progress shows both auto and manual translation status
+**Status**: ✅ Fixed and verified
+
+**How Translation Works Now**:
+1. Job completes → Results fetched from API
+2. `resultsKey` changes when `textOutputs` are loaded
+3. `useEffect` detects results key change and triggers auto-translation
+4. If Chrome AI is available, translations are automatically added
+5. User can also click "Translate" button to manually trigger translation
+6. Translations stored in job results: `content.en` and `content.zh`
+7. Tabs appear in UI when translations are available
 
