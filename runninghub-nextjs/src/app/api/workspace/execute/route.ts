@@ -99,25 +99,51 @@ async function processWorkflowInBackground(
     await writeLog(`Files: ${fileInputs.length}, Text Inputs: ${Object.keys(textInputs).length}`, 'info', taskId);
     await updateTask(taskId, { status: 'processing', completedCount: 0 });
 
-    const args = ["-m", "runninghub_cli.cli", "process-multiple"];
+    let args: string[] = ["-m", "runninghub_cli.cli"];
 
-    // Add file inputs
-    for (const input of fileInputs) {
-      // Format: <node_id>:<file_path>
-      args.push("--image", `${input.parameterId}:${input.filePath}`);
-    }
+    // DECISION: Use 'process' for single file, 'process-multiple' for multiple files
+    if (fileInputs.length === 1) {
+        // Single file mode -> use 'process' command
+        const input = fileInputs[0];
+        args.push("process");
+        args.push(input.filePath);
+        args.push("--node", input.parameterId);
 
-    // Add text inputs
-    for (const [paramId, value] of Object.entries(textInputs)) {
-      // Format: <node_id>:text:<value>
-      args.push("-p", `${paramId}:text:${value}`);
+        // Add text inputs as params
+        for (const [paramId, value] of Object.entries(textInputs)) {
+            // Format: <node_id>:text:<value>
+            args.push("-p", `${paramId}:text:${value}`);
+        }
+
+        // Handle cleanup flag
+        // CLI behavior: Default is to delete. --no-cleanup prevents deletion.
+        // We want to delete if deleteSourceFiles is TRUE.
+        // So if deleteSourceFiles is FALSE, we pass --no-cleanup.
+        if (!deleteSourceFiles) {
+            args.push("--no-cleanup");
+        }
+
+    } else {
+        // Multiple files (or 0 files with just params) -> use 'process-multiple' command
+        args.push("process-multiple");
+
+        // Add file inputs
+        for (const input of fileInputs) {
+            // Format: <node_id>:<file_path>
+            args.push("--image", `${input.parameterId}:${input.filePath}`);
+        }
+
+        // Add text inputs
+        for (const [paramId, value] of Object.entries(textInputs)) {
+            // Format: <node_id>:text:<value>
+            args.push("-p", `${paramId}:text:${value}`);
+        }
+        
+        // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required
     }
 
     // Add common flags
     args.push("--json"); // Output JSON for better parsing (though we rely on logs mostly)
-    
-    // Note: process-multiple in CLI currently doesn't support --no-cleanup or auto-download explicitly in arguments
-    // as per the inspected code, but we will run it.
 
     await writeLog(`Executing command: python ${args.join(' ')}`, 'info', taskId);
 
@@ -146,8 +172,9 @@ async function processWorkflowInBackground(
         await writeLog("Workflow execution completed successfully", 'success', taskId);
         await updateTask(taskId, { status: 'completed', completedCount: fileInputs.length + Object.keys(textInputs).length });
         
-        // Handle post-processing (cleanup) if needed
-        if (deleteSourceFiles) {
+        // Handle post-processing (cleanup) if needed AND if we used process-multiple (since process handles it internally)
+        // If fileInputs.length !== 1, we used process-multiple which doesn't auto-cleanup
+        if (deleteSourceFiles && fileInputs.length !== 1) {
           await writeLog("Cleaning up source files...", 'info', taskId);
           try {
              const fs = await import("fs/promises");
