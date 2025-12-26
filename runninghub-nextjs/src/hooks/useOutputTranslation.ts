@@ -2,7 +2,7 @@
  * Hook for auto-translating job text outputs
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from './useTranslation';
 import { useWorkspaceStore } from '@/store/workspace-store';
 
@@ -12,21 +12,33 @@ export function useOutputTranslation(jobId: string) {
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedCount, setTranslatedCount] = useState(0);
 
-  useEffect(() => {
-    const job = getJobById(jobId);
+  // Get job once
+  const job = getJobById(jobId);
 
+  // Create a stable key for results to trigger effect when results are loaded
+  const resultsKey = useMemo(() => {
+    if (!job?.results?.textOutputs) return 'no-results';
+    return job.results.textOutputs.map(to => `${to.fileName}-${to.autoTranslated}-${to.translationError}`).join('|');
+  }, [job?.results?.textOutputs]);
+
+  useEffect(() => {
     // Only translate when:
     // 1. Job is completed
     // 2. Has text outputs
-    // 3. Not already translated
+    // 3. Not already translated (check ALL outputs)
     // 4. Chrome AI is available
     if (
-      job?.status !== 'completed' ||
-      !job.results?.textOutputs ||
+      !job?.results?.textOutputs ||
       job.results.textOutputs.length === 0 ||
-      job.results.textOutputs.some(to => to.autoTranslated) ||
+      job.status !== 'completed' ||
       !isChromeAIAvailable
     ) {
+      return;
+    }
+
+    // Check if any output needs translation
+    const needsTranslation = job.results.textOutputs.some(to => !to.autoTranslated && !to.translationError);
+    if (!needsTranslation) {
       return;
     }
 
@@ -35,9 +47,16 @@ export function useOutputTranslation(jobId: string) {
       setTranslatedCount(0);
 
       const updatedTextOutputs = [...(job.results!.textOutputs || [])];
+      let translated = 0;
 
       for (let i = 0; i < updatedTextOutputs.length; i++) {
         const textOutput = updatedTextOutputs[i];
+
+        // Skip if already translated or has error
+        if (textOutput.autoTranslated || textOutput.translationError) {
+          continue;
+        }
+
         const originalText = textOutput.content.original;
 
         try {
@@ -61,7 +80,8 @@ export function useOutputTranslation(jobId: string) {
           }
 
           updatedTextOutputs[i].autoTranslated = true;
-          setTranslatedCount(i + 1);
+          translated++;
+          setTranslatedCount(translated);
 
           // Update job incrementally
           updateJob(jobId, {
@@ -73,6 +93,14 @@ export function useOutputTranslation(jobId: string) {
         } catch (error) {
           console.error(`Translation failed for ${textOutput.fileName}:`, error);
           updatedTextOutputs[i].translationError = error instanceof Error ? error.message : 'Translation failed';
+
+          // Update job with error
+          updateJob(jobId, {
+            results: {
+              ...job.results!,
+              textOutputs: updatedTextOutputs,
+            },
+          });
         }
       }
 
@@ -80,7 +108,7 @@ export function useOutputTranslation(jobId: string) {
     };
 
     translateOutputs();
-  }, [jobId, isChromeAIAvailable, getJobById, updateJob]);
+  }, [jobId, resultsKey, job, isChromeAIAvailable, updateJob]);
 
   return { isTranslating, translatedCount };
 }

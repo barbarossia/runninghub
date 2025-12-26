@@ -19,6 +19,7 @@ import {
   ImageIcon,
   Copy,
   Loader2,
+  Languages,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -30,6 +31,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { downloadFile } from '@/lib/download';
 import { useOutputTranslation } from '@/hooks/useOutputTranslation';
+import { useTranslation } from '@/hooks/useTranslation';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
 import type { Job } from '@/types/workspace';
@@ -44,9 +46,13 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const { getJobById, reRunJob, deleteJob, updateJob } = useWorkspaceStore();
   const [isReRunning, setIsReRunning] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [isTranslatingManual, setIsTranslatingManual] = useState(false);
 
   // Auto-translate outputs
   const { isTranslating, translatedCount } = useOutputTranslation(jobId);
+
+  // Translation hooks
+  const { toEnglish, toChinese, isChromeAIAvailable } = useTranslation();
 
   const job = getJobById(jobId);
 
@@ -108,6 +114,75 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
     if (confirm('Delete this job? This action cannot be undone.')) {
       deleteJob(jobId);
       onBack?.();
+    }
+  };
+
+  // Handle manual translation
+  const handleTranslate = async () => {
+    if (!job?.results?.textOutputs || job.results.textOutputs.length === 0) {
+      toast.error('No text outputs to translate');
+      return;
+    }
+
+    if (!isChromeAIAvailable) {
+      toast.error('Chrome AI Translator is not available. Please use Chrome browser with AI enabled.');
+      return;
+    }
+
+    setIsTranslatingManual(true);
+
+    try {
+      const updatedTextOutputs = [...job.results.textOutputs];
+
+      for (let i = 0; i < updatedTextOutputs.length; i++) {
+        const textOutput = updatedTextOutputs[i];
+        const originalText = textOutput.content.original;
+
+        // Detect language
+        const detectLanguage = (text: string): 'en' | 'zh' => {
+          const chineseRegex = /[\u4e00-\u9fa5]/;
+          const englishRegex = /[a-zA-Z]/;
+          const hasChinese = chineseRegex.test(text);
+          const hasEnglish = englishRegex.test(text);
+          if (hasChinese && !hasEnglish) return 'zh';
+          return 'en';
+        };
+
+        const detectedLang = detectLanguage(originalText);
+
+        // Translate to English if not already English
+        if (detectedLang !== 'en' && !textOutput.content.en) {
+          const enResult = await toEnglish(originalText, detectedLang);
+          if (enResult.success) {
+            updatedTextOutputs[i].content.en = enResult.translatedText;
+          }
+        }
+
+        // Translate to Chinese if not already Chinese
+        if (detectedLang !== 'zh' && !textOutput.content.zh) {
+          const zhResult = await toChinese(originalText, detectedLang);
+          if (zhResult.success) {
+            updatedTextOutputs[i].content.zh = zhResult.translatedText;
+          }
+        }
+
+        updatedTextOutputs[i].autoTranslated = true;
+
+        // Update job incrementally
+        updateJob(jobId, {
+          results: {
+            ...job.results!,
+            textOutputs: updatedTextOutputs,
+          },
+        });
+      }
+
+      toast.success('Translation completed');
+    } catch (error) {
+      console.error('Translation failed:', error);
+      toast.error('Translation failed');
+    } finally {
+      setIsTranslatingManual(false);
     }
   };
 
@@ -173,6 +248,17 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
               Re-run
             </Button>
           )}
+          {job.status === 'completed' && job.results?.textOutputs && job.results.textOutputs.length > 0 && (
+            <Button
+              onClick={handleTranslate}
+              disabled={isTranslating || isTranslatingManual}
+              variant="outline"
+              size="sm"
+            >
+              <Languages className={cn('h-4 w-4 mr-1', (isTranslating || isTranslatingManual) && 'animate-spin')} />
+              Translate
+            </Button>
+          )}
           <Button variant="destructive" size="sm" onClick={handleDelete}>
             <Trash2 className="h-4 w-4 mr-1" />
             Delete
@@ -220,11 +306,13 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       )}
 
       {/* Translation progress */}
-      {isTranslating && (
+      {(isTranslating || isTranslatingManual) && (
         <Card className="p-3 bg-blue-50 border-blue-200">
           <div className="flex items-center gap-2 text-sm text-blue-900">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Translating outputs ({translatedCount}/{job?.results?.textOutputs?.length || 0})...</span>
+            <span>
+              {isTranslatingManual ? 'Manually translating...' : `Translating outputs (${translatedCount}/${job?.results?.textOutputs?.length || 0})...`}
+            </span>
           </div>
         </Card>
       )}
