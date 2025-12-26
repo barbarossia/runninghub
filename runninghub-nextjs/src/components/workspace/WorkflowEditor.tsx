@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Loader2, Lock } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Loader2, Lock, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { AVAILABLE_WORKFLOWS } from '@/constants/workflows';
+import { toast } from 'sonner';
 import type { Workflow, WorkflowInputParameter, CliNode } from '@/types/workspace';
 
 export interface WorkflowEditorProps {
@@ -53,6 +54,10 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
 
+  // Custom workflow ID state
+  const [customWorkflowId, setCustomWorkflowId] = useState<string>('');
+  const [isLoadingCustomId, setIsLoadingCustomId] = useState(false);
+
   // Output configuration state
   const [outputType, setOutputType] = useState<'none' | 'text' | 'image' | 'mixed'>(
     workflow?.output?.type || 'none'
@@ -71,6 +76,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       setOutputDescription(workflow.output?.description || '');
       // Reset template state when editing existing workflow
       setSelectedWorkflowId('');
+      setCustomWorkflowId('');
       setTemplateLoaded(false);
     } else {
       // Reset for new workflow
@@ -80,6 +86,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       setOutputType('none');
       setOutputDescription('');
       setSelectedWorkflowId('');
+      setCustomWorkflowId('');
       setTemplateLoaded(false);
     }
   }, [workflow]);
@@ -178,6 +185,74 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     }
   }, [selectedWorkflowId, name]);
 
+  // Load custom workflow ID
+  const handleLoadCustomWorkflowId = useCallback(async () => {
+    if (!customWorkflowId.trim()) {
+      toast.error('Please enter a workflow ID');
+      return;
+    }
+
+    setIsLoadingCustomId(true);
+
+    try {
+      // Validate and fetch workflow nodes
+      const response = await fetch('/api/workflow/validate-custom-id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workflowId: customWorkflowId.trim() }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Invalid workflow ID');
+      }
+
+      const data = await response.json();
+
+      // Convert workflow inputs to parameters
+      const newParameters: WorkflowInputParameter[] = (data.workflow.inputs || []).map((input: any, index: number) => {
+        let paramType: WorkflowInputParameter['type'] = 'text';
+        let mediaType: 'image' | 'video' | undefined;
+
+        if (input.type === 'file') {
+          paramType = 'file';
+          mediaType = input.validation?.mediaType;
+        } else if (input.type === 'number') {
+          paramType = 'number';
+        } else if (input.type === 'boolean') {
+          paramType = 'boolean';
+        }
+
+        return {
+          id: input.id || `param_${index}`,
+          name: input.name,
+          type: paramType,
+          required: input.required || index === 0,
+          description: input.description,
+          validation: input.validation,
+        };
+      });
+
+      setParameters(newParameters);
+
+      // Set workflow name if not already set
+      if (!name) {
+        setName(`Custom Workflow ${customWorkflowId}`);
+      }
+
+      setDescription(`Workflow created from custom ID: ${customWorkflowId}`);
+      setSelectedWorkflowId(customWorkflowId);
+      setTemplateLoaded(true);
+
+      toast.success('Custom workflow loaded successfully!');
+    } catch (error) {
+      console.error('Failed to load custom workflow ID:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to load custom workflow ID');
+    } finally {
+      setIsLoadingCustomId(false);
+    }
+  }, [customWorkflowId, name]);
+
   // Handle save
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -270,39 +345,79 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
           {/* Template selection (for new workflows only) */}
           {!isEditing && (
             <Card className="p-4 bg-blue-50 border-blue-200">
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-medium text-blue-900">Step 1: Select Workflow Template</h3>
+                  <h3 className="text-sm font-medium text-blue-900">Step 1: Select Workflow Template or Enter Custom ID</h3>
                   <p className="text-xs text-blue-700">Input fields will load automatically when you select a workflow</p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={selectedWorkflowId}
-                    onValueChange={(value) => {
-                      setSelectedWorkflowId(value);
-                      handleLoadTemplate(value);
-                    }}
-                    disabled={isLoadingTemplate}
-                  >
-                    <SelectTrigger className="flex-1">
-                      {isLoadingTemplate ? (
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Loading template...</span>
-                        </div>
+                {/* Option 1: Select from available templates */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-blue-800">Option 1: Select from templates</label>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={selectedWorkflowId}
+                      onValueChange={(value) => {
+                        setSelectedWorkflowId(value);
+                        setCustomWorkflowId(''); // Clear custom ID when selecting template
+                        handleLoadTemplate(value);
+                      }}
+                      disabled={isLoadingTemplate || isLoadingCustomId}
+                    >
+                      <SelectTrigger className="flex-1">
+                        {isLoadingTemplate ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Loading template...</span>
+                          </div>
+                        ) : (
+                          <SelectValue placeholder="Select a workflow template..." />
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AVAILABLE_WORKFLOWS.map((wf) => (
+                          <SelectItem key={wf.id} value={wf.id}>
+                            {wf.name} ({wf.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Option 2: Enter custom workflow ID */}
+                <div className="border-t border-blue-200 pt-3">
+                  <label className="text-xs font-medium text-blue-800 flex items-center gap-1">
+                    <Key className="h-3 w-3" />
+                    Option 2: Enter custom workflow ID
+                  </label>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      value={customWorkflowId}
+                      onChange={(e) => {
+                        setCustomWorkflowId(e.target.value);
+                        setSelectedWorkflowId(''); // Clear template selection when entering custom ID
+                      }}
+                      placeholder="Enter workflow ID from RunningHub..."
+                      disabled={isLoadingCustomId || isLoadingTemplate}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleLoadCustomWorkflowId}
+                      disabled={!customWorkflowId.trim() || isLoadingCustomId || isLoadingTemplate}
+                      variant="outline"
+                      className="shrink-0"
+                    >
+                      {isLoadingCustomId ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <SelectValue placeholder="Select a workflow template..." />
+                        'Load'
                       )}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_WORKFLOWS.map((wf) => (
-                        <SelectItem key={wf.id} value={wf.id}>
-                          {wf.name} ({wf.id})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    </Button>
+                  </div>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Enter a workflow ID from your RunningHub account to load its structure
+                  </p>
                 </div>
 
                 {templateLoaded && (

@@ -18,8 +18,9 @@ function parseNodesOutput(output: string): CliNode[] {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Match node header: "1. LoadImage (203)"
-    const nodeHeaderMatch = trimmed.match(/^(\d+)\.\s+(\S+)\s+\((\d+)\)\s*$/);
+    // Match node header: "1. LoadImage (203)" or "1. Text Multiline (10)"
+    // Updated regex to handle multi-word node names
+    const nodeHeaderMatch = trimmed.match(/^(\d+)\.\s+(.+?)\s+\((\d+)\)\s*$/);
     if (nodeHeaderMatch) {
       // Save previous node if exists
       if (currentNode && currentNode.id && currentNode.name) {

@@ -109,6 +109,7 @@ Allow users to manually add workflow IDs that aren't configured in `.env.local`,
 
 ### User Flow
 
+#### Option A: Add Custom Workflow ID from Run Workflow Tab
 ```
 1. User in Run Workflow tab
    ↓
@@ -135,6 +136,33 @@ Allow users to manually add workflow IDs that aren't configured in `.env.local`,
    - Reloads workflows list
    ↓
 6. New workflow appears in dropdown
+```
+
+#### Option B: Enter Custom Workflow ID in Create Workflow Dialog (NEW)
+```
+1. User in Workflows tab
+   ↓
+2. Clicks "Create New Workflow" button
+   ↓
+3. WorkflowEditor dialog appears:
+   - Step 1: Select Workflow Template or Enter Custom ID
+   - Option 1: Select from available templates (dropdown)
+   - Option 2: Enter custom workflow ID (input field)
+   ↓
+4. User enters custom workflow ID and clicks "Load"
+   ↓
+5. System validates and loads:
+   - Validates workflow ID exists on RunningHub
+   - Fetches workflow structure
+   - Converts inputs to parameters
+   - Auto-generates workflow name: "Custom Workflow {ID}"
+   - Loads parameters into editor
+   ↓
+6. User can customize parameters and outputs
+   ↓
+7. User clicks "Create Workflow"
+   ↓
+8. System saves workflow JSON to workspace/workflows/
 ```
 
 ### Files Created/Modified
@@ -165,6 +193,13 @@ Allow users to manually add workflow IDs that aren't configured in `.env.local`,
   - Added Key icon for the option
   - Integrated CustomWorkflowIdDialog
   - Reloads workflows after saving
+
+- `src/components/workspace/WorkflowEditor.tsx` (UPDATED)
+  - Added custom workflow ID input field
+  - Added Option 1/Option 2 layout in template selection
+  - Added handleLoadCustomWorkflowId function
+  - Auto-generates workflow name from custom ID
+  - Clears opposing selection when option is chosen
 
 ---
 
@@ -261,6 +296,7 @@ The custom workflow ID feature handles `.env.local` safely:
 
 ### Feature 2: Custom Workflow ID
 
+#### Option A: Run Workflow Tab
 - [ ] Click dropdown → "Add Custom Workflow ID" option appears
 - [ ] Click option → Dialog appears with empty input
 - [ ] Enter valid workflow ID → Fetch succeeds
@@ -272,6 +308,20 @@ The custom workflow ID feature handles `.env.local` safely:
 - [ ] Try duplicate ID → 409 error returned
 - [ ] Try duplicate env key → 409 error returned
 - [ ] Test workflow execution with newly added workflow
+
+#### Option B: Create Workflow Dialog
+- [ ] Click "Create New Workflow" → Dialog appears
+- [ ] Option 1 dropdown shows available templates
+- [ ] Option 2 input field appears with Key icon
+- [ ] Enter valid workflow ID → Load button enables
+- [ ] Click Load → Parameters load correctly
+- [ ] Enter invalid workflow ID → Error toast appears
+- [ ] Auto-generated workflow name is set
+- [ ] Description includes custom workflow ID
+- [ ] Can customize parameters after loading
+- [ ] Can save workflow after loading custom ID
+- [ ] Template selection clears custom ID field
+- [ ] Custom ID entry clears template selection
 
 ---
 
@@ -339,6 +389,8 @@ npm run build
 - `src/components/workspace/CustomWorkflowIdDialog.tsx` (NEW)
 - `src/components/workspace/MediaSelectionToolbar.tsx` (MODIFIED)
 - `src/components/workspace/WorkflowSelector.tsx` (MODIFIED)
+- `src/components/workspace/WorkflowEditor.tsx` (MODIFIED - Dec 26)
+  - Added custom workflow ID input field for create workflow dialog
 
 ### Store
 - `src/store/workspace-store.ts` (MODIFIED)
@@ -371,6 +423,18 @@ npm run build
 1. **.env.local reload**: Requires server restart to pick up new env vars in some cases
 2. **Assignment conflicts**: If file matches multiple parameters, uses first match
 3. **File type inference**: Relies on file extension for type detection
+
+---
+
+## Changelog
+
+### 2025-12-26 - Enhancement: Custom Workflow ID in Create Workflow Dialog
+- Added custom workflow ID input field to WorkflowEditor component
+- Users can now enter custom workflow IDs directly when creating new workflows
+- Two options available: Select from templates OR enter custom ID
+- Auto-generates workflow name: "Custom Workflow {ID}"
+- Validates and fetches workflow structure from RunningHub API
+- Clears opposing selection when switching between options
 
 ---
 
