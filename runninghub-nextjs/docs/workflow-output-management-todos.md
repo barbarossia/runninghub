@@ -364,3 +364,33 @@ All 7 phases have been successfully implemented:
 6. Text files show content with translation tabs
 7. Auto-translation triggers if Chrome AI is available
 
+### Fix 8: Job view refactored to show thumbnails and translations
+
+**Date**: 2025-12-26
+**Issue**: Job inputs showed as simple list without visual previews
+**Files**:
+- `src/components/workspace/JobDetail.tsx`
+**Fix**:
+1. Replaced list view with responsive grid layout (2-6 columns based on screen size)
+2. Added image/video thumbnails using `/api/images/serve` and `/api/videos/serve`
+3. Show IMG/VID badge on each thumbnail
+4. Display file name and size below each thumbnail
+5. Text outputs already have translation support with Original/English/Chinese tabs
+**Status**: ✅ Fixed and verified
+
+**New Input Display**:
+- Grid layout: `grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6`
+- Each input shows:
+  - Thumbnail (image/video preview)
+  - Type badge (IMG/VID)
+  - File name
+  - File size
+
+**Text Output Translation**:
+- Already implemented with tabs:
+  - Original tab: Shows original text content
+  - English tab: Shows English translation (when available)
+  - Chinese tab: Shows Chinese translation (when available)
+- Auto-translation triggers on job completion via `useOutputTranslation` hook
+- Chrome AI Translator API used for automatic translation
+
