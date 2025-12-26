@@ -200,22 +200,39 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         </div>
       </div>
 
-      {/* Inputs (Compact) */}
-      <div className="shrink-0">
-        <h3 className="text-sm font-medium mb-2 text-gray-500">Inputs</h3>
-        <div className="flex flex-wrap gap-2">
+      {/* Inputs */}
+      <div className="shrink-0 space-y-3">
+        <h3 className="text-sm font-medium text-gray-500">Inputs</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
            {job.fileInputs.map((input, index) => (
-             <Badge key={index} variant="secondary" className="pl-1 pr-2 py-1 flex items-center gap-2">
-               {input.fileType === 'image' ? <ImageIcon className="h-3 w-3" /> : <Video className="h-3 w-3" />}
-               <span className="max-w-[150px] truncate">{input.fileName}</span>
-             </Badge>
-           ))}
-           {Object.entries(job.textInputs).map(([key, value]) => (
-             <Badge key={key} variant="outline" className="py-1">
-               <span className="font-semibold mr-1">{key}:</span> {value}
-             </Badge>
+             <div key={index} className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+               {input.fileType === 'image' ? (
+                 <img
+                   src={`/api/workspace/serve-output?path=${encodeURIComponent(input.filePath)}`}
+                   alt={input.fileName}
+                   className="object-cover w-full h-full"
+                 />
+               ) : (
+                 <div className="flex items-center justify-center w-full h-full text-gray-400">
+                   <Video className="h-8 w-8" />
+                 </div>
+               )}
+               <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-white text-xs truncate">
+                 <span title={input.fileName}>{input.fileName}</span>
+               </div>
+             </div>
            ))}
         </div>
+        {/* Text inputs if any */}
+        {Object.keys(job.textInputs).length > 0 && (
+           <div className="flex flex-wrap gap-2 mt-2">
+             {Object.entries(job.textInputs).map(([key, value]) => (
+               <Badge key={key} variant="outline" className="py-1">
+                 <span className="font-semibold mr-1">{key}:</span> {value}
+               </Badge>
+             ))}
+           </div>
+        )}
       </div>
       
       <Separator />
@@ -267,11 +284,19 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                     </Button>
                  </div>
                  <div className="flex-1 p-4 overflow-y-auto font-mono text-sm whitespace-pre-wrap">
-                   {job.results.textOutputs.map((output, idx) => (
-                     <div key={idx} className="mb-4 last:mb-0">
-                       {leftLang === 'original' ? output.content.original : (output.content[leftLang] || 'Translation not available')}
-                     </div>
-                   ))}
+                   {job.results.textOutputs.map((output, idx) => {
+                     const content = leftLang === 'original' ? output.content.original : output.content[leftLang];
+                     
+                     if (content) return <div key={idx} className="mb-4 last:mb-0">{content}</div>;
+                     
+                     if (output.translationError) {
+                        return <div key={idx} className="mb-4 last:mb-0 text-red-500 italic">Error: {output.translationError}</div>;
+                     }
+                     if (isTranslating && !output.autoTranslated) {
+                        return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translating...</div>;
+                     }
+                     return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translation not available</div>;
+                   })}
                  </div>
                </Card>
 
@@ -295,11 +320,19 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                     </Button>
                  </div>
                  <div className="flex-1 p-4 overflow-y-auto font-mono text-sm whitespace-pre-wrap">
-                   {job.results.textOutputs.map((output, idx) => (
-                     <div key={idx} className="mb-4 last:mb-0">
-                       {rightLang === 'original' ? output.content.original : (output.content[rightLang] || 'Translation not available')}
-                     </div>
-                   ))}
+                   {job.results.textOutputs.map((output, idx) => {
+                     const content = rightLang === 'original' ? output.content.original : output.content[rightLang];
+                     
+                     if (content) return <div key={idx} className="mb-4 last:mb-0">{content}</div>;
+                     
+                     if (output.translationError) {
+                        return <div key={idx} className="mb-4 last:mb-0 text-red-500 italic">Error: {output.translationError}</div>;
+                     }
+                     if (isTranslating && !output.autoTranslated) {
+                        return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translating...</div>;
+                     }
+                     return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translation not available</div>;
+                   })}
                  </div>
                </Card>
              </div>
