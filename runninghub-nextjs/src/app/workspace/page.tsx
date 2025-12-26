@@ -156,8 +156,13 @@ export default function WorkspacePage() {
               selected: false,
             }));
 
-            // Combine both types
-            setMediaFiles([...imageFiles, ...videoFiles]);
+            // Combine both types and deduplicate by ID (path)
+            const allFiles = [...imageFiles, ...videoFiles];
+            const uniqueFiles = Array.from(
+              new Map(allFiles.map(file => [file.id, file])).values()
+            );
+
+            setMediaFiles(uniqueFiles);
           }
         }
       );
