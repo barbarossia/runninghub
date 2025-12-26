@@ -308,3 +308,59 @@ All 7 phases have been successfully implemented:
 **Fix**: Added `setSelectedJob(newJob.id)` after `addJob(newJob)` to select the newly created job
 **Status**: ✅ Fixed and verified
 
+### Fix 7: Output files not displayed in job history
+
+**Date**: 2025-12-26
+**Issue**: Output files were downloaded to job directory but not shown in job history UI
+**Root Cause**: Server downloaded files but didn't update job's `results` field in the store
+**Files**:
+- `src/app/api/workspace/job-results/route.ts` (NEW)
+- `src/components/workspace/JobDetail.tsx`
+- `src/constants/index.ts`
+**Fix**:
+1. Created `/api/workspace/job-results` endpoint to read downloaded files from job directory
+2. Updated JobDetail to fetch results when job is completed
+3. Added loading indicator while fetching results
+4. Endpoint reads text files (content) and images (metadata) from `~/Downloads/workspace/{jobId}/result/`
+**Status**: ✅ Fixed and verified
+
+**API Response Format**:
+```json
+{
+  "success": true,
+  "results": {
+    "outputs": [
+      {
+        "type": "file",
+        "fileName": "save_text_00001_jbryc_1766727977.txt",
+        "fileType": "text",
+        "fileSize": 1234,
+        "workspacePath": "/Users/user/Downloads/workspace/job_xxx/result/save_text_00001_jbryc_1766727977.txt"
+      }
+    ],
+    "textOutputs": [
+      {
+        "fileName": "save_text_00001_jbryc_1766727977.txt",
+        "filePath": "/Users/user/Downloads/workspace/job_xxx/result/save_text_00001_jbryc_1766727977.txt",
+        "content": {
+          "original": "...",
+          "en": undefined,
+          "zh": undefined
+        },
+        "autoTranslated": false,
+        "translationError": undefined
+      }
+    ]
+  }
+}
+```
+
+**Expected Behavior After Fix**:
+1. Job completes and files are downloaded to `~/Downloads/workspace/{jobId}/result/`
+2. User navigates to job history
+3. JobDetail automatically fetches results via `/api/workspace/job-results?jobId={jobId}`
+4. Results are populated in job store
+5. UI displays output files with download buttons
+6. Text files show content with translation tabs
+7. Auto-translation triggers if Chrome AI is available
+
