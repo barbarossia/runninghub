@@ -27,12 +27,13 @@ interface TaskState {
 interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
   onTaskComplete?: (taskId: string, status: 'completed' | 'failed') => void;
+  onStatusChange?: (taskId: string, status: TaskState['status']) => void;
   taskId?: string | null;
   defaultVisible?: boolean; // Force console to be visible by default
   autoRefreshInterval?: number; // Optional auto-refresh interval
 }
 
-export function ConsoleViewer({ onRefresh, onTaskComplete, taskId, defaultVisible = false }: ConsoleViewerProps) {
+export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskId, defaultVisible = false }: ConsoleViewerProps) {
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -67,8 +68,10 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, taskId, defaultVisibl
           const data = await res.json();
           setTaskStatus(data);
 
-          // Check for status change to terminal state
+          // Check for status change
           if (data.status !== lastStatusRef.current) {
+             onStatusChange?.(taskId, data.status);
+
              if (data.status === 'completed' || data.status === 'failed') {
                onTaskComplete?.(taskId, data.status);
                

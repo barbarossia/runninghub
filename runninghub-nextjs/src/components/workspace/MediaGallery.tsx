@@ -144,7 +144,7 @@ export function MediaGallery({
 
   // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
-    return mediaFiles.filter((file) => {
+    const filtered = mediaFiles.filter((file) => {
       // Extension filter
       if (selectedExtension && file.extension !== selectedExtension) return false;
 
@@ -159,6 +159,16 @@ export function MediaGallery({
 
       return true;
     });
+
+    // Deduplicate by ID to prevent key collision errors
+    const uniqueMap = new Map();
+    filtered.forEach(file => {
+      if (!uniqueMap.has(file.id)) {
+        uniqueMap.set(file.id, file);
+      }
+    });
+    
+    return Array.from(uniqueMap.values());
   }, [mediaFiles, searchQuery, selectedExtension]);
 
   // Get selected files count

@@ -33,6 +33,9 @@ import { cn } from '@/lib/utils';
 import { WorkflowEditor } from './WorkflowEditor';
 import type { Workflow } from '@/types/workspace';
 
+import { API_ENDPOINTS } from '@/constants';
+import { toast } from 'sonner';
+
 export interface WorkflowListProps {
   onSelectWorkflow?: (workflow: Workflow) => void;
   className?: string;
@@ -69,9 +72,23 @@ export function WorkflowList({ onSelectWorkflow, className = '' }: WorkflowListP
   };
 
   // Handle delete workflow
-  const handleDeleteWorkflow = () => {
+  const handleDeleteWorkflow = async () => {
     if (deletingWorkflowId) {
-      deleteWorkflow(deletingWorkflowId);
+      try {
+        const response = await fetch(`${API_ENDPOINTS.WORKFLOW_DELETE}?id=${deletingWorkflowId}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete workflow from server');
+        }
+
+        deleteWorkflow(deletingWorkflowId);
+        toast.success('Workflow deleted');
+      } catch (error) {
+        console.error('Delete workflow error:', error);
+        toast.error('Failed to delete workflow');
+      }
       setDeletingWorkflowId(undefined);
     }
   };

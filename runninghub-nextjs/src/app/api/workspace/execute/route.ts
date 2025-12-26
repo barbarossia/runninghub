@@ -42,19 +42,13 @@ export async function POST(request: NextRequest) {
 
     // Prepare environment
     const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
-    const workflowId = process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID; // Base workflow ID (might be overridden by body.workflowId if needed, but usually workspace uses specific one)
-    // Note: The CLI uses RUNNINGHUB_WORKFLOW_ID from env. If the user selected a specific workflow, 
-    // we might need to override it in the env passed to the child process.
-    // However, the workspace allows selecting different workflows. 
-    // If the selected workflow has a different ID, we should use that.
-    
     const apiHost = process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
     const downloadDir = process.env.RUNNINGHUB_DOWNLOAD_DIR;
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       RUNNINGHUB_API_KEY: apiKey!,
-      RUNNINGHUB_WORKFLOW_ID: body.workflowId, // Use the selected workflow ID
+      RUNNINGHUB_WORKFLOW_ID: body.workflowId, // Strictly use the workflow ID from the task
       RUNNINGHUB_API_HOST: apiHost,
     };
 
@@ -101,18 +95,21 @@ async function processWorkflowInBackground(
 
     let args: string[] = ["-m", "runninghub_cli.cli"];
 
+    // Helper to extract node ID from parameter ID (e.g., "param_203" -> "203")
+    const getNodeId = (paramId: string) => paramId.replace(/^param_/, '');
+
     // DECISION: Use 'process' for single file, 'process-multiple' for multiple files
     if (fileInputs.length === 1) {
         // Single file mode -> use 'process' command
         const input = fileInputs[0];
         args.push("process");
         args.push(input.filePath);
-        args.push("--node", input.parameterId);
+        args.push("--node", getNodeId(input.parameterId));
 
         // Add text inputs as params
         for (const [paramId, value] of Object.entries(textInputs)) {
             // Format: <node_id>:text:<value>
-            args.push("-p", `${paramId}:text:${value}`);
+            args.push("-p", `${getNodeId(paramId)}:text:${value}`);
         }
 
         // Handle cleanup flag
@@ -130,16 +127,21 @@ async function processWorkflowInBackground(
         // Add file inputs
         for (const input of fileInputs) {
             // Format: <node_id>:<file_path>
-            args.push("--image", `${input.parameterId}:${input.filePath}`);
+            args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
         }
 
         // Add text inputs
         for (const [paramId, value] of Object.entries(textInputs)) {
             // Format: <node_id>:text:<value>
-            args.push("-p", `${paramId}:text:${value}`);
+            args.push("-p", `${getNodeId(paramId)}:text:${value}`);
         }
         
         // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required
+    }
+
+    // Add workflow ID explicitly if provided
+    if (env.RUNNINGHUB_WORKFLOW_ID) {
+        args.push("--workflow-id", env.RUNNINGHUB_WORKFLOW_ID);
     }
 
     // Add common flags

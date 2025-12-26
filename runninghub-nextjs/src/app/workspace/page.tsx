@@ -78,15 +78,71 @@ export default function WorkspacePage() {
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
 
+  // Helper to process and update media files
+  const processFolderContents = useCallback((result: any) => {
+    if (!result) return;
+
+    // Convert images to MediaFile format with serve URLs
+    const imageFiles = (result.images || []).map((file: any) => ({
+      id: file.path,
+      name: file.name,
+      path: file.path,
+      type: 'image' as const,
+      extension: file.name.split('.').pop() || '',
+      size: file.size || 0,
+      width: file.width,
+      height: file.height,
+      thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
+      selected: false,
+    }));
+
+    // Convert videos to MediaFile format with serve URLs
+    const videoFiles = (result.videos || []).map((file: any) => ({
+      id: file.path,
+      name: file.name,
+      path: file.path,
+      type: 'video' as const,
+      extension: file.name.split('.').pop() || '',
+      size: file.size || 0,
+      width: file.width,
+      height: file.height,
+      fps: file.fps,
+      thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
+      blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
+      selected: false,
+    }));
+
+    // Combine both types and deduplicate by ID (path)
+    const allFiles = [...imageFiles, ...videoFiles];
+    const uniqueMap = new Map();
+    const duplicates: string[] = [];
+
+    allFiles.forEach(file => {
+      if (uniqueMap.has(file.id)) {
+        duplicates.push(file.id);
+      } else {
+        uniqueMap.set(file.id, file);
+      }
+    });
+
+    if (duplicates.length > 0) {
+      console.warn('Duplicate files detected and removed:', duplicates);
+    }
+
+    const uniqueFiles = Array.from(uniqueMap.values());
+    setMediaFiles(uniqueFiles as MediaFile[]);
+  }, [setMediaFiles]);
+
   const handleRefresh = useCallback(async (silent = false) => {
     if (selectedFolder) {
-      await loadFolderContents(
+      const result = await loadFolderContents(
         selectedFolder.folder_path,
         selectedFolder.session_id,
         silent
       );
+      processFolderContents(result);
     }
-  }, [selectedFolder, loadFolderContents]);
+  }, [selectedFolder, loadFolderContents, processFolderContents]);
 
   const handleTaskComplete = useCallback((taskId: string, status: 'completed' | 'failed') => {
     // Find job associated with this task
@@ -105,6 +161,23 @@ export default function WorkspacePage() {
       }
     }
   }, [jobs, updateJob, handleRefresh]);
+
+  const handleStatusChange = useCallback((taskId: string, status: string) => {
+    // Map task status to job status
+    let jobStatus: Job['status'] = 'pending';
+    if (status === 'processing') jobStatus = 'running';
+    else if (status === 'completed') jobStatus = 'completed';
+    else if (status === 'failed') jobStatus = 'failed';
+
+    // Find and update job
+    const job = jobs.find(j => j.taskId === taskId);
+    if (job && job.status !== jobStatus) {
+      updateJob(job.id, { 
+        status: jobStatus,
+        startedAt: jobStatus === 'running' ? (job.startedAt || Date.now()) : job.startedAt
+      });
+    }
+  }, [jobs, updateJob]);
 
   // Use folder selection hook (using 'images' type for workspace)
   const { handleFolderSelected } = useFolderSelection({
@@ -125,49 +198,11 @@ export default function WorkspacePage() {
     if (selectedFolder) {
       loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id).then(
         (result) => {
-          if (result) {
-            // Convert images to MediaFile format with serve URLs
-            const imageFiles = (result.images || []).map((file: any) => ({
-              id: file.path,
-              name: file.name,
-              path: file.path,
-              type: 'image' as const,
-              extension: file.name.split('.').pop() || '',
-              size: file.size || 0,
-              width: file.width,
-              height: file.height,
-              thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
-              selected: false,
-            }));
-
-            // Convert videos to MediaFile format with serve URLs
-            const videoFiles = (result.videos || []).map((file: any) => ({
-              id: file.path,
-              name: file.name,
-              path: file.path,
-              type: 'video' as const,
-              extension: file.name.split('.').pop() || '',
-              size: file.size || 0,
-              width: file.width,
-              height: file.height,
-              fps: file.fps,
-              thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
-              blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
-              selected: false,
-            }));
-
-            // Combine both types and deduplicate by ID (path)
-            const allFiles = [...imageFiles, ...videoFiles];
-            const uniqueFiles = Array.from(
-              new Map(allFiles.map(file => [file.id, file])).values()
-            );
-
-            setMediaFiles(uniqueFiles);
-          }
+          processFolderContents(result);
         }
       );
     }
-  }, [selectedFolder, loadFolderContents, setMediaFiles]);
+  }, [selectedFolder, loadFolderContents, processFolderContents]);
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
@@ -198,10 +233,23 @@ export default function WorkspacePage() {
     setIsEditingWorkflow(true);
   };
 
-  const handleDeleteWorkflow = (id: string) => {
+  const handleDeleteWorkflow = async (id: string) => {
     if (confirm('Delete this workflow? This action cannot be undone.')) {
-      deleteWorkflow(id);
-      toast.success('Workflow deleted');
+      try {
+        const response = await fetch(`${API_ENDPOINTS.WORKFLOW_DELETE}?id=${id}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete workflow from server');
+        }
+
+        deleteWorkflow(id);
+        toast.success('Workflow deleted');
+      } catch (error) {
+        console.error('Delete workflow error:', error);
+        toast.error('Failed to delete workflow');
+      }
     }
   };
 
@@ -235,10 +283,11 @@ export default function WorkspacePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          workflowId: workflow.id,
+          workflowId: workflow.sourceWorkflowId || workflow.id,
           fileInputs: jobFiles,
           textInputs: jobInputs,
           folderPath: selectedFolder?.folder_path,
+          deleteSourceFiles: false,
         }),
       });
 
@@ -497,6 +546,7 @@ export default function WorkspacePage() {
         <ConsoleViewer
           onRefresh={handleRefresh}
           onTaskComplete={handleTaskComplete}
+          onStatusChange={handleStatusChange}
           taskId={activeConsoleTaskId}
           defaultVisible={true}
         />

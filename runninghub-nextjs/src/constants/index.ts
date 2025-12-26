@@ -77,6 +77,10 @@ export const API_ENDPOINTS = {
   WORKSPACE_SAVE: '/api/workspace/save',
   WORKSPACE_SERVE: '/api/workspace/serve',
   WORKSPACE_EXECUTE: '/api/workspace/execute',
+
+  // Workflows
+  WORKFLOW_SAVE: '/api/workflow/save',
+  WORKFLOW_DELETE: '/api/workflow/delete',
 } as const;
 
 export const ERROR_MESSAGES = {

@@ -230,11 +230,17 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
 @click.option(
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
+@click.option(
+    "--workflow-id", help="Override workflow ID from configuration"
+)
 @click.pass_context
-def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup, params):
+def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup, params, workflow_id):
     """Upload a file and process it in one command."""
     source_file_path = file_path
     cfg = ctx.obj["config"]
+    # Use provided workflow_id or fall back to config
+    active_workflow_id = workflow_id if workflow_id else cfg.workflow_id
+
     client = RunningHubClient(cfg.api_key, cfg.api_host)
 
     try:
@@ -274,7 +280,7 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
-        task_id = client.submit_task(cfg.workflow_id, node_configs)
+        task_id = client.submit_task(active_workflow_id, node_configs)
         print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 3: Wait for completion
@@ -344,10 +350,16 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
 @click.option(
     "--no-download", is_flag=True, help="Skip automatic download of output files"
 )
+@click.option(
+    "--workflow-id", help="Override workflow ID from configuration"
+)
 @click.pass_context
-def process_multiple(ctx, images, params, timeout, output_json, no_download):
+def process_multiple(ctx, images, params, timeout, output_json, no_download, workflow_id):
     """Process multiple files in one workflow."""
     cfg = ctx.obj["config"]
+    # Use provided workflow_id or fall back to config
+    active_workflow_id = workflow_id if workflow_id else cfg.workflow_id
+
     client = RunningHubClient(cfg.api_key, cfg.api_host)
     node_configs = []
 
@@ -397,8 +409,8 @@ def process_multiple(ctx, images, params, timeout, output_json, no_download):
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
         # Step 3: Submit task
-        print_info("Submitting task with multiple inputs...")
-        task_id = client.submit_task(cfg.workflow_id, node_configs)
+        print_info(f"Submitting task to workflow {active_workflow_id} with multiple inputs...")
+        task_id = client.submit_task(active_workflow_id, node_configs)
         print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 4: Wait for completion
