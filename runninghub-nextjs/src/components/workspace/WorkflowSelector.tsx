@@ -101,7 +101,7 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
               <SelectValue placeholder="Select a workflow..." />
             </div>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="z-50">
             {isLoadingWorkflows ? (
               <div className="p-4 flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-gray-500" />

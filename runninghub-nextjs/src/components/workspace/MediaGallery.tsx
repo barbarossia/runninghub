@@ -607,16 +607,10 @@ export function MediaGallery({
                       isSelected ? 'bg-blue-100 border-blue-200' : 'bg-white border-gray-100'
                     )}
                   >
-                    <p
-                      className={cn(
-                        'text-xs font-bold line-clamp-1 h-4', // Added h-4 for consistent height
-                        isSelected ? 'text-blue-800' : 'text-gray-900'
-                      )}
-                      title={file.name}
-                    >
+                    <p className={cn('text-xs font-bold line-clamp-1 h-4', isSelected ? 'text-blue-800' : 'text-gray-900')} title={file.name}>
                       {file.name}
                     </p>
-                    <p className="text-xs text-gray-500 line-clamp-1 h-4"> // Added h-4 for consistent height
+                    <p className="text-xs text-gray-500 line-clamp-1 h-4">
                       {(file.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
