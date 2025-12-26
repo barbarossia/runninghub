@@ -66,7 +66,19 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
 
       try {
         const response = await fetch(`${API_ENDPOINTS.WORKSPACE_JOB_RESULTS}?jobId=${jobId}`);
-        const data = await response.json();
+        
+        if (!response.ok) {
+           throw new Error(`Results API error: ${response.status}`);
+        }
+
+        const textData = await response.text();
+        let data;
+        try {
+          data = JSON.parse(textData);
+        } catch (e) {
+          console.error('Failed to parse results response:', textData);
+          throw new Error('Invalid JSON response from results API');
+        }
 
         if (data.success && data.results) {
           // Update job with results

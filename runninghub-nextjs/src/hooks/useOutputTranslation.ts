@@ -63,10 +63,20 @@ export function useOutputTranslation(jobId: string) {
         try {
           // Detect language
           const detectResponse = await fetch(`/api/translate?text=${encodeURIComponent(originalText)}`);
+          
           if (!detectResponse.ok) {
             throw new Error(`Language detection API error: ${detectResponse.status}`);
           }
-          const detectData = await detectResponse.json();
+          
+          // Safely parse JSON
+          const detectText = await detectResponse.text();
+          let detectData;
+          try {
+            detectData = JSON.parse(detectText);
+          } catch (e) {
+            console.error('Failed to parse detection response:', detectText);
+            throw new Error('Invalid JSON response from language detection');
+          }
 
           if (!detectData.success) {
             throw new Error('Language detection failed');
@@ -97,7 +107,15 @@ export function useOutputTranslation(jobId: string) {
               throw new Error(`Translation API error (en): ${enResponse.status}`);
             }
 
-            const enData = await enResponse.json();
+            const enRespText = await enResponse.text();
+            let enData;
+            try {
+              enData = JSON.parse(enRespText);
+            } catch (e) {
+              console.error('Failed to parse EN translation response:', enRespText);
+              throw new Error('Invalid JSON response from EN translation');
+            }
+
             if (enData.success) {
               updatedTextOutputs[i].content.en = enData.translatedText;
             } else {
@@ -121,7 +139,15 @@ export function useOutputTranslation(jobId: string) {
               throw new Error(`Translation API error (zh): ${zhResponse.status}`);
             }
 
-            const zhData = await zhResponse.json();
+            const zhRespText = await zhResponse.text();
+            let zhData;
+            try {
+              zhData = JSON.parse(zhRespText);
+            } catch (e) {
+              console.error('Failed to parse ZH translation response:', zhRespText);
+              throw new Error('Invalid JSON response from ZH translation');
+            }
+
             if (zhData.success) {
               updatedTextOutputs[i].content.zh = zhData.translatedText;
             } else {
