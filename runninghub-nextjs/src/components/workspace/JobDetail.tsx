@@ -248,7 +248,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
               Re-run
             </Button>
           )}
-          {job.status === 'completed' && job.results?.textOutputs && job.results.textOutputs.length > 0 && (
+          {job.status === 'completed' && job.results?.outputs && job.results.outputs.some(o => o.fileType === 'text') && (
             <Button
               onClick={handleTranslate}
               disabled={isTranslating || isTranslatingManual}
