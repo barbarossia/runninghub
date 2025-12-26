@@ -270,27 +270,21 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
 
           {/* Parameters */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium">
-                  {templateLoaded ? 'Step 2: Configure Fields' : 'Input Parameters'}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {templateLoaded
-                    ? 'Customize the loaded fields or add new ones'
-                    : 'Define the inputs this workflow accepts'}
-                </p>
-              </div>
-              <Button onClick={addParameter} size="sm" variant="outline">
-                <Plus className="h-4 w-4 mr-1" />
-                Add Parameter
-              </Button>
+            <div>
+              <h3 className="text-sm font-medium">
+                {templateLoaded ? 'Step 2: Configure Fields' : 'Input Parameters'}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {templateLoaded
+                  ? 'Customize the loaded fields below'
+                  : 'Define the inputs this workflow accepts'}
+              </p>
             </div>
 
             {parameters.length === 0 ? (
               <Card className="p-8 text-center text-gray-500">
                 <p className="text-sm">No parameters defined yet.</p>
-                <p className="text-xs mt-1">Click "Add Parameter" to get started.</p>
+                <p className="text-xs mt-1">Select a workflow template above to load parameters.</p>
               </Card>
             ) : (
               <div className="space-y-3">
