@@ -131,7 +131,6 @@ export default function WorkspacePage() {
               size: file.size || 0,
               width: file.width,
               height: file.height,
-              duration: file.duration,
               fps: file.fps,
               thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
               blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
@@ -439,7 +438,6 @@ export default function WorkspacePage() {
                     selectedFiles={selectedFiles}
                     onRename={handleRenameFile}
                     onDelete={handleDeleteFile}
-                    onPreview={handlePreviewFile}
                   />
                 )}
 

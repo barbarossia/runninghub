@@ -2,9 +2,8 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Trash2,
-  Eye,
   Pencil,
+  Trash2,
   Loader2,
   X,
 } from 'lucide-react';
@@ -36,7 +35,6 @@ interface MediaSelectionToolbarProps {
   selectedFiles: MediaFile[];
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
   onDelete?: (files: MediaFile[]) => Promise<void>;
-  onPreview?: (file: MediaFile) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -45,7 +43,6 @@ export function MediaSelectionToolbar({
   selectedFiles,
   onRename,
   onDelete,
-  onPreview,
   disabled = false,
   className = '',
 }: MediaSelectionToolbarProps) {
@@ -57,13 +54,6 @@ export function MediaSelectionToolbar({
   const [newFileName, setNewFileName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Handle preview
-  const handlePreview = useCallback(() => {
-    if (isSingleSelection && onPreview) {
-      onPreview(selectedFiles[0]);
-    }
-  }, [isSingleSelection, onPreview, selectedFiles]);
 
   // Handle rename
   const handleRename = useCallback(async () => {
@@ -136,20 +126,6 @@ export function MediaSelectionToolbar({
           if (mode === 'expanded-actions') {
             return (
               <>
-                {/* Preview - only for single selection */}
-                {isSingleSelection && onPreview && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePreview}
-                    disabled={toolbarDisabled}
-                    className="h-9 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    Preview
-                  </Button>
-                )}
-
                 {/* Rename - only for single selection */}
                 {isSingleSelection && onRename && (
                   <Button
@@ -184,21 +160,6 @@ export function MediaSelectionToolbar({
           if (mode === 'floating') {
             return (
               <>
-                {/* Preview - only for single selection */}
-                {isSingleSelection && onPreview && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handlePreview}
-                    disabled={toolbarDisabled}
-                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-                    title="Preview"
-                  >
-                    <Eye className="h-3.5 w-3.5 mr-2 text-blue-400" />
-                    <span className="text-xs">Preview</span>
-                  </Button>
-                )}
-
                 {/* Rename - only for single selection */}
                 {isSingleSelection && onRename && (
                   <Button

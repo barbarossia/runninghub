@@ -22,6 +22,7 @@ import {
   Trash2,
   Eye,
   Info,
+  Copy,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Button } from '@/components/ui/button';
@@ -54,7 +55,43 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { API_ENDPOINTS } from '@/constants';
+import { toast } from 'sonner';
 import type { MediaFile } from '@/types/workspace';
+
+// Common aspect ratios
+const COMMON_ASPECT_RATIOS: [number, number, string][] = [
+  [1, 1, '1:1'],
+  [4, 3, '4:3'],
+  [3, 4, '3:4'],
+  [16, 9, '16:9'],
+  [9, 16, '9:16'],
+  [21, 9, '21:9'],
+  [5, 4, '5:4'],
+  [4, 5, '4:5'],
+  [3, 2, '3:2'],
+  [2, 3, '2:3'],
+];
+
+function getAspectRatio(width: number, height: number): string {
+  if (!width || !height) return 'N/A';
+
+  const ratio = width / height;
+
+  // Find the closest common aspect ratio
+  let closestRatio = COMMON_ASPECT_RATIOS[0];
+  let minDiff = Math.abs(ratio - (COMMON_ASPECT_RATIOS[0][0] / COMMON_ASPECT_RATIOS[0][1]));
+
+  for (const [w, h, label] of COMMON_ASPECT_RATIOS) {
+    const diff = Math.abs(ratio - (w / h));
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestRatio = [w, h, label];
+    }
+  }
+
+  // Always return the closest common ratio
+  return closestRatio[2];
+}
 
 export interface MediaGalleryProps {
   onFileClick?: (file: MediaFile) => void;
@@ -92,6 +129,7 @@ export function MediaGallery({
   const [newFileName, setNewFileName] = useState('');
   const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
 
   // Get unique extensions for filter
   const uniqueExtensions = useMemo(() => {
@@ -653,6 +691,7 @@ export function MediaGallery({
           if (!open) {
             setPreviewFile(null);
             setShowMoreDetails(false);
+            setCopiedPath(false);
           }
         }}>
           <DialogContent className="max-w-6xl w-full">
@@ -667,12 +706,12 @@ export function MediaGallery({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left: Preview (2/3 width on large screens) */}
               <div className="lg:col-span-2">
-                <div className="relative bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[400px]">
+                <div className="relative bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
                   {previewFile.type === 'video' ? (
                     <video
                       src={previewFile.blobUrl || ''}
                       controls
-                      className="w-full max-h-[60vh]"
+                      className="w-full max-h-[70vh] object-contain"
                       autoPlay
                     />
                   ) : (
@@ -681,14 +720,14 @@ export function MediaGallery({
                       alt={previewFile.name}
                       width={previewFile.width || 800}
                       height={previewFile.height || 600}
-                      className="w-full h-auto object-contain max-h-[60vh]"
+                      className="w-full h-auto object-contain max-h-[70vh]"
                     />
                   )}
                 </div>
               </div>
 
               {/* Right: Details (1/3 width on large screens) */}
-              <div className="lg:col-span-1 space-y-4">
+              <div className="lg:col-span-1 space-y-4 bg-white p-4 rounded-lg">
                 {/* Basic Info */}
                 <div className="space-y-3">
                   <h3 className="font-semibold text-sm text-gray-700">File Information</h3>
@@ -707,7 +746,10 @@ export function MediaGallery({
                     <div>
                       <span className="text-gray-600 text-xs">File Size</span>
                       <p className="font-medium">
-                        {(previewFile.size / 1024).toFixed(2)} KB
+                        {previewFile.size >= 1024 * 1024
+                          ? `${(previewFile.size / (1024 * 1024)).toFixed(2)} MB`
+                          : `${(previewFile.size / 1024).toFixed(2)} KB`
+                        }
                         <span className="text-gray-500 text-xs ml-1">({previewFile.size.toLocaleString()} bytes)</span>
                       </p>
                     </div>
@@ -743,7 +785,7 @@ export function MediaGallery({
                       <div>
                         <span className="text-gray-600 text-xs">Aspect Ratio</span>
                         <p className="font-medium">
-                          {(previewFile.width / previewFile.height).toFixed(3)}:1
+                          {getAspectRatio(previewFile.width, previewFile.height)}
                         </p>
                       </div>
                     ) : (
@@ -752,20 +794,6 @@ export function MediaGallery({
                         <p className="font-medium text-gray-400">N/A</p>
                       </div>
                     )}
-
-                    {previewFile.duration ? (
-                      <div>
-                        <span className="text-gray-600 text-xs">Duration</span>
-                        <p className="font-medium">
-                          {Math.floor(previewFile.duration / 60)}:{(previewFile.duration % 60).toFixed(2).padStart(5, '0')}
-                        </p>
-                      </div>
-                    ) : previewFile.type === 'video' ? (
-                      <div>
-                        <span className="text-gray-600 text-xs">Duration</span>
-                        <p className="font-medium text-gray-400">N/A</p>
-                      </div>
-                    ) : null}
 
                     {previewFile.fps ? (
                       <div>
@@ -812,7 +840,32 @@ export function MediaGallery({
                         className="space-y-2 text-sm"
                       >
                         <div>
-                          <span className="text-gray-600 text-xs">File Path</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-600 text-xs">File Path</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => {
+                                navigator.clipboard.writeText(previewFile.path);
+                                setCopiedPath(true);
+                                toast.success('File path copied to clipboard');
+                                setTimeout(() => setCopiedPath(false), 2000);
+                              }}
+                            >
+                              {copiedPath ? (
+                                <>
+                                  <Check className="h-3 w-3 mr-1 text-green-600" />
+                                  Copied
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy
+                                </>
+                              )}
+                            </Button>
+                          </div>
                           <p className="font-mono text-xs break-all bg-gray-50 p-2 rounded mt-1 border">
                             {previewFile.path}
                           </p>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
+import { getFileMetadata } from '@/lib/metadata';
 
 async function handleFolderList(folderPath: string, sessionId?: string) {
   try {
@@ -40,6 +41,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         size: number;
         type: 'image';
         extension: string;
+        width?: number;
+        height?: number;
       }>,
       videos: [] as Array<{
         name: string;
@@ -47,6 +50,9 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         size: number;
         type: 'video';
         extension: string;
+        width?: number;
+        height?: number;
+        fps?: number;
       }>,
       current_path: folder,
       parent_path: path.dirname(folder) !== folder ? path.dirname(folder) : null,
@@ -73,20 +79,31 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
             const supportedVideoExtensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv'];
 
             if (supportedImageExtensions.includes(extension)) {
+              // Extract image metadata
+              const metadata = await getFileMetadata(itemPath, 'image');
+
               contents.images.push({
                 name: item,
                 path: itemPath,
                 size: itemStats.size,
                 type: 'image',
                 extension,
+                width: metadata?.width,
+                height: metadata?.height,
               });
             } else if (supportedVideoExtensions.includes(extension)) {
+              // Extract video metadata
+              const metadata = await getFileMetadata(itemPath, 'video') as any;
+
               contents.videos.push({
                 name: item,
                 path: itemPath,
                 size: itemStats.size,
                 type: 'video',
                 extension,
+                width: metadata?.width,
+                height: metadata?.height,
+                fps: metadata?.fps,
               });
             }
           }
