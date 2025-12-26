@@ -244,42 +244,52 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
         onDragOver={(e) => handleDragOver(e, param.id)}
         onDragLeave={handleDragLeave}
       >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {getInputIcon(param.type)}
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-sm">{param.name}</span>
-                {param.required && <Badge variant="destructive" className="text-xs">Required</Badge>}
-                {!param.required && <Badge variant="secondary" className="text-xs">Optional</Badge>}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm truncate">{param.name}</span>
+                {param.required && <Badge variant="destructive" className="text-xs shrink-0">Required</Badge>}
+                {!param.required && <Badge variant="secondary" className="text-xs shrink-0">Optional</Badge>}
               </div>
               {param.description && (
-                <p className="text-xs text-gray-500 mt-1">{param.description}</p>
+                <p className="text-xs text-gray-500 mt-1 truncate">{param.description}</p>
               )}
             </div>
           </div>
 
           {/* Validation status */}
           {assigned.length > 0 && (
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
           )}
           {param.required && assigned.length === 0 && (
-            <AlertTriangle className="h-5 w-5 text-yellow-600" />
+            <AlertTriangle className="h-5 w-5 text-yellow-600 shrink-0" />
           )}
         </div>
 
         {/* Assigned files */}
         {assigned.length > 0 && (
-          <div className="space-y-2 mb-3">
+          <div className="grid grid-cols-1 gap-2 mb-3">
             {assigned.map((assignment) => (
-              <Card key={assignment.filePath} className="p-2 flex items-center gap-2 bg-gray-50">
-                {assignment.fileType === 'image' ? (
-                  <ImageIcon className="h-4 w-4 text-blue-600" />
-                ) : (
-                  <Video className="h-4 w-4 text-purple-600" />
-                )}
-                <span className="text-sm flex-1 truncate">{assignment.fileName}</span>
-                <span className="text-xs text-gray-500">{formatFileSize(assignment.fileSize)}</span>
+              <Card key={assignment.filePath} className="p-2 flex items-center gap-3 bg-gray-50">
+                <div className="relative h-10 w-10 shrink-0 rounded overflow-hidden bg-gray-200">
+                  {assignment.fileType === 'image' ? (
+                    <img
+                      src={`/api/images/serve?path=${encodeURIComponent(assignment.filePath)}`}
+                      alt={assignment.fileName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full w-full text-gray-400">
+                      <Video className="h-5 w-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{assignment.fileName}</p>
+                  <p className="text-xs text-gray-500">{formatFileSize(assignment.fileSize)}</p>
+                </div>
                 {!assignment.valid && (
                   <Badge variant="destructive" className="text-xs">
                     {assignment.validationError}
@@ -288,10 +298,10 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6"
+                  className="h-8 w-8"
                   onClick={() => removeFileAssignment(assignment.filePath)}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </Card>
             ))}
@@ -373,23 +383,23 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
 
     return (
       <div key={param.id} className="border rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {getInputIcon(param.type)}
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-sm">{param.name}</span>
-                {param.required && <Badge variant="destructive" className="text-xs">Required</Badge>}
-                {!param.required && <Badge variant="secondary" className="text-xs">Optional</Badge>}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm truncate">{param.name}</span>
+                {param.required && <Badge variant="destructive" className="text-xs shrink-0">Required</Badge>}
+                {!param.required && <Badge variant="secondary" className="text-xs shrink-0">Optional</Badge>}
               </div>
               {param.description && (
-                <p className="text-xs text-gray-500 mt-1">{param.description}</p>
+                <p className="text-xs text-gray-500 mt-1 truncate">{param.description}</p>
               )}
             </div>
           </div>
 
           {/* Validation status */}
-          {value && <CheckCircle2 className={cn('h-5 w-5', isValid ? 'text-green-600' : 'text-yellow-600')} />}
+          {value && <CheckCircle2 className={cn('h-5 w-5 shrink-0', isValid ? 'text-green-600' : 'text-yellow-600')} />}
         </div>
 
         {param.type === 'boolean' ? (

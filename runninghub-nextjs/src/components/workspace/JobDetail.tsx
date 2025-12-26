@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ArrowLeft,
   RefreshCw,
@@ -21,6 +21,7 @@ import {
   Loader2,
   ArrowRightLeft,
   Clock,
+  Save,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -28,12 +29,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { downloadFile } from '@/lib/download';
 import { useOutputTranslation } from '@/hooks/useOutputTranslation';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
-import type { Job } from '@/types/workspace';
+import type { Job, JobResult } from '@/types/workspace';
 
 export interface JobDetailProps {
   jobId: string;
@@ -45,54 +47,80 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const { getJobById, reRunJob, deleteJob, updateJob } = useWorkspaceStore();
   const [isReRunning, setIsReRunning] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // State for split view language selection
   const [leftLang, setLeftLang] = useState<'original' | 'en' | 'zh'>('original');
   const [rightLang, setRightLang] = useState<'original' | 'en' | 'zh'>('zh');
+
+  // Local state for editable text outputs
+  const [editedText, setEditedText] = useState<Record<string, { original: string; en?: string; zh?: string }>>({});
+  const [translating, setTranslating] = useState<Record<string, 'left' | 'right' | null>>({});
+  const [debouncedTimers, setDebouncedTimers] = useState<Record<string, NodeJS.Timeout>>({});
 
   // Auto-translate outputs (uses server-side API)
   const { isTranslating, translatedCount } = useOutputTranslation(jobId);
 
   const job = getJobById(jobId);
 
-  // Fetch job results when job is completed and results are not loaded
+  // Initialize editedText when job results load
   useEffect(() => {
-    const fetchJobResults = async () => {
-      if (!job || job.status !== 'completed' || job.results || isLoadingResults) {
-        return;
-      }
+    if (job?.results?.textOutputs) {
+      const initial: Record<string, { original: string; en?: string; zh?: string }> = {};
+      job.results.textOutputs.forEach(output => {
+        initial[output.filePath] = { ...output.content };
+      });
+      setEditedText(initial);
+    }
+  }, [job?.results?.textOutputs]);
 
-      setIsLoadingResults(true);
-
-      try {
-        const response = await fetch(`${API_ENDPOINTS.WORKSPACE_JOB_RESULTS}?jobId=${jobId}`);
-        
-        if (!response.ok) {
-           throw new Error(`Results API error: ${response.status}`);
-        }
-
-        const textData = await response.text();
-        let data;
-        try {
-          data = JSON.parse(textData);
-        } catch (e) {
-          console.error('Failed to parse results response:', textData);
-          throw new Error('Invalid JSON response from results API');
-        }
-
-        if (data.success && data.results) {
-          // Update job with results
-          updateJob(jobId, { results: data.results });
-        }
-      } catch (error) {
-        console.error('Failed to fetch job results:', error);
-      } finally {
-        setIsLoadingResults(false);
-      }
+  // Cleanup debounced timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debouncedTimers).forEach(timer => clearTimeout(timer));
     };
+  }, [debouncedTimers]);
 
-    fetchJobResults();
-  }, [job, jobId, updateJob, isLoadingResults]);
+  // Fetch job results when job is completed and results are not loaded
+  const fetchResults = useCallback(async () => {
+    if (!job || job.status !== 'completed' || isLoadingResults) {
+      return;
+    }
+
+    setIsLoadingResults(true);
+
+    try {
+      const response = await fetch(`${API_ENDPOINTS.WORKSPACE_JOB_RESULTS}?jobId=${jobId}`);
+      
+      if (!response.ok) {
+         throw new Error(`Results API error: ${response.status}`);
+      }
+
+      const textData = await response.text();
+      let data;
+      try {
+        data = JSON.parse(textData);
+      } catch (e) {
+        console.error('Failed to parse results response:', textData);
+        throw new Error('Invalid JSON response from results API');
+      }
+
+      if (data.success && data.results) {
+        // Update job with results
+        updateJob(jobId, { results: data.results });
+      }
+    } catch (error) {
+      console.error('Failed to fetch job results:', error);
+    } finally {
+      setIsLoadingResults(false);
+    }
+  }, [jobId, job?.status, updateJob, isLoadingResults]);
+
+  useEffect(() => {
+    if (job && job.status === 'completed' && !job.results) {
+      fetchResults();
+    }
+  }, [job, fetchResults]);
 
   if (!job) {
     return (
@@ -137,6 +165,137 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       toast.success('Download started');
     } catch (error) {
       toast.error('Download failed');
+    }
+  };
+
+  // Handle text edit with real-time translation
+  const handleTextEdit = (filePath: string, lang: 'original' | 'en' | 'zh', value: string, pane: 'left' | 'right') => {
+    // Update the edited text immediately
+    setEditedText(prev => ({
+      ...prev,
+      [filePath]: {
+        ...prev[filePath],
+        [lang]: value
+      }
+    }));
+
+    // Clear existing timer for this file/pane combination
+    const timerKey = `${filePath}-${pane}`;
+    if (debouncedTimers[timerKey]) {
+      clearTimeout(debouncedTimers[timerKey]);
+    }
+
+    // Debounce translation (500ms delay)
+    const timer = setTimeout(async () => {
+      // Determine target language based on pane
+      const otherPane = pane === 'left' ? rightLang : leftLang;
+
+      // Skip if the other pane is 'original' or same language
+      if (otherPane === 'original' || otherPane === lang) {
+        return;
+      }
+
+      // Show translating state
+      setTranslating(prev => ({ ...prev, [filePath]: pane }));
+
+      try {
+        // Detect language of the input
+        const detectResponse = await fetch(`/api/translate?text=${encodeURIComponent(value.slice(0, 500))}`);
+        if (!detectResponse.ok) {
+          throw new Error('Language detection failed');
+        }
+
+        const detectData = await detectResponse.json();
+        if (!detectData.success) {
+          throw new Error('Language detection failed');
+        }
+
+        const sourceLang = detectData.detectedLang;
+
+        // Translate to the other pane's language
+        const translateResponse = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: value,
+            sourceLang: sourceLang === 'en' || sourceLang === 'zh' ? sourceLang : 'autodetect',
+            targetLang: otherPane,
+          }),
+        });
+
+        if (!translateResponse.ok) {
+          throw new Error('Translation failed');
+        }
+
+        const translateData = await translateResponse.json();
+        if (!translateData.success) {
+          throw new Error(translateData.error || 'Translation failed');
+        }
+
+        // Update the other pane with translated text
+        setEditedText(prev => ({
+          ...prev,
+          [filePath]: {
+            ...prev[filePath],
+            [otherPane]: translateData.translatedText
+          }
+        }));
+      } catch (error) {
+        console.error('Real-time translation error:', error);
+        // Don't show error to user on every keystroke, just log it
+      } finally {
+        setTranslating(prev => ({ ...prev, [filePath]: null }));
+      }
+    }, 500);
+
+    setDebouncedTimers(prev => ({ ...prev, [timerKey]: timer }));
+  };
+
+  // Handle save text changes
+  const handleSaveText = async (filePath: string, lang: 'original' | 'en' | 'zh') => {
+    const content = editedText[filePath]?.[lang];
+    if (content === undefined) return;
+
+    setIsSaving(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_UPDATE_CONTENT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath, content })
+      });
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Save failed');
+
+      toast.success('File updated successfully');
+      
+      // Update local store state too so it's persistent across re-renders
+      if (job.results?.textOutputs) {
+        const newTextOutputs = job.results.textOutputs.map(output => {
+          if (output.filePath === filePath) {
+            return {
+              ...output,
+              content: {
+                ...output.content,
+                [lang]: content
+              }
+            };
+          }
+          return output;
+        });
+        
+        updateJob(jobId, {
+          results: {
+            ...job.results,
+            textOutputs: newTextOutputs
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Failed to save text:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save text');
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -220,7 +379,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
              <div key={index} className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                {input.fileType === 'image' ? (
                  <img
-                   src={`/api/workspace/serve-output?path=${encodeURIComponent(input.filePath)}`}
+                   src={`/api/images/serve?path=${encodeURIComponent(input.filePath)}`}
                    alt={input.fileName}
                    className="object-cover w-full h-full"
                  />
@@ -280,34 +439,61 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                <Card className="flex flex-col overflow-hidden bg-white">
                  <div className="p-2 border-b bg-gray-50 flex justify-between items-center text-xs font-medium text-gray-500">
                     <span className="uppercase">{leftLang}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6"
-                      onClick={() => {
-                        const content = job.results?.textOutputs?.map(t => 
-                          leftLang === 'original' ? t.content.original : (t.content[leftLang] || '')
-                        ).join('\n\n') || '';
-                        navigator.clipboard.writeText(content);
-                        toast.success('Copied');
-                      }}
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 text-blue-600 hover:text-blue-700"
+                        title="Save changes to original file"
+                        onClick={() => {
+                          // Find the first output for now - in reality might need more complex UI
+                          const output = job.results?.textOutputs?.[0];
+                          if (output) handleSaveText(output.filePath, leftLang);
+                        }}
+                      >
+                        <Save className="h-3 w-3" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const content = job.results?.textOutputs?.map(t => 
+                            editedText[t.filePath]?.[leftLang] || t.content[leftLang as keyof typeof t.content] || ''
+                          ).join('\n\n') || '';
+                          navigator.clipboard.writeText(content);
+                          toast.success('Copied');
+                        }}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
                  </div>
-                 <div className="flex-1 p-4 overflow-y-auto font-mono text-sm whitespace-pre-wrap">
+                 <div className="flex-1 p-0 overflow-hidden flex flex-col">
                    {job.results.textOutputs.map((output, idx) => {
-                     const content = leftLang === 'original' ? output.content.original : output.content[leftLang];
-                     
-                     if (content) return <div key={idx} className="mb-4 last:mb-0">{content}</div>;
-                     
-                     if (output.translationError) {
-                        return <div key={idx} className="mb-4 last:mb-0 text-red-500 italic">Error: {output.translationError}</div>;
-                     }
-                     if (isTranslating && !output.autoTranslated) {
-                        return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translating...</div>;
-                     }
-                     return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translation not available</div>;
+                     const originalContent = leftLang === 'original' ? output.content.original : output.content[leftLang as keyof typeof output.content] || '';
+                     const currentVal = editedText[output.filePath]?.[leftLang] ?? originalContent;
+                     const isPaneTranslating = translating[output.filePath] === 'left';
+
+                     return (
+                        <div key={idx} className="flex-1 flex flex-col min-h-0 relative">
+                          <Textarea
+                            value={currentVal}
+                            onChange={(e) => handleTextEdit(output.filePath, leftLang, e.target.value, 'left')}
+                            className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm"
+                            placeholder="No content available..."
+                          />
+                          {isPaneTranslating && (
+                            <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Translating...
+                            </div>
+                          )}
+                          {output.translationError && leftLang !== 'original' && (
+                            <div className="p-2 text-xs text-red-500 italic bg-red-50">Error: {output.translationError}</div>
+                          )}
+                        </div>
+                     );
                    })}
                  </div>
                </Card>
@@ -316,34 +502,60 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                <Card className="flex flex-col overflow-hidden bg-gray-50">
                  <div className="p-2 border-b bg-gray-100 flex justify-between items-center text-xs font-medium text-gray-500">
                     <span className="uppercase">{rightLang}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6"
-                      onClick={() => {
-                         const content = job.results?.textOutputs?.map(t => 
-                          rightLang === 'original' ? t.content.original : (t.content[rightLang] || '')
-                        ).join('\n\n') || '';
-                        navigator.clipboard.writeText(content);
-                        toast.success('Copied');
-                      }}
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 text-blue-600 hover:text-blue-700"
+                        title="Save changes to original file"
+                        onClick={() => {
+                          const output = job.results?.textOutputs?.[0];
+                          if (output) handleSaveText(output.filePath, rightLang);
+                        }}
+                      >
+                        <Save className="h-3 w-3" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6"
+                        onClick={() => {
+                          const content = job.results?.textOutputs?.map(t => 
+                            editedText[t.filePath]?.[rightLang] || t.content[rightLang as keyof typeof t.content] || ''
+                          ).join('\n\n') || '';
+                          navigator.clipboard.writeText(content);
+                          toast.success('Copied');
+                        }}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
                  </div>
-                 <div className="flex-1 p-4 overflow-y-auto font-mono text-sm whitespace-pre-wrap">
-                   {job.results.textOutputs.map((output, idx) => {
-                     const content = rightLang === 'original' ? output.content.original : output.content[rightLang];
-                     
-                     if (content) return <div key={idx} className="mb-4 last:mb-0">{content}</div>;
-                     
-                     if (output.translationError) {
-                        return <div key={idx} className="mb-4 last:mb-0 text-red-500 italic">Error: {output.translationError}</div>;
-                     }
-                     if (isTranslating && !output.autoTranslated) {
-                        return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translating...</div>;
-                     }
-                     return <div key={idx} className="mb-4 last:mb-0 text-gray-400 italic">Translation not available</div>;
+                 <div className="flex-1 p-0 overflow-hidden flex flex-col">
+                    {job.results.textOutputs.map((output, idx) => {
+                     const originalContent = rightLang === 'original' ? output.content.original : output.content[rightLang as keyof typeof output.content] || '';
+                     const currentVal = editedText[output.filePath]?.[rightLang] ?? originalContent;
+                     const isPaneTranslating = translating[output.filePath] === 'right';
+
+                     return (
+                        <div key={idx} className="flex-1 flex flex-col min-h-0 relative">
+                          <Textarea
+                            value={currentVal}
+                            onChange={(e) => handleTextEdit(output.filePath, rightLang, e.target.value, 'right')}
+                            className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm bg-transparent"
+                            placeholder="No content available..."
+                          />
+                          {isPaneTranslating && (
+                            <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Translating...
+                            </div>
+                          )}
+                          {output.translationError && rightLang !== 'original' && (
+                            <div className="p-2 text-xs text-red-500 italic bg-red-50">Error: {output.translationError}</div>
+                          )}
+                        </div>
+                     );
                    })}
                  </div>
                </Card>
@@ -372,7 +584,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                       {output.fileType === 'image' && output.workspacePath && (
                          <div className="relative aspect-video bg-gray-100 rounded overflow-hidden">
                            <img
-                             src={`/api/workspace/serve-output?path=${encodeURIComponent(output.workspacePath)}`}
+                             src={`/api/images/serve?path=${encodeURIComponent(output.workspacePath)}`}
                              alt={output.fileName}
                              className="object-contain w-full h-full"
                            />

@@ -1,10 +1,171 @@
 /**
  * Hook for auto-translating job text outputs
  * Uses server-side translation API (no Chrome AI required)
+ * Handles text chunking for files exceeding API limits
  */
 
 import { useEffect, useState, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
+
+const MYMEMORY_LIMIT = 500; // MyMemory API character limit per request
+const CHUNK_OVERLAP = 50; // Overlap between chunks to maintain context
+const RATE_LIMIT_DELAY = 1000; // Delay between requests to avoid rate limiting
+
+/**
+ * Split text into chunks that respect the API limit
+ * Tries to split at sentence boundaries when possible
+ */
+function splitTextIntoChunks(text: string): string[] {
+  // If text is within limit, return as-is
+  if (text.length <= MYMEMORY_LIMIT) {
+    return [text];
+  }
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    // If remaining text is short enough, take it all
+    if (remaining.length <= MYMEMORY_LIMIT) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Take a chunk of MYMEMORY_LIMIT - CHUNK_OVERLAP characters
+    let chunkEnd = MYMEMORY_LIMIT - CHUNK_OVERLAP;
+
+    // Try to find a sentence boundary near the chunk end
+    const sentenceEnds = ['.', '!', '?', '\n'];
+    let bestEnd = chunkEnd;
+
+    for (const ending of sentenceEnds) {
+      const pos = remaining.lastIndexOf(ending, chunkEnd);
+      if (pos > chunkEnd - 100 && pos > 0) {
+        bestEnd = pos + 1;
+        break;
+      }
+    }
+
+    // If no good boundary found, try to find a space
+    if (bestEnd === chunkEnd) {
+      const spacePos = remaining.lastIndexOf(' ', chunkEnd);
+      if (spacePos > chunkEnd - 100 && spacePos > 0) {
+        bestEnd = spacePos + 1;
+      }
+    }
+
+    chunks.push(remaining.slice(0, bestEnd));
+    remaining = remaining.slice(bestEnd);
+  }
+
+  return chunks;
+}
+
+/**
+ * Translate a single text with chunking support
+ */
+async function translateText(
+  text: string,
+  sourceLang: string,
+  targetLang: string,
+  onProgress?: (chunk: number, total: number) => void
+): Promise<string> {
+  const chunks = splitTextIntoChunks(text);
+
+  if (chunks.length === 1) {
+    // No chunking needed
+    const response = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        sourceLang,
+        targetLang,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Translation API error: ${response.status}`);
+    }
+
+    const respText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(respText);
+    } catch (e) {
+      console.error('Failed to parse translation response:', respText);
+      throw new Error('Invalid JSON response from translation API');
+    }
+
+    if (!data.success) {
+      throw new Error(data.error || 'Translation failed');
+    }
+
+    return data.translatedText;
+  }
+
+  // Translate chunks and combine results
+  const translatedChunks: string[] = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    onProgress?.(i + 1, chunks.length);
+
+    const response = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: chunks[i],
+        sourceLang,
+        targetLang,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Translation API error (chunk ${i + 1}/${chunks.length}): ${response.status}`);
+    }
+
+    const respText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(respText);
+    } catch (e) {
+      console.error('Failed to parse translation response:', respText);
+      throw new Error(`Invalid JSON response (chunk ${i + 1}/${chunks.length})`);
+    }
+
+    if (!data.success) {
+      throw new Error(data.error || `Translation failed (chunk ${i + 1}/${chunks.length})`);
+    }
+
+    translatedChunks.push(data.translatedText);
+
+    // Rate limiting delay between chunks (except for last chunk)
+    if (i < chunks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+    }
+  }
+
+  // Combine chunks, removing overlap from all but first chunk
+  let combined = translatedChunks[0] || '';
+  for (let i = 1; i < translatedChunks.length; i++) {
+    const chunk = translatedChunks[i];
+    // Find the overlap position
+    let overlapPos = 0;
+    const minOverlap = Math.min(CHUNK_OVERLAP, chunk.length);
+
+    for (let j = minOverlap; j >= 0; j--) {
+      const chunkStart = chunk.slice(0, j);
+      if (combined.endsWith(chunkStart)) {
+        overlapPos = j;
+        break;
+      }
+    }
+
+    combined += chunk.slice(overlapPos);
+  }
+
+  return combined;
+}
 
 export function useOutputTranslation(jobId: string) {
   const { getJobById, updateJob } = useWorkspaceStore();
@@ -61,14 +222,14 @@ export function useOutputTranslation(jobId: string) {
         const originalText = textOutput.content.original;
 
         try {
-          // Detect language (truncate for detection to save bandwidth/url length)
+          // Detect language (use first 500 chars for detection)
           const detectTextSlice = originalText.slice(0, 500);
           const detectResponse = await fetch(`/api/translate?text=${encodeURIComponent(detectTextSlice)}`);
-          
+
           if (!detectResponse.ok) {
             throw new Error(`Language detection API error: ${detectResponse.status}`);
           }
-          
+
           // Safely parse JSON
           const detectText = await detectResponse.text();
           let detectData;
@@ -85,75 +246,30 @@ export function useOutputTranslation(jobId: string) {
 
           const detectedLang = detectData.detectedLang;
 
-          // Set original text to detected language key if applicable
-          if (detectedLang === 'en') {
-             updatedTextOutputs[i].content.en = originalText;
-          } else if (detectedLang === 'zh') {
-             updatedTextOutputs[i].content.zh = originalText;
-          }
-
           // Translate to English if not already English
           if (detectedLang !== 'en' && !textOutput.content.en) {
-            const enResponse = await fetch('/api/translate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: originalText,
-                sourceLang: detectedLang,
-                targetLang: 'en',
-              }),
-            });
-
-            if (!enResponse.ok) {
-              throw new Error(`Translation API error (en): ${enResponse.status}`);
-            }
-
-            const enRespText = await enResponse.text();
-            let enData;
-            try {
-              enData = JSON.parse(enRespText);
-            } catch (e) {
-              console.error('Failed to parse EN translation response:', enRespText);
-              throw new Error('Invalid JSON response from EN translation');
-            }
-
-            if (enData.success) {
-              updatedTextOutputs[i].content.en = enData.translatedText;
-            } else {
-              throw new Error(enData.error || 'English translation failed');
-            }
+            const enText = await translateText(
+              originalText,
+              detectedLang,
+              'en',
+              (chunk, total) => {
+                console.log(`Translating to English: ${chunk}/${total} chunks`);
+              }
+            );
+            updatedTextOutputs[i].content.en = enText;
           }
 
           // Translate to Chinese if not already Chinese
           if (detectedLang !== 'zh' && !textOutput.content.zh) {
-            const zhResponse = await fetch('/api/translate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                text: originalText,
-                sourceLang: detectedLang,
-                targetLang: 'zh',
-              }),
-            });
-
-            if (!zhResponse.ok) {
-              throw new Error(`Translation API error (zh): ${zhResponse.status}`);
-            }
-
-            const zhRespText = await zhResponse.text();
-            let zhData;
-            try {
-              zhData = JSON.parse(zhRespText);
-            } catch (e) {
-              console.error('Failed to parse ZH translation response:', zhRespText);
-              throw new Error('Invalid JSON response from ZH translation');
-            }
-
-            if (zhData.success) {
-              updatedTextOutputs[i].content.zh = zhData.translatedText;
-            } else {
-              throw new Error(zhData.error || 'Chinese translation failed');
-            }
+            const zhText = await translateText(
+              originalText,
+              detectedLang,
+              'zh',
+              (chunk, total) => {
+                console.log(`Translating to Chinese: ${chunk}/${total} chunks`);
+              }
+            );
+            updatedTextOutputs[i].content.zh = zhText;
           }
 
           updatedTextOutputs[i].autoTranslated = true;
@@ -167,6 +283,11 @@ export function useOutputTranslation(jobId: string) {
               textOutputs: updatedTextOutputs,
             },
           });
+
+          // Small delay between files to avoid rate limiting
+          if (i < updatedTextOutputs.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+          }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error(`Translation failed for ${textOutput.fileName}:`, errorMessage, error);

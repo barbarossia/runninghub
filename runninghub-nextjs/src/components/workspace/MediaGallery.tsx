@@ -448,13 +448,13 @@ export function MediaGallery({
                       <div className="flex-1 min-w-0">
                         <p
                           className={cn(
-                            'text-sm font-bold truncate',
+                            'text-sm font-bold line-clamp-1',
                             isSelected ? 'text-blue-700' : 'text-gray-900'
                           )}
                         >
                           {file.name}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">{file.path}</p>
+                        <p className="text-xs text-gray-500 line-clamp-1">{file.path}</p>
                       </div>
 
                       {/* Badge */}
@@ -609,14 +609,14 @@ export function MediaGallery({
                   >
                     <p
                       className={cn(
-                        'text-xs font-bold truncate',
+                        'text-xs font-bold line-clamp-1 h-4', // Added h-4 for consistent height
                         isSelected ? 'text-blue-800' : 'text-gray-900'
                       )}
                       title={file.name}
                     >
                       {file.name}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 line-clamp-1 h-4"> // Added h-4 for consistent height
                       {(file.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
