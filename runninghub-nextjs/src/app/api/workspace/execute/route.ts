@@ -5,6 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
+import { spawn } from 'child_process';
+import { writeLog } from '@/lib/logger';
+import { initTask, updateTask } from '@/lib/task-store';
 import type {
   ExecuteJobRequest,
   ExecuteJobResponse,
@@ -23,7 +26,7 @@ export async function POST(request: NextRequest) {
       } as ExecuteJobResponse, { status: 400 });
     }
 
-    if (!body.fileInputs && !body.textInputs) {
+    if ((!body.fileInputs || body.fileInputs.length === 0) && (!body.textInputs || Object.keys(body.textInputs).length === 0)) {
       return NextResponse.json({
         success: false,
         error: 'No inputs provided',
@@ -34,42 +37,45 @@ export async function POST(request: NextRequest) {
     const taskId = `workspace_job_${Date.now()}_${randomUUID().substring(0, 8)}`;
     const jobId = `job_${Date.now()}_${randomUUID().substring(0, 8)}`;
 
-    // Create job object
-    const job: Job = {
-      id: jobId,
-      workflowId: body.workflowId,
-      workflowName: body.workflowId, // Will be updated from workflow store
-      fileInputs: (body.fileInputs || []).map((input) => ({
-        ...input,
-        fileName: '', // Will be populated from file path
-        fileSize: 0, // Will be populated from file stats
-        fileType: 'image', // Default, will be validated
-        valid: true, // Will be validated
-      })),
-      textInputs: body.textInputs || {},
-      status: 'pending',
-      taskId,
-      createdAt: Date.now(),
-      folderPath: body.folderPath,
-      deleteSourceFiles: body.deleteSourceFiles || false,
+    // Initialize task in store
+    await initTask(taskId, (body.fileInputs?.length || 0) + Object.keys(body.textInputs || {}).length);
+
+    // Prepare environment
+    const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+    const workflowId = process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID; // Base workflow ID (might be overridden by body.workflowId if needed, but usually workspace uses specific one)
+    // Note: The CLI uses RUNNINGHUB_WORKFLOW_ID from env. If the user selected a specific workflow, 
+    // we might need to override it in the env passed to the child process.
+    // However, the workspace allows selecting different workflows. 
+    // If the selected workflow has a different ID, we should use that.
+    
+    const apiHost = process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
+    const downloadDir = process.env.RUNNINGHUB_DOWNLOAD_DIR;
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      RUNNINGHUB_API_KEY: apiKey!,
+      RUNNINGHUB_WORKFLOW_ID: body.workflowId, // Use the selected workflow ID
+      RUNNINGHUB_API_HOST: apiHost,
     };
 
-    // TODO: Get workflow name from store (would need store access here)
-    // For now, use the workflow ID as the name
+    if (downloadDir) {
+      env.RUNNINGHUB_DOWNLOAD_DIR = downloadDir;
+    }
 
-    // TODO: Execute Python CLI with workflow ID and inputs
-    // This would involve:
-    // 1. Spawning a Python process
-    // 2. Passing workflow ID, input files, and text parameters
-    // 3. Monitoring the task completion
-    // 4. Handling post-processing cleanup (delete source files if requested)
+    // Start background processing
+    processWorkflowInBackground(
+      taskId, 
+      body.fileInputs || [], 
+      body.textInputs || {}, 
+      body.deleteSourceFiles || false,
+      env
+    );
 
-    // For now, return the job details (execution will be handled separately)
     return NextResponse.json({
       success: true,
       taskId,
       jobId,
-      message: 'Job created successfully',
+      message: 'Job started successfully',
     } as ExecuteJobResponse);
 
   } catch (error) {
@@ -78,5 +84,100 @@ export async function POST(request: NextRequest) {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to execute job',
     } as ExecuteJobResponse, { status: 500 });
+  }
+}
+
+async function processWorkflowInBackground(
+  taskId: string,
+  fileInputs: Array<{ parameterId: string; filePath: string }>,
+  textInputs: Record<string, string>,
+  deleteSourceFiles: boolean,
+  env: NodeJS.ProcessEnv
+) {
+  try {
+    await writeLog(`=== WORKFLOW JOB STARTED: ${taskId} ===`, 'info', taskId);
+    await writeLog(`Files: ${fileInputs.length}, Text Inputs: ${Object.keys(textInputs).length}`, 'info', taskId);
+    await updateTask(taskId, { status: 'processing', completedCount: 0 });
+
+    const args = ["-m", "runninghub_cli.cli", "process-multiple"];
+
+    // Add file inputs
+    for (const input of fileInputs) {
+      // Format: <node_id>:<file_path>
+      args.push("--image", `${input.parameterId}:${input.filePath}`);
+    }
+
+    // Add text inputs
+    for (const [paramId, value] of Object.entries(textInputs)) {
+      // Format: <node_id>:text:<value>
+      args.push("-p", `${paramId}:text:${value}`);
+    }
+
+    // Add common flags
+    args.push("--json"); // Output JSON for better parsing (though we rely on logs mostly)
+    
+    // Note: process-multiple in CLI currently doesn't support --no-cleanup or auto-download explicitly in arguments
+    // as per the inspected code, but we will run it.
+
+    await writeLog(`Executing command: python ${args.join(' ')}`, 'info', taskId);
+
+    const childProcess = spawn("python", args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    childProcess.stdout?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stdout += text;
+      writeLog(text.trim(), 'info', taskId);
+    });
+
+    childProcess.stderr?.on("data", (data: Buffer) => {
+      const text = data.toString();
+      stderr += text;
+      writeLog(text.trim(), 'warning', taskId);
+    });
+
+    childProcess.on("close", async (code) => {
+      if (code === 0) {
+        await writeLog("Workflow execution completed successfully", 'success', taskId);
+        await updateTask(taskId, { status: 'completed', completedCount: fileInputs.length + Object.keys(textInputs).length });
+        
+        // Handle post-processing (cleanup) if needed
+        if (deleteSourceFiles) {
+          await writeLog("Cleaning up source files...", 'info', taskId);
+          try {
+             const fs = await import("fs/promises");
+             for (const input of fileInputs) {
+               try {
+                 await fs.unlink(input.filePath);
+                 await writeLog(`Deleted: ${input.filePath}`, 'info', taskId);
+               } catch (e) {
+                 await writeLog(`Failed to delete ${input.filePath}: ${e}`, 'warning', taskId);
+               }
+             }
+          } catch (e) {
+            await writeLog(`Cleanup failed: ${e}`, 'error', taskId);
+          }
+        }
+
+      } else {
+        await writeLog(`Workflow execution failed with code ${code}`, 'error', taskId);
+        await updateTask(taskId, { status: 'failed', error: `Exit code ${code}` });
+      }
+    });
+
+    childProcess.on("error", async (error) => {
+      await writeLog(`Process error: ${error.message}`, 'error', taskId);
+      await updateTask(taskId, { status: 'failed', error: error.message });
+    });
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    await writeLog(`Job failed to start: ${errorMessage}`, 'error', taskId);
+    await updateTask(taskId, { status: 'failed', error: errorMessage });
   }
 }
