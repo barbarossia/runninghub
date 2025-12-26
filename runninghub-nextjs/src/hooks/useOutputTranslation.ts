@@ -1,13 +1,12 @@
 /**
  * Hook for auto-translating job text outputs
+ * Uses server-side translation API (no Chrome AI required)
  */
 
 import { useEffect, useState, useMemo } from 'react';
-import { useTranslation } from './useTranslation';
 import { useWorkspaceStore } from '@/store/workspace-store';
 
 export function useOutputTranslation(jobId: string) {
-  const { toEnglish, toChinese, isChromeAIAvailable } = useTranslation();
   const { getJobById, updateJob } = useWorkspaceStore();
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedCount, setTranslatedCount] = useState(0);
@@ -26,12 +25,11 @@ export function useOutputTranslation(jobId: string) {
     // 1. Job is completed
     // 2. Has text outputs
     // 3. Not already translated (check ALL outputs)
-    // 4. Chrome AI is available
     if (
-      !job?.results?.textOutputs ||
+      !job?.results ||
+      !job.results.textOutputs ||
       job.results.textOutputs.length === 0 ||
-      job.status !== 'completed' ||
-      !isChromeAIAvailable
+      job.status !== 'completed'
     ) {
       return;
     }
@@ -42,11 +40,14 @@ export function useOutputTranslation(jobId: string) {
       return;
     }
 
+    // Store results in local variable to avoid TypeScript errors
+    const jobResults = job.results;
+
     const translateOutputs = async () => {
       setIsTranslating(true);
       setTranslatedCount(0);
 
-      const updatedTextOutputs = [...(job.results!.textOutputs || [])];
+      const updatedTextOutputs = [...(jobResults.textOutputs || [])];
       let translated = 0;
 
       for (let i = 0; i < updatedTextOutputs.length; i++) {
@@ -60,22 +61,71 @@ export function useOutputTranslation(jobId: string) {
         const originalText = textOutput.content.original;
 
         try {
-          // Detect language first
-          const detectedLang = detectLanguage(originalText);
+          // Detect language
+          const detectResponse = await fetch(`/api/translate?text=${encodeURIComponent(originalText)}`);
+          if (!detectResponse.ok) {
+            throw new Error(`Language detection API error: ${detectResponse.status}`);
+          }
+          const detectData = await detectResponse.json();
+
+          if (!detectData.success) {
+            throw new Error('Language detection failed');
+          }
+
+          const detectedLang = detectData.detectedLang;
+
+          // Set original text to detected language key if applicable
+          if (detectedLang === 'en') {
+             updatedTextOutputs[i].content.en = originalText;
+          } else if (detectedLang === 'zh') {
+             updatedTextOutputs[i].content.zh = originalText;
+          }
 
           // Translate to English if not already English
-          if (detectedLang !== 'en') {
-            const enResult = await toEnglish(originalText, detectedLang);
-            if (enResult.success) {
-              updatedTextOutputs[i].content.en = enResult.translatedText;
+          if (detectedLang !== 'en' && !textOutput.content.en) {
+            const enResponse = await fetch('/api/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: originalText,
+                sourceLang: detectedLang,
+                targetLang: 'en',
+              }),
+            });
+
+            if (!enResponse.ok) {
+              throw new Error(`Translation API error (en): ${enResponse.status}`);
+            }
+
+            const enData = await enResponse.json();
+            if (enData.success) {
+              updatedTextOutputs[i].content.en = enData.translatedText;
+            } else {
+              throw new Error(enData.error || 'English translation failed');
             }
           }
 
           // Translate to Chinese if not already Chinese
-          if (detectedLang !== 'zh') {
-            const zhResult = await toChinese(originalText, detectedLang);
-            if (zhResult.success) {
-              updatedTextOutputs[i].content.zh = zhResult.translatedText;
+          if (detectedLang !== 'zh' && !textOutput.content.zh) {
+            const zhResponse = await fetch('/api/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: originalText,
+                sourceLang: detectedLang,
+                targetLang: 'zh',
+              }),
+            });
+
+            if (!zhResponse.ok) {
+              throw new Error(`Translation API error (zh): ${zhResponse.status}`);
+            }
+
+            const zhData = await zhResponse.json();
+            if (zhData.success) {
+              updatedTextOutputs[i].content.zh = zhData.translatedText;
+            } else {
+              throw new Error(zhData.error || 'Chinese translation failed');
             }
           }
 
@@ -86,18 +136,19 @@ export function useOutputTranslation(jobId: string) {
           // Update job incrementally
           updateJob(jobId, {
             results: {
-              ...job.results!,
+              ...jobResults,
               textOutputs: updatedTextOutputs,
             },
           });
         } catch (error) {
-          console.error(`Translation failed for ${textOutput.fileName}:`, error);
-          updatedTextOutputs[i].translationError = error instanceof Error ? error.message : 'Translation failed';
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          console.error(`Translation failed for ${textOutput.fileName}:`, errorMessage, error);
+          updatedTextOutputs[i].translationError = errorMessage;
 
           // Update job with error
           updateJob(jobId, {
             results: {
-              ...job.results!,
+              ...jobResults,
               textOutputs: updatedTextOutputs,
             },
           });
@@ -108,19 +159,7 @@ export function useOutputTranslation(jobId: string) {
     };
 
     translateOutputs();
-  }, [jobId, resultsKey, job, isChromeAIAvailable, updateJob]);
+  }, [jobId, resultsKey, job, updateJob]);
 
   return { isTranslating, translatedCount };
-}
-
-// Simple language detection
-function detectLanguage(text: string): 'en' | 'zh' {
-  const chineseRegex = /[\u4e00-\u9fa5]/;
-  const englishRegex = /[a-zA-Z]/;
-
-  const hasChinese = chineseRegex.test(text);
-  const hasEnglish = englishRegex.test(text);
-
-  if (hasChinese && !hasEnglish) return 'zh';
-  return 'en'; // Default to English
 }
