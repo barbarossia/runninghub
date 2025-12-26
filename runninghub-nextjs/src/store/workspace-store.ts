@@ -17,6 +17,7 @@ import {
 
 // Import folder types from folder-store
 import { FolderSelectionResponse } from '@/types';
+import { validateFileForParameter } from '@/utils/workspace-validation';
 
 // ============================================================================
 // STORE STATE & ACTIONS
@@ -169,6 +170,7 @@ interface WorkspaceActions extends WorkspaceState {
   clearJobInputs: () => void;
   validateJobInputs: (workflow: Workflow) => { valid: boolean; errors: string[] };
   resetJobPreparation: () => void;
+  autoAssignSelectedFilesToWorkflow: (workflowId: string) => void;
 
   // ============================================================
   // NEW ACTIONS - Job Management
@@ -553,6 +555,72 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       resetJobPreparation: () =>
         set({ jobFiles: [], jobInputs: {} }),
+
+      autoAssignSelectedFilesToWorkflow: (workflowId) => {
+        const state = get();
+        const workflow = state.workflows.find((w) => w.id === workflowId);
+        if (!workflow) return;
+
+        const selected = state.mediaFiles.filter((f) => f.selected);
+        if (selected.length === 0) return;
+
+        // Clear existing assignments for this workflow's parameters
+        const currentAssignments = state.jobFiles.filter(
+          (assignment) => !workflow.inputs.some((input) => input.id === assignment.parameterId)
+        );
+
+        // Smart assignment logic - distribute files across parameters
+        const assignments: FileInputAssignment[] = [];
+        const assignedFiles = new Set<string>();
+        const paramAssignmentCount = new Map<string, number>();
+
+        // Get file input parameters in order
+        const fileParams = workflow.inputs.filter((p) => p.type === 'file');
+
+        // Initialize count for each parameter
+        fileParams.forEach(param => {
+          paramAssignmentCount.set(param.id, 0);
+        });
+
+        // Assign files to parameters (one file per parameter)
+        selected.forEach((file, fileIndex) => {
+          // Find the first compatible parameter that doesn't have any files yet
+          for (const param of fileParams) {
+            // Skip if this file is already assigned
+            if (assignedFiles.has(file.path)) continue;
+
+            // Check if this parameter already has a file assigned
+            const currentCount = paramAssignmentCount.get(param.id) || 0;
+            if (currentCount > 0) {
+              // Parameter already has a file, try next parameter
+              continue;
+            }
+
+            // Check if file is compatible with this parameter
+            const validation = validateFileForParameter(file, param);
+            if (validation.valid) {
+              // Assign file to this parameter
+              assignments.push({
+                parameterId: param.id,
+                filePath: file.path,
+                fileName: file.name,
+                fileSize: file.size,
+                fileType: file.type,
+                valid: true,
+              });
+              assignedFiles.add(file.path);
+              paramAssignmentCount.set(param.id, currentCount + 1);
+              break; // Move to next file
+            }
+          }
+        });
+
+        // Update store
+        set({
+          jobFiles: [...currentAssignments, ...assignments],
+          selectedWorkflowId: workflowId,
+        });
+      },
 
       // ============================================================
       // NEW ACTIONS - Job Management

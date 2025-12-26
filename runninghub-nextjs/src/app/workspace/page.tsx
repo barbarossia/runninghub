@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaGallery } from '@/components/workspace/MediaGallery';
 import { MediaSelectionToolbar } from '@/components/workspace/MediaSelectionToolbar';
+import { QuickRunWorkflowDialog } from '@/components/workspace/QuickRunWorkflowDialog';
 import { WorkflowList } from '@/components/workspace/WorkflowList';
 import { WorkflowEditor } from '@/components/workspace/WorkflowEditor';
 import { WorkflowSelector } from '@/components/workspace/WorkflowSelector';
@@ -64,6 +65,7 @@ export default function WorkspacePage() {
     clearJobInputs,
     getSelectedMediaFiles,
     deselectAllMediaFiles,
+    autoAssignSelectedFilesToWorkflow,
   } = useWorkspaceStore();
 
   // Local state
@@ -72,6 +74,7 @@ export default function WorkspacePage() {
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
+  const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
 
   // Get selected files from store
   const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
@@ -286,6 +289,9 @@ export default function WorkspacePage() {
       return;
     }
 
+    // Auto-assign selected files if any
+    autoAssignSelectedFilesToWorkflow(workflow.id);
+
     try {
       const response = await fetch(API_ENDPOINTS.WORKSPACE_EXECUTE, {
         method: 'POST',
@@ -345,6 +351,23 @@ export default function WorkspacePage() {
       toast.error(errorMessage);
     }
   };
+
+  // Handler for quick run workflow from Media Gallery
+  const handleQuickRunWorkflow = useCallback((workflowId?: string) => {
+    if (!workflowId) {
+      // If no workflowId provided, just open the dialog
+      setShowQuickRunDialog(true);
+      return;
+    }
+
+    // Auto-assign files to workflow
+    autoAssignSelectedFilesToWorkflow(workflowId);
+
+    // Switch to Run Workflow tab
+    setActiveTab('run-workflow');
+
+    toast.success('Files assigned to workflow. You can now run the job.');
+  }, [autoAssignSelectedFilesToWorkflow]);
 
   const handleRenameFile = async (file: MediaFile, newName: string) => {
     try {
@@ -506,6 +529,7 @@ export default function WorkspacePage() {
                     selectedFiles={selectedFiles}
                     onRename={handleRenameFile}
                     onDelete={handleDeleteFile}
+                    onRunWorkflow={handleQuickRunWorkflow}
                   />
                 )}
 
@@ -589,6 +613,15 @@ export default function WorkspacePage() {
             open={isEditingWorkflow}
           />
         )}
+
+        {/* Quick Run Workflow Dialog */}
+        <QuickRunWorkflowDialog
+          open={showQuickRunDialog}
+          onOpenChange={setShowQuickRunDialog}
+          selectedFiles={selectedFiles}
+          workflows={workflows}
+          onConfirm={handleQuickRunWorkflow}
+        />
       </div>
     </div>
   );
