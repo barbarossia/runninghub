@@ -26,12 +26,13 @@ interface TaskState {
 
 interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
+  onTaskComplete?: (taskId: string, status: 'completed' | 'failed') => void;
   taskId?: string | null;
   defaultVisible?: boolean; // Force console to be visible by default
   autoRefreshInterval?: number; // Optional auto-refresh interval
 }
 
-export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: ConsoleViewerProps) {
+export function ConsoleViewer({ onRefresh, onTaskComplete, taskId, defaultVisible = false }: ConsoleViewerProps) {
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -40,6 +41,7 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
   const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastStatusRef = useRef<string | null>(null);
 
   // Prevent hydration errors
   useEffect(() => {
@@ -50,6 +52,7 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setTaskStatus(null);
+    lastStatusRef.current = null;
   }, [taskId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -64,9 +67,17 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
           const data = await res.json();
           setTaskStatus(data);
 
-          // Auto-minimize on completion
-          if (data.status === 'completed' && taskStatus?.status !== 'completed') {
-            setTimeout(() => setIsMinimized(true), 3000);
+          // Check for status change to terminal state
+          if (data.status !== lastStatusRef.current) {
+             if (data.status === 'completed' || data.status === 'failed') {
+               onTaskComplete?.(taskId, data.status);
+               
+               // Auto-minimize on completion
+               if (data.status === 'completed') {
+                 setTimeout(() => setIsMinimized(true), 3000);
+               }
+             }
+             lastStatusRef.current = data.status;
           }
         }
       } catch (error) {
@@ -77,7 +88,7 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
     fetchTask();
     const interval = setInterval(fetchTask, 1000);
     return () => clearInterval(interval);
-  }, [taskId, taskStatus?.status]);
+  }, [taskId, onTaskComplete]); // Removed taskStatus dependency to avoid infinite loops if it was used
 
   // Polling logs
   useEffect(() => {

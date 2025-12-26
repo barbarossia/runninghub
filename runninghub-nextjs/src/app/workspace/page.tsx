@@ -58,6 +58,7 @@ export default function WorkspacePage() {
     updateWorkflow,
     deleteWorkflow,
     addJob,
+    updateJob,
     setSelectedJob,
     clearJobInputs,
     getSelectedMediaFiles,
@@ -77,7 +78,7 @@ export default function WorkspacePage() {
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
 
-  const handleRefresh = async (silent = false) => {
+  const handleRefresh = useCallback(async (silent = false) => {
     if (selectedFolder) {
       await loadFolderContents(
         selectedFolder.folder_path,
@@ -85,7 +86,25 @@ export default function WorkspacePage() {
         silent
       );
     }
-  };
+  }, [selectedFolder, loadFolderContents]);
+
+  const handleTaskComplete = useCallback((taskId: string, status: 'completed' | 'failed') => {
+    // Find job associated with this task
+    const job = jobs.find(j => j.taskId === taskId);
+    if (job) {
+      updateJob(job.id, { 
+        status: status, 
+        completedAt: Date.now() 
+      });
+      
+      if (status === 'completed') {
+        toast.success('Job completed successfully');
+        handleRefresh(true); // Refresh folder contents to show new files
+      } else {
+        toast.error('Job failed');
+      }
+    }
+  }, [jobs, updateJob, handleRefresh]);
 
   // Use folder selection hook (using 'images' type for workspace)
   const { handleFolderSelected } = useFolderSelection({
@@ -472,6 +491,7 @@ export default function WorkspacePage() {
         {/* Console Viewer */}
         <ConsoleViewer
           onRefresh={handleRefresh}
+          onTaskComplete={handleTaskComplete}
           taskId={activeConsoleTaskId}
           defaultVisible={true}
         />
