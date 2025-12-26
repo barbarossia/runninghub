@@ -11,8 +11,8 @@ export interface AvailableWorkflow {
 
 export const AVAILABLE_WORKFLOWS: AvailableWorkflow[] = [
   {
-    id: '2002570902468476929',
-    name: 'Main Workflow',
+    id: 'workflow_1766742244900_z78t5g9lk',
+    name: 'Image Training',
     envKey: 'NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID',
   },
   {

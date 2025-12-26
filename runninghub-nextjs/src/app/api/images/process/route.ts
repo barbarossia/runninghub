@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import { writeLog } from "@/lib/logger";
 import { initTask, updateTask } from "@/lib/task-store";
+import type { Workflow } from "@/types/workspace";
 
 interface ProcessRequest {
   images: string[];
@@ -171,6 +172,25 @@ function processSingleImage(
 }
 
 /**
+ * Get workflow by ID from file
+ */
+async function getWorkflowById(workflowId: string): Promise<Workflow | undefined> {
+  const path = await import('path');
+  const fs = await import('fs/promises');
+
+  try {
+    const workflowDir = path.join(process.env.HOME || '~', 'Downloads', 'workspace', 'workflows');
+    const workflowPath = path.join(workflowDir, `${workflowId}.json`);
+
+    const content = await fs.readFile(workflowPath, 'utf-8');
+    return JSON.parse(content) as Workflow;
+  } catch (error) {
+    console.error('Failed to load workflow:', error);
+    return undefined;
+  }
+}
+
+/**
  * Process multiple images in background
  */
 async function processImagesInBackground(
@@ -195,11 +215,17 @@ async function processImagesInBackground(
     process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
   const downloadDir = process.env.RUNNINGHUB_DOWNLOAD_DIR;
 
+  // Load workflow to get sourceWorkflowId for CLI
+  const workflow = await getWorkflowById(workflowId!);
+  const cliWorkflowId = workflow?.sourceWorkflowId || workflowId;
+
+  await writeLog(`Using workflow: ${workflowId} (CLI will use: ${cliWorkflowId})`, 'info', taskId);
+
   // Set environment for subprocess
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     RUNNINGHUB_API_KEY: apiKey!,
-    RUNNINGHUB_WORKFLOW_ID: workflowId!,
+    RUNNINGHUB_WORKFLOW_ID: cliWorkflowId!,  // Use sourceWorkflowId for CLI
     RUNNINGHUB_API_HOST: apiHost,
   };
 

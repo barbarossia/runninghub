@@ -36,6 +36,7 @@ import {
   AlertCircle,
   Plus,
   Upload,
+  Play,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
@@ -67,7 +68,7 @@ export default function WorkspacePage() {
 
   // Local state
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'media' | 'workflows' | 'jobs'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'run-workflow' | 'workflows' | 'jobs'>('media');
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
@@ -478,10 +479,14 @@ export default function WorkspacePage() {
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="media" className="flex items-center gap-2">
                   <FolderOpen className="h-4 w-4" />
                   Media Gallery
+                </TabsTrigger>
+                <TabsTrigger value="run-workflow" className="flex items-center gap-2">
+                  <Play className="h-4 w-4" />
+                  Run Workflow
                 </TabsTrigger>
                 <TabsTrigger value="workflows" className="flex items-center gap-2">
                   <WorkflowIcon className="h-4 w-4" />
@@ -495,6 +500,25 @@ export default function WorkspacePage() {
 
               {/* Media Gallery Tab */}
               <TabsContent value="media" className="space-y-6 mt-6">
+                {/* Media Selection Toolbar */}
+                {selectedFiles.length > 0 && (
+                  <MediaSelectionToolbar
+                    selectedFiles={selectedFiles}
+                    onRename={handleRenameFile}
+                    onDelete={handleDeleteFile}
+                  />
+                )}
+
+                {/* Media Gallery */}
+                <MediaGallery
+                  onRename={handleRenameFile}
+                  onDelete={handleDeleteFile}
+                  onPreview={handlePreviewFile}
+                />
+              </TabsContent>
+
+              {/* Run Workflow Tab */}
+              <TabsContent value="run-workflow" className="space-y-6 mt-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Select Files & Run Workflow</h3>
                 </div>
@@ -521,22 +545,6 @@ export default function WorkspacePage() {
                     )}
                   </div>
                 </div>
-
-                {/* Media Selection Toolbar */}
-                {selectedFiles.length > 0 && (
-                  <MediaSelectionToolbar
-                    selectedFiles={selectedFiles}
-                    onRename={handleRenameFile}
-                    onDelete={handleDeleteFile}
-                  />
-                )}
-
-                {/* Media Gallery */}
-                <MediaGallery
-                  onRename={handleRenameFile}
-                  onDelete={handleDeleteFile}
-                  onPreview={handlePreviewFile}
-                />
               </TabsContent>
 
               {/* Workflows Tab */}
