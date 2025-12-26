@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { X, Plus, Trash2, GripVertical, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +52,25 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
+
+  // Sync state with workflow prop when it changes
+  useEffect(() => {
+    if (workflow) {
+      setName(workflow.name);
+      setDescription(workflow.description || '');
+      setParameters(workflow.inputs);
+      // Reset template state when editing existing workflow
+      setSelectedWorkflowId(''); 
+      setTemplateLoaded(false);
+    } else {
+      // Reset for new workflow
+      setName('');
+      setDescription('');
+      setParameters([]);
+      setSelectedWorkflowId('');
+      setTemplateLoaded(false);
+    }
+  }, [workflow]);
 
   // Add new parameter
   const addParameter = useCallback(() => {
