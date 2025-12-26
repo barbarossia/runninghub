@@ -283,7 +283,8 @@ export default function WorkspacePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          workflowId: workflow.sourceWorkflowId || workflow.id,
+          workflowId: workflow.id,                        // Actual workflow ID
+          sourceWorkflowId: workflow.sourceWorkflowId,    // Template ID for CLI
           fileInputs: jobFiles,
           textInputs: jobInputs,
           folderPath: selectedFolder?.folder_path,
@@ -312,6 +313,9 @@ export default function WorkspacePage() {
       };
 
       addJob(newJob);
+
+      // Select the newly created job
+      setSelectedJob(newJob.id);
 
       // Start tracking progress
       if (data.taskId) {

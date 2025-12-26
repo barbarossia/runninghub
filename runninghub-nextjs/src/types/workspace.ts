@@ -170,7 +170,7 @@ export interface WorkflowInputParameter {
  * Workflow output definition
  */
 export interface WorkflowOutput {
-  type: 'files' | 'text' | 'mixed';
+  type: 'none' | 'text' | 'image' | 'mixed';
   description?: string;
 }
 
@@ -291,6 +291,11 @@ export interface JobResult {
     path?: string;
     content?: string;
     metadata?: Record<string, any>;
+    // Output file metadata
+    fileName?: string;
+    fileType?: 'text' | 'image';
+    fileSize?: number;
+    workspacePath?: string; // Path in ~/Downloads/workspace/{jobId}/result/
   }>;
   summary?: string;
 
@@ -308,6 +313,8 @@ export interface JobResult {
       en?: string; // Translated to English
       zh?: string; // Translated to Chinese
     };
+    autoTranslated?: boolean; // Track if translation was automatic
+    translationError?: string; // Translation failures
   }>;
 }
 
@@ -362,7 +369,8 @@ export interface JobValidationResult {
  * Execute job request
  */
 export interface ExecuteJobRequest {
-  workflowId: string;
+  workflowId: string;           // Actual workflow ID (for loading output config)
+  sourceWorkflowId?: string;    // Template ID (for CLI)
   fileInputs: Array<{
     parameterId: string;
     filePath: string;

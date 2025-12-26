@@ -53,20 +53,32 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [templateLoaded, setTemplateLoaded] = useState(false);
 
+  // Output configuration state
+  const [outputType, setOutputType] = useState<'none' | 'text' | 'image' | 'mixed'>(
+    workflow?.output?.type || 'none'
+  );
+  const [outputDescription, setOutputDescription] = useState(
+    workflow?.output?.description || ''
+  );
+
   // Sync state with workflow prop when it changes
   useEffect(() => {
     if (workflow) {
       setName(workflow.name);
       setDescription(workflow.description || '');
       setParameters(workflow.inputs);
+      setOutputType(workflow.output?.type || 'none');
+      setOutputDescription(workflow.output?.description || '');
       // Reset template state when editing existing workflow
-      setSelectedWorkflowId(''); 
+      setSelectedWorkflowId('');
       setTemplateLoaded(false);
     } else {
       // Reset for new workflow
       setName('');
       setDescription('');
       setParameters([]);
+      setOutputType('none');
+      setOutputDescription('');
       setSelectedWorkflowId('');
       setTemplateLoaded(false);
     }
@@ -172,6 +184,10 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       name: name.trim(),
       description: description.trim() || undefined,
       inputs: parameters,
+      output: outputType !== 'none' ? {
+        type: outputType,
+        description: outputDescription.trim() || undefined,
+      } : undefined,
       createdAt: workflow?.createdAt || Date.now(),
       updatedAt: Date.now(),
       sourceWorkflowId: templateLoaded ? selectedWorkflowId : workflow?.sourceWorkflowId,
@@ -198,7 +214,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     }
 
     onSave(workflowData);
-  }, [name, description, parameters, workflow, templateLoaded, selectedWorkflowId, onSave]);
+  }, [name, description, parameters, outputType, outputDescription, workflow, templateLoaded, selectedWorkflowId, onSave]);
 
   const isValid = name.trim() && parameters.length > 0;
 
@@ -321,6 +337,60 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Output Configuration */}
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-medium">
+                {templateLoaded ? 'Step 3: Configure Outputs' : 'Output Configuration'}
+              </h3>
+              <p className="text-xs text-gray-500">
+                Define what this workflow outputs
+              </p>
+            </div>
+
+            <Card className="p-4">
+              <div className="space-y-4">
+                {/* Output Type Selector */}
+                <div>
+                  <label htmlFor="output-type" className="text-sm font-medium">
+                    Output Type
+                  </label>
+                  <Select
+                    value={outputType}
+                    onValueChange={(value: 'none' | 'text' | 'image' | 'mixed') => setOutputType(value)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select output type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No outputs</SelectItem>
+                      <SelectItem value="text">Text files (.txt)</SelectItem>
+                      <SelectItem value="image">Image files (.jpg, .png, etc.)</SelectItem>
+                      <SelectItem value="mixed">Mixed (text + images)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Description (shown only when output type is not "none") */}
+                {outputType !== 'none' && (
+                  <div>
+                    <label htmlFor="output-description" className="text-sm font-medium">
+                      Output Description
+                    </label>
+                    <Textarea
+                      id="output-description"
+                      value={outputDescription}
+                      onChange={(e) => setOutputDescription(e.target.value)}
+                      placeholder="Describe what this workflow outputs..."
+                      rows={2}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
         </div>
 

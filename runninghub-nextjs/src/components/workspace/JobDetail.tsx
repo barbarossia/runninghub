@@ -17,6 +17,8 @@ import {
   FileText,
   Video,
   ImageIcon,
+  Copy,
+  Loader2,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { downloadFile } from '@/lib/download';
+import { useOutputTranslation } from '@/hooks/useOutputTranslation';
+import { toast } from 'sonner';
 import type { Job } from '@/types/workspace';
 
 export interface JobDetailProps {
@@ -36,6 +41,9 @@ export interface JobDetailProps {
 export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const { getJobById, reRunJob, deleteJob } = useWorkspaceStore();
   const [isReRunning, setIsReRunning] = useState(false);
+
+  // Auto-translate outputs
+  const { isTranslating, translatedCount } = useOutputTranslation(jobId);
 
   const job = getJobById(jobId);
 
@@ -72,6 +80,25 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       onBack?.();
     }
   };
+
+  // Handle download output
+  const handleDownloadOutput = async (output: any) => {
+    if (!output.workspacePath || !output.fileName) return;
+
+    try {
+      await downloadFile(output.workspacePath, output.fileName);
+      toast.success('Download started');
+    } catch (error) {
+      toast.error('Download failed');
+    }
+  };
+
+  // Format file size
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   // Format date
   const formatDate = (timestamp?: number) => {
@@ -162,6 +189,16 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         </Card>
       )}
 
+      {/* Translation progress */}
+      {isTranslating && (
+        <Card className="p-3 bg-blue-50 border-blue-200">
+          <div className="flex items-center gap-2 text-sm text-blue-900">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Translating outputs ({translatedCount}/{job?.results?.textOutputs?.length || 0})...</span>
+          </div>
+        </Card>
+      )}
+
       {/* Details tabs */}
       <Tabs defaultValue="inputs">
         <TabsList>
@@ -249,25 +286,62 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
             {job.results ? (
               <>
                 {/* Outputs */}
-                {job.results.outputs.length > 0 && (
+                {job.results.outputs && job.results.outputs.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-medium mb-3">Outputs</h3>
+                    <h3 className="text-sm font-medium mb-3">Output Files</h3>
                     <div className="space-y-2">
                       {job.results.outputs.map((output, index) => (
                         <Card key={index} className="p-3">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="outline" className="text-xs">
-                              {output.type}
-                            </Badge>
-                            {output.parameterId && (
-                              <span className="text-xs text-gray-500">{output.parameterId}</span>
+                          <div className="flex items-center gap-3">
+                            {/* File type icon */}
+                            {output.fileType === 'image' ? (
+                              <ImageIcon className="h-5 w-5 text-blue-600" />
+                            ) : (
+                              <FileText className="h-5 w-5 text-gray-600" />
+                            )}
+
+                            {/* File info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium truncate">
+                                  {output.fileName || 'Unknown file'}
+                                </p>
+                                {output.fileSize && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {formatFileSize(output.fileSize)}
+                                  </Badge>
+                                )}
+                              </div>
+                              {output.workspacePath && (
+                                <p className="text-xs text-gray-500 truncate">
+                                  {output.workspacePath}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Download button */}
+                            {output.workspacePath && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadOutput(output)}
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Download
+                              </Button>
                             )}
                           </div>
-                          {output.path && (
-                            <p className="text-sm font-mono text-gray-700 truncate">{output.path}</p>
-                          )}
-                          {output.content && (
-                            <p className="text-sm text-gray-700 line-clamp-3">{output.content}</p>
+
+                          {/* Image preview for image outputs */}
+                          {output.fileType === 'image' && output.workspacePath && (
+                            <div className="mt-3">
+                              <img
+                                src={`/api/workspace/serve-output?path=${encodeURIComponent(output.workspacePath)}`}
+                                alt={output.fileName}
+                                className="max-w-full h-auto rounded border border-gray-200"
+                                style={{ maxHeight: '200px' }}
+                              />
+                            </div>
                           )}
                         </Card>
                       ))}
@@ -294,13 +368,60 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                         <Card key={index} className="p-4">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{textOutput.fileName}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium truncate">{textOutput.fileName}</p>
+                                {textOutput.autoTranslated && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    Auto-translated
+                                  </Badge>
+                                )}
+                                {textOutput.translationError && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    Translation failed
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-xs text-gray-500 truncate">{textOutput.filePath}</p>
                             </div>
-                            <Button variant="outline" size="sm" className="h-7">
-                              <Download className="h-3 w-3 mr-1" />
-                              Copy
-                            </Button>
+
+                            {/* Action buttons */}
+                            <div className="flex gap-2">
+                              {/* Copy button - copies currently visible tab */}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7"
+                                onClick={() => {
+                                  const activeTab = document.querySelector('[data-state="active"]')?.textContent;
+                                  let textToCopy = textOutput.content.original;
+                                  if (activeTab === 'English' && textOutput.content.en) {
+                                    textToCopy = textOutput.content.en;
+                                  } else if (activeTab === 'Chinese' && textOutput.content.zh) {
+                                    textToCopy = textOutput.content.zh;
+                                  }
+                                  navigator.clipboard.writeText(textToCopy);
+                                  toast.success('Copied to clipboard');
+                                }}
+                              >
+                                <Copy className="h-3 w-3 mr-1" />
+                                Copy
+                              </Button>
+
+                              {/* Download button */}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7"
+                                onClick={() => handleDownloadOutput({
+                                  type: 'file',
+                                  path: textOutput.filePath,
+                                  fileName: textOutput.fileName,
+                                })}
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Download
+                              </Button>
+                            </div>
                           </div>
                           <Tabs defaultValue="original">
                             <TabsList className="w-full">

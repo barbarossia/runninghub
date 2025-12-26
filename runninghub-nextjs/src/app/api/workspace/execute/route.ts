@@ -12,6 +12,7 @@ import type {
   ExecuteJobRequest,
   ExecuteJobResponse,
   Job,
+  Workflow,
 } from '@/types/workspace';
 
 export async function POST(request: NextRequest) {
@@ -45,10 +46,13 @@ export async function POST(request: NextRequest) {
     const apiHost = process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
     const downloadDir = process.env.RUNNINGHUB_DOWNLOAD_DIR;
 
+    // Use sourceWorkflowId for CLI (template ID), fallback to workflowId
+    const cliWorkflowId = body.sourceWorkflowId || body.workflowId;
+
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       RUNNINGHUB_API_KEY: apiKey!,
-      RUNNINGHUB_WORKFLOW_ID: body.workflowId, // Strictly use the workflow ID from the task
+      RUNNINGHUB_WORKFLOW_ID: cliWorkflowId, // CLI needs template ID
       RUNNINGHUB_API_HOST: apiHost,
     };
 
@@ -58,9 +62,11 @@ export async function POST(request: NextRequest) {
 
     // Start background processing
     processWorkflowInBackground(
-      taskId, 
-      body.fileInputs || [], 
-      body.textInputs || {}, 
+      taskId,
+      jobId,
+      body.workflowId,        // Actual workflow ID for output config
+      body.fileInputs || [],
+      body.textInputs || {},
       body.deleteSourceFiles || false,
       env
     );
@@ -81,8 +87,195 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Process job outputs after CLI completion
+ */
+async function processJobOutputs(
+  taskId: string,
+  workflowId: string,
+  jobId: string,
+  env: NodeJS.ProcessEnv,
+  cliStdout: string
+) {
+  try {
+    await writeLog('Processing job outputs...', 'info', taskId);
+
+    const fs = await import('fs/promises');
+    const path = await import('path');
+
+    // Get workflow output configuration from store
+    const workflow = await getWorkflowById(workflowId);
+    const outputConfig = workflow?.output;
+
+    if (!outputConfig || outputConfig.type === 'none') {
+      await writeLog('No outputs configured for this workflow', 'info', taskId);
+      return;
+    }
+
+    // Parse CLI JSON response to extract file URLs
+    let cliResponse: any = null;
+    try {
+      // Extract JSON from stdout (might be mixed with log lines)
+      const jsonMatch = cliStdout.match(/\{[\s\S]*"code":[\s\S]*\}/);
+      if (jsonMatch) {
+        cliResponse = JSON.parse(jsonMatch[0]);
+        await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+      }
+    } catch (parseError) {
+      await writeLog(`Failed to parse CLI JSON response: ${parseError}`, 'warning', taskId);
+    }
+
+    if (!cliResponse || cliResponse.code !== 0 || !cliResponse.data || cliResponse.data.length === 0) {
+      await writeLog('No output files in CLI response', 'warning', taskId);
+      return;
+    }
+
+    // Workspace job directory: ~/Downloads/workspace/{jobId}/result/
+    const workspaceJobDir = path.join(
+      process.env.HOME || '~',
+      'Downloads',
+      'workspace',
+      jobId
+    );
+
+    const workspaceOutputsDir = path.join(workspaceJobDir, 'result');
+
+    // Create workspace job directory and result subdirectory
+    await fs.mkdir(workspaceOutputsDir, { recursive: true });
+
+    // Download each output file from remote URL
+    const outputFiles = cliResponse.data;
+    await writeLog(`Found ${outputFiles.length} output file(s) in CLI response`, 'info', taskId);
+
+    for (const output of outputFiles) {
+      const fileUrl = output.fileUrl;
+      const fileType = output.fileType;
+
+      if (!fileUrl) {
+        await writeLog('Output missing fileUrl, skipping', 'warning', taskId);
+        continue;
+      }
+
+      try {
+        // Extract filename from URL
+        const urlParts = fileUrl.split('/');
+        const fileName = urlParts[urlParts.length - 1];
+        const workspacePath = path.join(workspaceOutputsDir, fileName);
+
+        // Download file from remote URL
+        await writeLog(`Downloading ${fileName}...`, 'info', taskId);
+        const response = await fetch(fileUrl);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const buffer = await response.arrayBuffer();
+        const uint8Array = new Uint8Array(buffer);
+
+        // Write to workspace outputs directory
+        await fs.writeFile(workspacePath, uint8Array);
+
+        await writeLog(`Downloaded ${fileName} to workspace outputs`, 'success', taskId);
+      } catch (downloadError) {
+        const errorMsg = downloadError instanceof Error ? downloadError.message : 'Unknown error';
+        await writeLog(`Failed to download ${fileUrl}: ${errorMsg}`, 'error', taskId);
+      }
+    }
+
+    // Note: Text translation will be done client-side
+    // Server just prepares the files for download/viewing
+
+    await writeLog('Output processing complete', 'success', taskId);
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Output processing failed';
+    await writeLog(`Output processing error: ${errorMessage}`, 'error', taskId);
+  }
+}
+
+/**
+ * Get workflow by ID from store or file
+ */
+async function getWorkflowById(workflowId: string): Promise<Workflow | undefined> {
+  const path = await import('path');
+  const fs = await import('fs/promises');
+
+  try {
+    const workflowDir = path.join(process.env.HOME || '~', 'Downloads', 'workspace', 'workflows');
+    const workflowPath = path.join(workflowDir, `${workflowId}.json`);
+
+    const content = await fs.readFile(workflowPath, 'utf-8');
+    return JSON.parse(content) as Workflow;
+  } catch (error) {
+    console.error('Failed to load workflow:', error);
+    return undefined;
+  }
+}
+
+/**
+ * Copy input files to job directory
+ * Returns array of new file paths in job directory
+ */
+async function copyInputFilesToJobDirectory(
+  fileInputs: Array<{ parameterId: string; filePath: string }>,
+  jobId: string,
+  taskId: string
+): Promise<Array<{ parameterId: string; filePath: string }>> {
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+
+    // Create job directory
+    const workspaceJobDir = path.join(
+      process.env.HOME || '~',
+      'Downloads',
+      'workspace',
+      jobId
+    );
+    await fs.mkdir(workspaceJobDir, { recursive: true });
+
+    await writeLog(`Copying ${fileInputs.length} input file(s) to job directory`, 'info', taskId);
+
+    const copiedFiles: Array<{ parameterId: string; filePath: string }> = [];
+
+    for (const input of fileInputs) {
+      try {
+        // Extract filename from original path
+        const fileName = path.basename(input.filePath);
+        const jobFilePath = path.join(workspaceJobDir, fileName);
+
+        // Copy file to job directory
+        await fs.copyFile(input.filePath, jobFilePath);
+
+        await writeLog(`Copied ${fileName} to job directory`, 'info', taskId);
+
+        // Use the copied file path for CLI
+        copiedFiles.push({
+          parameterId: input.parameterId,
+          filePath: jobFilePath,
+        });
+      } catch (copyError) {
+        const errorMsg = copyError instanceof Error ? copyError.message : 'Unknown error';
+        await writeLog(`Failed to copy ${input.filePath}: ${errorMsg}`, 'error', taskId);
+        // If copy fails, use original path
+        copiedFiles.push(input);
+      }
+    }
+
+    return copiedFiles;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'File copy failed';
+    await writeLog(`Error copying input files: ${errorMsg}`, 'error', taskId);
+    // Return original paths if copy fails
+    return fileInputs;
+  }
+}
+
 async function processWorkflowInBackground(
   taskId: string,
+  jobId: string,
+  workflowId: string,
   fileInputs: Array<{ parameterId: string; filePath: string }>,
   textInputs: Record<string, string>,
   deleteSourceFiles: boolean,
@@ -93,15 +286,18 @@ async function processWorkflowInBackground(
     await writeLog(`Files: ${fileInputs.length}, Text Inputs: ${Object.keys(textInputs).length}`, 'info', taskId);
     await updateTask(taskId, { status: 'processing', completedCount: 0 });
 
+    // Copy input files to job directory and get new paths
+    const jobFileInputs = await copyInputFilesToJobDirectory(fileInputs, jobId, taskId);
+
     let args: string[] = ["-m", "runninghub_cli.cli"];
 
     // Helper to extract node ID from parameter ID (e.g., "param_203" -> "203")
     const getNodeId = (paramId: string) => paramId.replace(/^param_/, '');
 
     // DECISION: Use 'process' for single file, 'process-multiple' for multiple files
-    if (fileInputs.length === 1) {
+    if (jobFileInputs.length === 1) {
         // Single file mode -> use 'process' command
-        const input = fileInputs[0];
+        const input = jobFileInputs[0];
         args.push("process");
         args.push(input.filePath);
         args.push("--node", getNodeId(input.parameterId));
@@ -125,7 +321,7 @@ async function processWorkflowInBackground(
         args.push("process-multiple");
 
         // Add file inputs
-        for (const input of fileInputs) {
+        for (const input of jobFileInputs) {
             // Format: <node_id>:<file_path>
             args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
         }
@@ -135,7 +331,7 @@ async function processWorkflowInBackground(
             // Format: <node_id>:text:<value>
             args.push("-p", `${getNodeId(paramId)}:text:${value}`);
         }
-        
+
         // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required
     }
 
@@ -173,7 +369,10 @@ async function processWorkflowInBackground(
       if (code === 0) {
         await writeLog("Workflow execution completed successfully", 'success', taskId);
         await updateTask(taskId, { status: 'completed', completedCount: fileInputs.length + Object.keys(textInputs).length });
-        
+
+        // NEW: Process outputs - pass stdout for JSON parsing
+        await processJobOutputs(taskId, workflowId, jobId, env, stdout);
+
         // Handle post-processing (cleanup) if needed AND if we used process-multiple (since process handles it internally)
         // If fileInputs.length !== 1, we used process-multiple which doesn't auto-cleanup
         if (deleteSourceFiles && fileInputs.length !== 1) {
