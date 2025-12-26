@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   RefreshCw,
@@ -20,6 +20,7 @@ import {
   Copy,
   Loader2,
 } from 'lucide-react';
+import Image from 'next/image';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -247,29 +248,64 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
 
         {/* Inputs tab */}
         <TabsContent value="inputs" className="space-y-4">
-          {/* File inputs */}
+          {/* File inputs with thumbnails */}
           {job.fileInputs.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium mb-3">File Inputs</h3>
-              <div className="space-y-2">
-                {job.fileInputs.map((input, index) => (
-                  <Card key={index} className="p-3">
-                    <div className="flex items-center gap-3">
-                      {input.fileType === 'image' ? (
-                        <ImageIcon className="h-5 w-5 text-blue-600" />
-                      ) : (
-                        <Video className="h-5 w-5 text-purple-600" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{input.fileName}</p>
-                        <p className="text-xs text-gray-500 truncate">{input.filePath}</p>
+              <h3 className="text-sm font-medium mb-3">File Inputs ({job.fileInputs.length})</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                {job.fileInputs.map((input, index) => {
+                  const isImage = input.fileType === 'image';
+                  const isVideo = input.fileType === 'video';
+
+                  return (
+                    <Card key={index} className="overflow-hidden">
+                      {/* Thumbnail */}
+                      <div className="relative bg-gray-100 aspect-square">
+                        {isImage ? (
+                          <Image
+                            src={`/api/images/serve?path=${encodeURIComponent(input.filePath)}`}
+                            alt={input.fileName}
+                            fill
+                            className="object-cover p-1"
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                            loading="lazy"
+                          />
+                        ) : isVideo ? (
+                          <video
+                            src={`/api/videos/serve?path=${encodeURIComponent(input.filePath)}`}
+                            className="w-full h-full object-cover p-1"
+                            muted
+                            preload="metadata"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <FileText className="h-12 w-12 text-gray-400" />
+                          </div>
+                        )}
+
+                        {/* Type badge */}
+                        <div className="absolute top-2 left-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {isImage ? 'IMG' : isVideo ? 'VID' : 'FILE'}
+                          </Badge>
+                        </div>
                       </div>
-                      <Badge variant={input.valid ? 'default' : 'destructive'} className="text-xs">
-                        {input.valid ? 'Valid' : 'Invalid'}
-                      </Badge>
-                    </div>
-                  </Card>
-                ))}
+
+                      {/* File info */}
+                      <div className="p-2 border-t">
+                        <p
+                          className="text-xs font-bold truncate"
+                          title={input.fileName}
+                        >
+                          {input.fileName}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {(input.fileSize / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
