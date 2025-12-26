@@ -22,6 +22,7 @@ import {
   ArrowRightLeft,
   Clock,
   Save,
+  ChevronDown,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -30,6 +31,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { downloadFile } from '@/lib/download';
 import { useOutputTranslation } from '@/hooks/useOutputTranslation';
@@ -50,7 +52,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const [isSaving, setIsSaving] = useState(false);
   
   // State for split view language selection
-  const [leftLang, setLeftLang] = useState<'original' | 'en' | 'zh'>('original');
+  const [leftLang, setLeftLang] = useState<'original' | 'en' | 'zh'>('en');
   const [rightLang, setRightLang] = useState<'original' | 'en' | 'zh'>('zh');
 
   // Local state for editable text outputs
@@ -190,11 +192,6 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       // Determine target language based on pane
       const otherPane = pane === 'left' ? rightLang : leftLang;
 
-      // Skip if the other pane is 'original' or same language
-      if (otherPane === 'original' || otherPane === lang) {
-        return;
-      }
-
       // Show translating state
       setTranslating(prev => ({ ...prev, [filePath]: pane }));
 
@@ -210,7 +207,64 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
           throw new Error('Language detection failed');
         }
 
-        const sourceLang = detectData.detectedLang;
+        const detectedLang = detectData.detectedLang;
+
+        // If other pane is 'original', translate to the opposite language
+        if (otherPane === 'original') {
+          // Determine target language: if current is zh, translate to en; if en, translate to zh
+          const targetLang = detectedLang === 'zh' ? 'en' : 'zh';
+
+          // Skip if already in target language
+          if (detectedLang === targetLang) {
+            setEditedText(prev => ({
+              ...prev,
+              [filePath]: {
+                ...prev[filePath],
+                original: value
+              }
+            }));
+            setTranslating(prev => ({ ...prev, [filePath]: null }));
+            return;
+          }
+
+          // Translate to the opposite language
+          const translateResponse = await fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: value,
+              sourceLang: detectedLang,
+              targetLang: targetLang,
+            }),
+          });
+
+          if (!translateResponse.ok) {
+            throw new Error('Translation failed');
+          }
+
+          const translateData = await translateResponse.json();
+          if (!translateData.success) {
+            throw new Error(translateData.error || 'Translation failed');
+          }
+
+          // Update both original and the translated language
+          setEditedText(prev => ({
+            ...prev,
+            [filePath]: {
+              ...prev[filePath],
+              original: value,
+              [targetLang]: translateData.translatedText
+            }
+          }));
+          setTranslating(prev => ({ ...prev, [filePath]: null }));
+          return;
+        }
+
+        // Skip if detected language is the same as target language (nothing to translate)
+        if (detectedLang === otherPane) {
+          setTranslating(prev => ({ ...prev, [filePath]: null }));
+          return;
+        }
 
         // Translate to the other pane's language
         const translateResponse = await fetch('/api/translate', {
@@ -218,7 +272,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: value,
-            sourceLang: sourceLang === 'en' || sourceLang === 'zh' ? sourceLang : 'autodetect',
+            sourceLang: detectedLang === 'en' || detectedLang === 'zh' ? detectedLang : 'autodetect',
             targetLang: otherPane,
           }),
         });
@@ -438,11 +492,20 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                {/* Left Pane */}
                <Card className="flex flex-col overflow-hidden bg-white">
                  <div className="p-2 border-b bg-gray-50 flex justify-between items-center text-xs font-medium text-gray-500">
-                    <span className="uppercase">{leftLang}</span>
+                    <Select value={leftLang} onValueChange={(value: any) => setLeftLang(value)}>
+                      <SelectTrigger className="h-6 w-20 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="original">Original</SelectItem>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="zh">中文</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <div className="flex gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-6 w-6 text-blue-600 hover:text-blue-700"
                         title="Save changes to original file"
                         onClick={() => {
@@ -453,12 +516,12 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                       >
                         <Save className="h-3 w-3" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-6 w-6"
                         onClick={() => {
-                          const content = job.results?.textOutputs?.map(t => 
+                          const content = job.results?.textOutputs?.map(t =>
                             editedText[t.filePath]?.[leftLang] || t.content[leftLang as keyof typeof t.content] || ''
                           ).join('\n\n') || '';
                           navigator.clipboard.writeText(content);
@@ -501,11 +564,20 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                {/* Right Pane */}
                <Card className="flex flex-col overflow-hidden bg-gray-50">
                  <div className="p-2 border-b bg-gray-100 flex justify-between items-center text-xs font-medium text-gray-500">
-                    <span className="uppercase">{rightLang}</span>
+                    <Select value={rightLang} onValueChange={(value: any) => setRightLang(value)}>
+                      <SelectTrigger className="h-6 w-20 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="original">Original</SelectItem>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="zh">中文</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <div className="flex gap-1">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-6 w-6 text-blue-600 hover:text-blue-700"
                         title="Save changes to original file"
                         onClick={() => {
@@ -515,12 +587,12 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                       >
                         <Save className="h-3 w-3" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-6 w-6"
                         onClick={() => {
-                          const content = job.results?.textOutputs?.map(t => 
+                          const content = job.results?.textOutputs?.map(t =>
                             editedText[t.filePath]?.[rightLang] || t.content[rightLang as keyof typeof t.content] || ''
                           ).join('\n\n') || '';
                           navigator.clipboard.writeText(content);
