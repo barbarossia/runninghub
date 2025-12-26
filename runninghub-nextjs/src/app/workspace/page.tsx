@@ -526,7 +526,7 @@ export default function WorkspacePage() {
                 {/* Workflow Selector and Input Builder */}
                 <div className="grid lg:grid-cols-3 gap-6">
                   {/* Workflow Selector */}
-                  <div className="lg:col-span-1">
+                  <div className="lg:col-span-1 overflow-visible">
                     <WorkflowSelector onAddWorkflow={handleAddWorkflow} />
                   </div>
 
