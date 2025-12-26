@@ -5,8 +5,8 @@
 
 'use client';
 
-import { useMemo } from 'react';
-import { Settings, Plus } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Settings, Plus, Loader2, AlertCircle } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -26,7 +26,11 @@ export interface WorkflowSelectorProps {
 }
 
 export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSelectorProps) {
-  const { workflows, selectedWorkflowId, setSelectedWorkflow } = useWorkspaceStore();
+  const { workflows, selectedWorkflowId, setSelectedWorkflow, setWorkflows } = useWorkspaceStore();
+
+  // Loading and error states for workflow fetching
+  const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const selectedWorkflow = useMemo(() => {
     return workflows.find((w) => w.id === selectedWorkflowId);
@@ -41,6 +45,38 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
     if (!selectedWorkflow) return 0;
     return selectedWorkflow.inputs.filter((i) => !i.required).length;
   }, [selectedWorkflow]);
+
+  // Load workflows from workspace folder on component mount
+  useEffect(() => {
+    const loadWorkflows = async () => {
+      setIsLoadingWorkflows(true);
+      setLoadError(null);
+
+      try {
+        const response = await fetch('/api/workflow/list');
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to load workflows');
+        }
+
+        const data = await response.json();
+
+        // Replace localStorage workflows with fetched workflows
+        setWorkflows(data.workflows || []);
+      } catch (error) {
+        console.error('Failed to load workflows:', error);
+        setLoadError(error instanceof Error ? error.message : 'Failed to load workflows');
+
+        // Clear workflows on error (empty state)
+        setWorkflows([]);
+      } finally {
+        setIsLoadingWorkflows(false);
+      }
+    };
+
+    loadWorkflows();
+  }, [setWorkflows]);
 
   const handleValueChange = (value: string) => {
     if (value === 'add_new') {
@@ -61,7 +97,20 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
             </div>
           </SelectTrigger>
           <SelectContent>
-            {workflows.length === 0 ? (
+            {isLoadingWorkflows ? (
+              <div className="p-4 flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                <span className="text-sm text-gray-500">Loading workflows...</span>
+              </div>
+            ) : loadError ? (
+              <div className="p-4 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm text-red-600 font-medium">Failed to load workflows</p>
+                  <p className="text-xs text-gray-500 mt-1">{loadError}</p>
+                </div>
+              </div>
+            ) : workflows.length === 0 ? (
               <div className="p-2 text-sm text-gray-500 text-center">
                 No workflows configured
               </div>
