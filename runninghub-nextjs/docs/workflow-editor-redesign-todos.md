@@ -41,7 +41,7 @@
 
 - [ ] Step 7.1: Test CLI nodes command returns valid data for all workflow IDs
 - [ ] Step 7.2: Test template selection dropdown shows all configured workflows
-- [ ] Step 7.3: Test Load Template button fetches and populates fields correctly
+- [ ] Step 7.3: Test auto-load template on selection works correctly
 - [ ] Step 7.4: Test locked fields cannot be edited
 - [ ] Step 7.5: Test unlocked fields can be edited
 - [ ] Step 7.6: Test file type selector (image/video) works correctly
@@ -50,6 +50,13 @@
 - [ ] Step 7.9: Test backward compatibility with existing workflows
 - [ ] Step 7.10: Test error handling for missing/invalid workflow IDs
 - [ ] Step 7.11: Test error handling for CLI failures
+
+## Phase 8: UX Enhancement - Auto-Load Template
+
+- [x] Step 8.1: Remove "Load Template" button
+- [x] Step 8.2: Auto-load template when workflow ID is selected
+- [x] Step 8.3: Show loading state in Select dropdown
+- [x] Step 8.4: Update UI description to indicate automatic loading
 
 ## Build Verification
 
