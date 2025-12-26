@@ -32,20 +32,6 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const selectedWorkflow = useMemo(() => {
-    return workflows.find((w) => w.id === selectedWorkflowId);
-  }, [workflows, selectedWorkflowId]);
-
-  const requiredCount = useMemo(() => {
-    if (!selectedWorkflow) return 0;
-    return selectedWorkflow.inputs.filter((i) => i.required).length;
-  }, [selectedWorkflow]);
-
-  const optionalCount = useMemo(() => {
-    if (!selectedWorkflow) return 0;
-    return selectedWorkflow.inputs.filter((i) => !i.required).length;
-  }, [selectedWorkflow]);
-
   // Load workflows from workspace folder on component mount
   useEffect(() => {
     const loadWorkflows = async () => {
@@ -101,7 +87,7 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
               <SelectValue placeholder="Select a workflow..." />
             </div>
           </SelectTrigger>
-          <SelectContent className="z-50">
+          <SelectContent className="z-[100] max-w-md" position="popper" align="start">
             {isLoadingWorkflows ? (
               <div className="p-4 flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
@@ -122,14 +108,7 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
             ) : (
               workflows.map((workflow) => (
                 <SelectItem key={workflow.id} value={workflow.id}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{workflow.name}</span>
-                    {workflow.description && (
-                      <span className="text-xs text-gray-500 truncate max-w-[200px]">
-                        - {workflow.description}
-                      </span>
-                    )}
-                  </div>
+                  {workflow.name}
                 </SelectItem>
               ))
             )}
@@ -147,18 +126,6 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
           </SelectContent>
         </Select>
       </div>
-
-      {/* Workflow info badges */}
-      {selectedWorkflow && (
-        <div className="flex items-center gap-1">
-          <Badge variant="secondary" className="text-xs">
-            {requiredCount} required
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {optionalCount} optional
-          </Badge>
-        </div>
-      )}
     </div>
   );
 }
