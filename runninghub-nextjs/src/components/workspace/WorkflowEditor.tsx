@@ -77,13 +77,14 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   }, [parameters]);
 
   // Load template from CLI
-  const handleLoadTemplate = useCallback(async () => {
-    if (!selectedWorkflowId) return;
+  const handleLoadTemplate = useCallback(async (workflowId?: string) => {
+    const targetWorkflowId = workflowId || selectedWorkflowId;
+    if (!targetWorkflowId) return;
 
     setIsLoadingTemplate(true);
 
     try {
-      const response = await fetch(`/api/workflow/nodes?workflowId=${selectedWorkflowId}`);
+      const response = await fetch(`/api/workflow/nodes?workflowId=${targetWorkflowId}`);
 
       if (!response.ok) {
         const error = await response.json();
@@ -126,12 +127,12 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       setParameters(newParameters);
 
       // Set workflow name from template
-      const workflowName = AVAILABLE_WORKFLOWS.find(wf => wf.id === selectedWorkflowId)?.name;
+      const workflowName = AVAILABLE_WORKFLOWS.find(wf => wf.id === targetWorkflowId)?.name;
       if (workflowName && !name) {
         setName(workflowName);
       }
 
-      setDescription(`Workflow created from template ${selectedWorkflowId}`);
+      setDescription(`Workflow created from template ${targetWorkflowId}`);
       setTemplateLoaded(true);
     } catch (error) {
       console.error('Failed to load template:', error);
@@ -226,13 +227,27 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
               <div className="space-y-3">
                 <div>
                   <h3 className="text-sm font-medium text-blue-900">Step 1: Select Workflow Template</h3>
-                  <p className="text-xs text-blue-700">Load input fields from an existing workflow</p>
+                  <p className="text-xs text-blue-700">Input fields will load automatically when you select a workflow</p>
                 </div>
 
-                <div className="flex gap-2">
-                  <Select value={selectedWorkflowId} onValueChange={setSelectedWorkflowId}>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedWorkflowId}
+                    onValueChange={(value) => {
+                      setSelectedWorkflowId(value);
+                      handleLoadTemplate(value);
+                    }}
+                    disabled={isLoadingTemplate}
+                  >
                     <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Select a workflow template..." />
+                      {isLoadingTemplate ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Loading template...</span>
+                        </div>
+                      ) : (
+                        <SelectValue placeholder="Select a workflow template..." />
+                      )}
                     </SelectTrigger>
                     <SelectContent>
                       {AVAILABLE_WORKFLOWS.map((wf) => (
@@ -242,22 +257,6 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
                       ))}
                     </SelectContent>
                   </Select>
-
-                  <Button
-                    onClick={handleLoadTemplate}
-                    disabled={!selectedWorkflowId || isLoadingTemplate}
-                    size="sm"
-                    variant="default"
-                  >
-                    {isLoadingTemplate ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      'Load Template'
-                    )}
-                  </Button>
                 </div>
 
                 {templateLoaded && (
