@@ -7,7 +7,17 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      const text = await request.text();
+      body = text ? JSON.parse(text) : {};
+    } catch (e) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON request body' },
+        { status: 400 }
+      );
+    }
+    
     const { text, targetLang, sourceLang } = body;
 
     if (!text || !targetLang) {
@@ -32,10 +42,22 @@ export async function POST(request: NextRequest) {
     const response = await fetch(myMemoryUrl);
 
     if (!response.ok) {
-      throw new Error('Translation service error');
+      console.error(`Translation service error: ${response.status} ${response.statusText}`);
+      const text = await response.text();
+      console.error('Service response body:', text);
+      throw new Error(`Translation service error: ${response.status}`);
     }
 
-    const data = await response.json();
+    const responseText = await response.text();
+    // console.log('MyMemory Raw Response:', responseText); // Uncomment for deep debugging if needed
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse MyMemory response:', responseText);
+      throw new Error('Invalid JSON from translation service');
+    }
 
     if (data.responseStatus === 200) {
       return NextResponse.json({

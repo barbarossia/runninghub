@@ -65,7 +65,16 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
       try {
         const res = await fetch(`/api/tasks/${taskId}`);
         if (res.ok) {
-          const data = await res.json();
+          const text = await res.text();
+          let data;
+          try {
+            data = text ? JSON.parse(text) : null;
+          } catch(e) {
+            return;
+          }
+          
+          if (!data) return;
+
           setTaskStatus(data);
 
           // Check for status change
@@ -84,7 +93,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
           }
         }
       } catch (error) {
-        console.error('Failed to fetch task status');
+        // Silent error
       }
     };
 
@@ -99,11 +108,20 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
       try {
         const res = await fetch('/api/logs?limit=100');
         if (res.ok) {
-          const data = await res.json();
-          setLogs(data.logs as LogEntry[]);
+          const text = await res.text();
+          let data;
+          try {
+            data = text ? JSON.parse(text) : null;
+          } catch(e) {
+            return;
+          }
+
+          if (data && data.logs) {
+            setLogs(data.logs as LogEntry[]);
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch logs:', error);
+        // Silent error
       }
     };
 
