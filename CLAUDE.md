@@ -4,6 +4,36 @@ This document contains the global development rules that apply to the entire Run
 
 ## Feature Planning and Documentation Rules
 
+### Mandatory Documentation Storage
+
+**CRITICAL RULE**: **ALL** project plans and TODO lists **MUST** be saved to the relevant `docs/` folder. This is **NOT optional**.
+
+**Applies to**:
+- ✅ All new feature development
+- ✅ All bug fixes
+- ✅ All refactoring work
+- ✅ All enhancement requests
+- ✅ All architectural changes
+- ✅ All UX/UI improvements
+
+**Documentation Locations**:
+- **Frontend/Next.js work**: `runninghub-nextjs/docs/`
+- **Backend/General work**: `docs/`
+
+**Required Files** (minimum):
+1. **Plan Document**: `{feature-name}-plan.md`
+   - Contains: Overview, requirements, architecture, implementation approach
+2. **TODO List**: `{feature-name}-todos.md`
+   - Contains: Step-by-step implementation checklist with checkboxes
+
+**No Exceptions**:
+- ❌ DO NOT create plans in conversation or temporary locations
+- ❌ DO NOT implement features without first creating documentation
+- ❌ DO NOT skip TODO list creation
+- ✅ ALWAYS save plans to the appropriate `docs/` folder before coding
+- ✅ ALWAYS create TODO lists to track progress
+- ✅ ALWAYS update TODO lists as you complete steps
+
 ### Documentation-First Development
 **RULE 1**: Before implementing any new feature, check the appropriate `docs/` folder for existing plans and TODO lists.
 - **Frontend features**: Check `runninghub-nextjs/docs/`
@@ -37,7 +67,9 @@ This document contains the global development rules that apply to the entire Run
 
 ### Requirement Submission Workflow
 
-**CRITICAL**: When you submit a requirement for a new feature, fix, or enhancement, the following workflow MUST be followed:
+**CRITICAL**: When you submit a requirement for a new feature, fix, or enhancement, the following workflow MUST be followed.
+
+**⚠️ MANDATORY FIRST STEP**: See "Mandatory Documentation Storage" section above - ALL plans and TODOs MUST be saved to the appropriate `docs/` folder. This rule applies to **every** requirement submission without exception.
 
 1. **Documentation First**:
    - Before any code implementation begins, a plan document MUST be created in the appropriate `docs/` folder
@@ -239,6 +271,14 @@ runninghub/
 **Important**: Always check the appropriate `docs/` folder before implementing features. See RULE 1 above.
 
 ## Quick Reference Checklist
+
+**FIRST AND FOREMOST**:
+
+- [ ] **📋 DOCUMENTATION MANDATE**: All plans and TODOs saved to relevant `docs/` folder
+  - Frontend: `runninghub-nextjs/docs/`
+  - Backend/General: `docs/`
+- [ ] Plan document created: `{feature-name}-plan.md`
+- [ ] TODO list created: `{feature-name}-todos.md`
 
 Before implementing any feature, verify:
 
