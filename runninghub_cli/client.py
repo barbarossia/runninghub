@@ -92,7 +92,7 @@ class RunningHubClient:
 
         result = response.json()
         if result.get("code") != 0:
-            raise Exception(f"Upload failed: {result.get('message', 'Unknown error')}")
+            raise Exception(f"Upload failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}")
 
         # RunningHub API returns fileName instead of fileId
         return result.get("data", {}).get("fileName", "")
@@ -131,7 +131,7 @@ class RunningHubClient:
 
         result = response.json()
         if result.get("code") != 0:
-            raise Exception(f"Task submission failed: {result.get('message', 'Unknown error')}")
+            raise Exception(f"Task submission failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}")
 
         return result.get("data", {}).get("taskId", "")
 

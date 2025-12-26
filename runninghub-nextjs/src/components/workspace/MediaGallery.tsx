@@ -6,15 +6,23 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import {
   Grid3x3,
   List,
+  Maximize2,
   Search,
   FileImage,
   FileVideo,
   Check,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Eye,
+  Info,
+  Copy,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Button } from '@/components/ui/button';
@@ -22,40 +30,123 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { API_ENDPOINTS } from '@/constants';
+import { toast } from 'sonner';
 import type { MediaFile } from '@/types/workspace';
+
+// Common aspect ratios
+const COMMON_ASPECT_RATIOS: [number, number, string][] = [
+  [1, 1, '1:1'],
+  [4, 3, '4:3'],
+  [3, 4, '3:4'],
+  [16, 9, '16:9'],
+  [9, 16, '9:16'],
+  [21, 9, '21:9'],
+  [5, 4, '5:4'],
+  [4, 5, '4:5'],
+  [3, 2, '3:2'],
+  [2, 3, '2:3'],
+];
+
+function getAspectRatio(width: number, height: number): string {
+  if (!width || !height) return 'N/A';
+
+  const ratio = width / height;
+
+  // Find the closest common aspect ratio
+  let closestRatio = COMMON_ASPECT_RATIOS[0];
+  let minDiff = Math.abs(ratio - (COMMON_ASPECT_RATIOS[0][0] / COMMON_ASPECT_RATIOS[0][1]));
+
+  for (const [w, h, label] of COMMON_ASPECT_RATIOS) {
+    const diff = Math.abs(ratio - (w / h));
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestRatio = [w, h, label];
+    }
+  }
+
+  // Always return the closest common ratio
+  return closestRatio[2];
+}
 
 export interface MediaGalleryProps {
   onFileClick?: (file: MediaFile) => void;
   onFileDoubleClick?: (file: MediaFile) => void;
+  onRename?: (file: MediaFile, newName: string) => Promise<void>;
+  onDelete?: (files: MediaFile[]) => Promise<void>;
+  onPreview?: (file: MediaFile) => void;
   className?: string;
 }
 
 export function MediaGallery({
   onFileClick,
   onFileDoubleClick,
+  onRename,
+  onDelete,
+  onPreview,
   className = '',
 }: MediaGalleryProps) {
   const {
     mediaFiles,
     viewMode,
+    selectedExtension,
     jobFiles,
     toggleMediaFileSelection,
     selectAllMediaFiles,
     deselectAllMediaFiles,
     getSelectedMediaFiles,
+    setViewMode,
+    setSelectedExtension,
   } = useWorkspaceStore();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [renameDialogFile, setRenameDialogFile] = useState<MediaFile | null>(null);
+  const [deleteDialogFile, setDeleteDialogFile] = useState<MediaFile | null>(null);
+  const [newFileName, setNewFileName] = useState('');
+  const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
 
-  // Filter files based on search and type
+  // Get unique extensions for filter
+  const uniqueExtensions = useMemo(() => {
+    const extensions = new Set<string>();
+    mediaFiles.forEach((file) => {
+      if (file.extension) {
+        extensions.add(file.extension);
+      }
+    });
+    return Array.from(extensions).sort();
+  }, [mediaFiles]);
+
+  // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
-    return mediaFiles.filter((file) => {
-      // Type filter
-      if (typeFilter === 'image' && file.type !== 'image') return false;
-      if (typeFilter === 'video' && file.type !== 'video') return false;
+    const filtered = mediaFiles.filter((file) => {
+      // Extension filter
+      if (selectedExtension && file.extension !== selectedExtension) return false;
 
       // Search filter
       if (searchQuery) {
@@ -68,7 +159,17 @@ export function MediaGallery({
 
       return true;
     });
-  }, [mediaFiles, searchQuery, typeFilter]);
+
+    // Deduplicate by ID to prevent key collision errors
+    const uniqueMap = new Map();
+    filtered.forEach(file => {
+      if (!uniqueMap.has(file.id)) {
+        uniqueMap.set(file.id, file);
+      }
+    });
+    
+    return Array.from(uniqueMap.values());
+  }, [mediaFiles, searchQuery, selectedExtension]);
 
   // Get selected files count
   const selectedCount = useMemo(() => {
@@ -76,11 +177,6 @@ export function MediaGallery({
   }, [mediaFiles]);
 
   const isAllSelected = selectedCount > 0 && selectedCount === filteredFiles.length;
-
-  // Handle view mode toggle
-  const handleViewModeChange = useCallback((mode: 'grid' | 'list') => {
-    useWorkspaceStore.getState().setViewMode(mode);
-  }, []);
 
   // Handle select all toggle
   const handleSelectAllToggle = useCallback(() => {
@@ -108,18 +204,56 @@ export function MediaGallery({
     [onFileDoubleClick]
   );
 
+  // Helper functions for dialogs
+  const setRenameDialogOpen = useCallback((file: MediaFile) => {
+    setRenameDialogFile(file);
+    setNewFileName(file.name);
+  }, []);
+
+  const setDeleteDialogOpen = useCallback((file: MediaFile) => {
+    setDeleteDialogFile(file);
+  }, []);
+
+  const handleRenameConfirm = async () => {
+    if (!renameDialogFile || !onRename || !newFileName.trim()) return;
+    try {
+      await onRename(renameDialogFile, newFileName.trim());
+      setRenameDialogFile(null);
+      setNewFileName('');
+    } catch (error) {
+      console.error('Failed to rename file:', error);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteDialogFile || !onDelete) return;
+    try {
+      await onDelete([deleteDialogFile]);
+      setDeleteDialogFile(null);
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+    }
+  };
+
   // Get grid columns based on view mode
   const gridCols = useMemo(() => {
-    return viewMode === 'grid'
-      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
-      : 'grid-cols-1';
+    switch (viewMode) {
+      case 'grid':
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
+      case 'large':
+        return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
+      case 'list':
+        return 'grid-cols-1';
+      default:
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+    }
   }, [viewMode]);
 
   // Empty state
   if (filteredFiles.length === 0) {
     return (
       <div className={cn('flex flex-col items-center justify-center py-16', className)}>
-        {typeFilter !== 'all' || searchQuery ? (
+        {selectedExtension || searchQuery ? (
           <>
             <Search className="h-16 w-16 text-gray-400 mb-4" />
             <p className="text-lg text-gray-600 mb-2">No files found</p>
@@ -155,35 +289,29 @@ export function MediaGallery({
             />
           </div>
 
-          {/* Type filter */}
-          <div className="flex gap-1" role="group" aria-label="Filter by file type">
+          {/* Extension filter */}
+          <div className="flex gap-1" role="group" aria-label="Filter by file extension">
             <Button
-              variant={typeFilter === 'all' ? 'default' : 'outline'}
+              variant={selectedExtension === null ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setTypeFilter('all')}
+              onClick={() => setSelectedExtension(null)}
               aria-label="Show all files"
-              aria-pressed={typeFilter === 'all'}
+              aria-pressed={selectedExtension === null}
             >
               All
             </Button>
-            <Button
-              variant={typeFilter === 'image' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTypeFilter('image')}
-              aria-label="Show images only"
-              aria-pressed={typeFilter === 'image'}
-            >
-              Images
-            </Button>
-            <Button
-              variant={typeFilter === 'video' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTypeFilter('video')}
-              aria-label="Show videos only"
-              aria-pressed={typeFilter === 'video'}
-            >
-              Videos
-            </Button>
+            {uniqueExtensions.slice(0, 5).map((ext) => (
+              <Button
+                key={ext}
+                variant={selectedExtension === ext ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedExtension(ext)}
+                aria-label={`Filter by ${ext} files`}
+                aria-pressed={selectedExtension === ext}
+              >
+                {ext.replace('.', '').toUpperCase()}
+              </Button>
+            ))}
           </div>
         </div>
 
@@ -209,7 +337,7 @@ export function MediaGallery({
             <Button
               variant={viewMode === 'grid' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => handleViewModeChange('grid')}
+              onClick={() => setViewMode('grid')}
               aria-label="Grid view"
               aria-pressed={viewMode === 'grid'}
             >
@@ -218,11 +346,20 @@ export function MediaGallery({
             <Button
               variant={viewMode === 'list' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => handleViewModeChange('list')}
+              onClick={() => setViewMode('list')}
               aria-label="List view"
               aria-pressed={viewMode === 'list'}
             >
               <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'large' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('large')}
+              aria-label="Large grid view"
+              aria-pressed={viewMode === 'large'}
+            >
+              <Maximize2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -231,7 +368,7 @@ export function MediaGallery({
       {/* File count */}
       <div className="text-sm text-gray-600">
         {filteredFiles.length} file{filteredFiles.length !== 1 ? 's' : ''}
-        {typeFilter !== 'all' && ` (${typeFilter})`}
+        {selectedExtension && ` (${selectedExtension.replace('.', '').toUpperCase()})`}
         {searchQuery && ' matching "' + searchQuery + '"'}
       </div>
 
@@ -311,13 +448,13 @@ export function MediaGallery({
                       <div className="flex-1 min-w-0">
                         <p
                           className={cn(
-                            'text-sm font-bold truncate',
+                            'text-sm font-bold line-clamp-1',
                             isSelected ? 'text-blue-700' : 'text-gray-900'
                           )}
                         >
                           {file.name}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">{file.path}</p>
+                        <p className="text-xs text-gray-500 line-clamp-1">{file.path}</p>
                       </div>
 
                       {/* Badge */}
@@ -405,7 +542,7 @@ export function MediaGallery({
                       </div>
                     )}
 
-                    {/* Overlay with checkbox */}
+                    {/* Overlay with checkbox and more menu */}
                     <div
                       className={cn(
                         'absolute inset-0 transition-all',
@@ -422,6 +559,44 @@ export function MediaGallery({
                       >
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleMediaFileSelection(file.id)} />
                       </div>
+
+                      {/* More menu */}
+                      <div
+                        className={cn(
+                          'absolute top-2 right-2 transition-opacity',
+                          isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        )}
+                      >
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 bg-white/90 hover:bg-white text-gray-700 hover:text-gray-900 shadow-sm"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPreviewFile(file); onPreview?.(file); }}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              Preview
+                            </DropdownMenuItem>
+                            {onRename && (
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameDialogOpen(file); }}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Rename
+                              </DropdownMenuItem>
+                            )}
+                            {onDelete && (
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setDeleteDialogOpen(file); }} className="text-destructive">
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </div>
 
@@ -432,16 +607,10 @@ export function MediaGallery({
                       isSelected ? 'bg-blue-100 border-blue-200' : 'bg-white border-gray-100'
                     )}
                   >
-                    <p
-                      className={cn(
-                        'text-xs font-bold truncate',
-                        isSelected ? 'text-blue-800' : 'text-gray-900'
-                      )}
-                      title={file.name}
-                    >
+                    <p className={cn('text-xs font-bold line-clamp-1 h-4', isSelected ? 'text-blue-800' : 'text-gray-900')} title={file.name}>
                       {file.name}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 line-clamp-1 h-4">
                       {(file.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
@@ -470,6 +639,256 @@ export function MediaGallery({
             </div>
           </Card>
         </motion.div>
+      )}
+
+      {/* Rename Dialog */}
+      {onRename && (
+        <AlertDialog open={!!renameDialogFile} onOpenChange={(open) => !open && setRenameDialogFile(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rename File</AlertDialogTitle>
+              <AlertDialogDescription>
+                Enter a new name for the file. The file extension will be preserved.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <Input
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder={renameDialogFile?.name}
+                onKeyDown={(e) => e.key === 'Enter' && handleRenameConfirm()}
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleRenameConfirm} className="bg-blue-600 hover:bg-blue-700">
+                Rename
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {onDelete && (
+        <AlertDialog open={!!deleteDialogFile} onOpenChange={(open) => !open && setDeleteDialogFile(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {deleteDialogFile?.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. The file will be permanently deleted from your file system.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Preview Dialog */}
+      {previewFile && (
+        <Dialog open={!!previewFile} onOpenChange={(open) => {
+          if (!open) {
+            setPreviewFile(null);
+            setShowMoreDetails(false);
+            setCopiedPath(false);
+          }
+        }}>
+          <DialogContent className="max-w-6xl w-full">
+            <DialogHeader>
+              <DialogTitle className="line-clamp-1">{previewFile.name}</DialogTitle>
+              <DialogDescription className="line-clamp-1">
+                {previewFile.type === 'image' ? 'Image' : 'Video'} • {previewFile.extension?.toUpperCase() || 'N/A'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Two-column layout: Preview on left, Details on right */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left: Preview (2/3 width on large screens) */}
+              <div className="lg:col-span-2">
+                <div className="relative bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+                  {previewFile.type === 'video' ? (
+                    <video
+                      src={previewFile.blobUrl || ''}
+                      controls
+                      className="w-full max-h-[70vh] object-contain"
+                      autoPlay
+                    />
+                  ) : (
+                    <Image
+                      src={previewFile.thumbnail || previewFile.blobUrl || ''}
+                      alt={previewFile.name}
+                      width={previewFile.width || 800}
+                      height={previewFile.height || 600}
+                      className="w-full h-auto object-contain max-h-[70vh]"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Right: Details (1/3 width on large screens) */}
+              <div className="lg:col-span-1 space-y-4 bg-white p-4 rounded-lg">
+                {/* Basic Info */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-gray-700">File Information</h3>
+
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600 text-xs">Type</span>
+                      <p className="font-medium capitalize">{previewFile.type}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-600 text-xs">Extension</span>
+                      <p className="font-medium">{previewFile.extension?.toUpperCase() || 'N/A'}</p>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-600 text-xs">File Size</span>
+                      <p className="font-medium">
+                        {previewFile.size >= 1024 * 1024
+                          ? `${(previewFile.size / (1024 * 1024)).toFixed(2)} MB`
+                          : `${(previewFile.size / 1024).toFixed(2)} KB`
+                        }
+                        <span className="text-gray-500 text-xs ml-1">({previewFile.size.toLocaleString()} bytes)</span>
+                      </p>
+                    </div>
+
+                    {/* Width - always show */}
+                    {previewFile.width ? (
+                      <div>
+                        <span className="text-gray-600 text-xs">Width</span>
+                        <p className="font-medium">{previewFile.width} pixels</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="text-gray-600 text-xs">Width</span>
+                        <p className="font-medium text-gray-400">N/A</p>
+                      </div>
+                    )}
+
+                    {/* Height - always show */}
+                    {previewFile.height ? (
+                      <div>
+                        <span className="text-gray-600 text-xs">Height</span>
+                        <p className="font-medium">{previewFile.height} pixels</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="text-gray-600 text-xs">Height</span>
+                        <p className="font-medium text-gray-400">N/A</p>
+                      </div>
+                    )}
+
+                    {/* Aspect Ratio - always show if we have dimensions */}
+                    {previewFile.width && previewFile.height ? (
+                      <div>
+                        <span className="text-gray-600 text-xs">Aspect Ratio</span>
+                        <p className="font-medium">
+                          {getAspectRatio(previewFile.width, previewFile.height)}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="text-gray-600 text-xs">Aspect Ratio</span>
+                        <p className="font-medium text-gray-400">N/A</p>
+                      </div>
+                    )}
+
+                    {previewFile.fps ? (
+                      <div>
+                        <span className="text-gray-600 text-xs">Frame Rate</span>
+                        <p className="font-medium">{previewFile.fps} FPS</p>
+                      </div>
+                    ) : previewFile.type === 'video' ? (
+                      <div>
+                        <span className="text-gray-600 text-xs">Frame Rate</span>
+                        <p className="font-medium text-gray-400">N/A</p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* More Details (collapsible) */}
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMoreDetails(!showMoreDetails)}
+                    className="w-full justify-start"
+                  >
+                    {showMoreDetails ? (
+                      <>
+                        <ChevronUp className="h-4 w-4 mr-2" />
+                        Hide Details
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4 mr-2" />
+                        More Details
+                      </>
+                    )}
+                  </Button>
+
+                  <AnimatePresence>
+                    {showMoreDetails && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="space-y-2 text-sm"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-600 text-xs">File Path</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => {
+                                navigator.clipboard.writeText(previewFile.path);
+                                setCopiedPath(true);
+                                toast.success('File path copied to clipboard');
+                                setTimeout(() => setCopiedPath(false), 2000);
+                              }}
+                            >
+                              {copiedPath ? (
+                                <>
+                                  <Check className="h-3 w-3 mr-1 text-green-600" />
+                                  Copied
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          <p className="font-mono text-xs break-all bg-gray-50 p-2 rounded mt-1 border">
+                            {previewFile.path}
+                          </p>
+                        </div>
+
+                        <div>
+                          <span className="text-gray-600 text-xs">MIME Type</span>
+                          <p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+                            {previewFile.type === 'image' ? 'image/' : 'video/'}{previewFile.extension?.replace('.', '')}
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

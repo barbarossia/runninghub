@@ -1,15 +1,11 @@
 /**
  * Translation hook
- * Provides translation functionality with Chrome AI API
+ * Provides translation functionality via Server API (Google Translate)
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { translateText, isChromeAITranslatorAvailable } from '@/lib/translator';
+import { useState, useCallback } from 'react';
+import { translateText } from '@/lib/translator';
 import type { TranslationResponse, Language } from '@/types/workspace';
-
-export interface UseTranslationOptions {
-  enableChromeAI?: boolean;
-}
 
 export interface UseTranslationReturn {
   translate: (text: string, from: Language, to: Language) => Promise<TranslationResponse>;
@@ -18,25 +14,14 @@ export interface UseTranslationReturn {
   isSupported: boolean;
   isLoading: boolean;
   error: string | null;
-  isChromeAIAvailable: boolean;
 }
 
 /**
  * Hook for translation functionality
  */
-export function useTranslation(
-  options: UseTranslationOptions = {}
-): UseTranslationReturn {
-  const { enableChromeAI = true } = options;
-
+export function useTranslation(): UseTranslationReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isChromeAIAvailable, setIsChromeAIAvailable] = useState(false);
-
-  // Check Chrome AI Translator availability on mount
-  useEffect(() => {
-    setIsChromeAIAvailable(isChromeAITranslatorAvailable());
-  }, []);
 
   /**
    * Translate text
@@ -93,10 +78,9 @@ export function useTranslation(
     translate,
     toEnglish,
     toChinese,
-    isSupported: isChromeAIAvailable,
+    isSupported: true, // Always supported via server API
     isLoading,
     error,
-    isChromeAIAvailable,
   };
 }
 
@@ -104,11 +88,9 @@ export function useTranslation(
  * Hook for translating text with debouncing
  */
 export function useDebouncedTranslation(
-  delay: number = 500,
-  options: UseTranslationOptions = {}
+  delay: number = 500
 ) {
-  const { translate, ...rest } = useTranslation(options);
-  const [debouncedText, setDebouncedText] = useState<string>('');
+  const { translate, ...rest } = useTranslation();
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
 
   /**

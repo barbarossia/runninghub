@@ -50,13 +50,19 @@ export function useFileSystem(): UseFileSystemReturn {
         ? { folder_path: folderInput, is_virtual: true, virtual_data: virtualData }
         : { folder_path: folderInput };
 
-      const response = await fetch(endpoint, {
+        const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      const data: FolderSelectionResponse = await response.json();
+      const text = await response.text();
+      let data: FolderSelectionResponse;
+      try {
+        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to select folder');
@@ -87,19 +93,24 @@ export function useFileSystem(): UseFileSystemReturn {
     }
 
     try {
-      const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          folder_path: folderPath,
-          session_id: sessionId,
-        }),
-      });
-
-      const data: FileSystemContents = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to load folder contents');
+              const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                folder_path: folderPath,
+                session_id: sessionId,
+              }),
+            });
+      
+            const text = await response.text();
+            let data: FileSystemContents;
+            try {
+              data = text ? JSON.parse(text) : { message: 'Empty response', success: false };
+            } catch (e) {
+              throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+            }
+      
+            if (!response.ok) {        throw new Error(data.message || 'Failed to load folder contents');
       }
 
       // Update folder contents in store
@@ -129,16 +140,21 @@ export function useFileSystem(): UseFileSystemReturn {
     path: string
   ): Promise<{ valid: boolean; message?: string; relativePath?: string }> => {
     try {
-      const response = await fetch(API_ENDPOINTS.FOLDER_VALIDATE_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { valid: false, message: data.error || 'Invalid path' };
+              const response = await fetch(API_ENDPOINTS.FOLDER_VALIDATE_PATH, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path }),
+            });
+      
+            const text = await response.text();
+            let data;
+            try {
+              data = text ? JSON.parse(text) : { error: 'Empty response' };
+            } catch (e) {
+              throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+            }
+      
+            if (!response.ok) {        return { valid: false, message: data.error || 'Invalid path' };
       }
 
       return {

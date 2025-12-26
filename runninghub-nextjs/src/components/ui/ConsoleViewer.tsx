@@ -26,12 +26,14 @@ interface TaskState {
 
 interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
+  onTaskComplete?: (taskId: string, status: 'completed' | 'failed') => void;
+  onStatusChange?: (taskId: string, status: TaskState['status']) => void;
   taskId?: string | null;
   defaultVisible?: boolean; // Force console to be visible by default
   autoRefreshInterval?: number; // Optional auto-refresh interval
 }
 
-export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: ConsoleViewerProps) {
+export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskId, defaultVisible = false }: ConsoleViewerProps) {
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -40,6 +42,7 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
   const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastStatusRef = useRef<string | null>(null);
 
   // Prevent hydration errors
   useEffect(() => {
@@ -50,6 +53,7 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setTaskStatus(null);
+    lastStatusRef.current = null;
   }, [taskId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -61,23 +65,42 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
       try {
         const res = await fetch(`/api/tasks/${taskId}`);
         if (res.ok) {
-          const data = await res.json();
+          const text = await res.text();
+          let data;
+          try {
+            data = text ? JSON.parse(text) : null;
+          } catch(e) {
+            return;
+          }
+          
+          if (!data) return;
+
           setTaskStatus(data);
 
-          // Auto-minimize on completion
-          if (data.status === 'completed' && taskStatus?.status !== 'completed') {
-            setTimeout(() => setIsMinimized(true), 3000);
+          // Check for status change
+          if (data.status !== lastStatusRef.current) {
+             onStatusChange?.(taskId, data.status);
+
+             if (data.status === 'completed' || data.status === 'failed') {
+               onTaskComplete?.(taskId, data.status);
+               
+               // Auto-minimize on completion
+               if (data.status === 'completed') {
+                 setTimeout(() => setIsMinimized(true), 3000);
+               }
+             }
+             lastStatusRef.current = data.status;
           }
         }
       } catch (error) {
-        console.error('Failed to fetch task status');
+        // Silent error
       }
     };
 
     fetchTask();
     const interval = setInterval(fetchTask, 1000);
     return () => clearInterval(interval);
-  }, [taskId, taskStatus?.status]);
+  }, [taskId, onTaskComplete]); // Removed taskStatus dependency to avoid infinite loops if it was used
 
   // Polling logs
   useEffect(() => {
@@ -85,11 +108,20 @@ export function ConsoleViewer({ onRefresh, taskId, defaultVisible = false }: Con
       try {
         const res = await fetch('/api/logs?limit=100');
         if (res.ok) {
-          const data = await res.json();
-          setLogs(data.logs as LogEntry[]);
+          const text = await res.text();
+          let data;
+          try {
+            data = text ? JSON.parse(text) : null;
+          } catch(e) {
+            return;
+          }
+
+          if (data && data.logs) {
+            setLogs(data.logs as LogEntry[]);
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch logs:', error);
+        // Silent error
       }
     };
 

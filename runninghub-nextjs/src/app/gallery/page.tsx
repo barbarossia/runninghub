@@ -88,7 +88,13 @@ export default function GalleryPage() {
   const loadNodes = async () => {
     try {
       const response = await fetch(API_ENDPOINTS.NODES);
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { success: false };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
 
       if (data.success && data.nodes) {
         setNodes(data.nodes);
@@ -119,7 +125,13 @@ export default function GalleryPage() {
         body: JSON.stringify({ images: selectedPaths }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to delete images');
@@ -163,7 +175,13 @@ export default function GalleryPage() {
         }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to process images');

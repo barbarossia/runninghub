@@ -4,11 +4,29 @@ This document consolidates all project rules, standards, and workflows from the 
 
 ## 1. Global Development Rules (Root)
 
+### Documentation & Planning Mandates
+**CRITICAL RULE**: **ALL** project plans and TODO lists **MUST** be saved to the relevant `docs/` folder. This is **NOT optional**.
+
+*   **Locations**:
+    *   Frontend: `runninghub-nextjs/docs/`
+    *   Backend/General: `docs/`
+*   **Required Files**:
+    *   Plan Document: `{feature-name}-plan.md`
+    *   TODO List: `{feature-name}-todos.md`
+*   **Workflow**:
+    1.  Check existing docs in `docs/` or `runninghub-nextjs/docs/`.
+    2.  If none, CREATE documentation first.
+    3.  Get approval.
+    4.  Implement while updating the TODO list.
+
 ### Git Workflow
 *   **Branching**: Always create from latest `main` (`git checkout main && git pull origin main`).
 *   **Naming**: `feature/`, `fix/`, `refactor/`, `docs/`, `test/`.
 *   **Commits**: Use conventional format: `type(scope): subject`.
     *   *Types*: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
+*   **Pull Requests**:
+    *   Title matches commit format.
+    *   Description includes Summary, Testing details, and Checklist.
 
 ### Build Verification
 *   **Mandatory Check**: Build must pass before any commit.
@@ -20,13 +38,15 @@ This document consolidates all project rules, standards, and workflows from the 
 ## 2. Frontend Development Standards (`runninghub-nextjs/`)
 
 ### Mandatory Rules
-*   **RULE 1 (Template)**: Use **Gallery page** (`src/app/gallery/page.tsx`) as the template for all new pages (Layout, Spacing, Typography).
-*   **RULE 2 (Reusability)**: Always use common **Select Folder**, **Toolbar**, and **Console** components. Keep style and layout consistent.
-*   **RULE 3 (Global Console)**: The **ConsoleViewer** component MUST be present on all pages requiring feedback or task tracking.
-*   **RULE 4 (Refresh Policy)**: Pages should **NOT** auto-refresh on intervals. Refresh only when items are explicitly added or removed. Use `silent: true` for background updates.
-*   **RULE 5 (Hydration)**: Prevent hydration errors by ensuring server/client HTML matches. **Never** use conditional early returns based on `mounted` state. Use `useEffect` for browser-only APIs (`localStorage`, `window`).
+*   **RULE 1 (Build Verification)**: Run `npm run build` before committing and after each implementation phase.
+*   **RULE 2 (Template)**: Use **Gallery page** (`src/app/gallery/page.tsx`) as the template for all new pages (Layout, Spacing, Typography).
+*   **RULE 3 (Reusability)**: Always use common **Select Folder**, **Toolbar**, and **Console** components. Keep style and layout consistent.
+*   **RULE 4 (Folder Selection)**: All pages with folder selectors must automatically restore the last opened folder on page load (persist in localStorage), validating existence before restoring.
+*   **RULE 5 (Global Console)**: The **ConsoleViewer** component MUST be present on all pages requiring feedback or task tracking.
+*   **RULE 6 (Refresh Policy)**: Pages should **NOT** auto-refresh on intervals. Refresh only when items are explicitly added or removed. Use `silent: true` for background updates.
+*   **RULE 7 (Hydration)**: Prevent hydration errors by ensuring server/client HTML matches. **Never** use conditional early returns based on `mounted` state. Use `useEffect` for browser-only APIs (`localStorage`, `window`).
 
-### Page structure Template
+### Page Structure Template
 ```tsx
 'use client';
 import { useState, useEffect } from 'react';

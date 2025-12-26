@@ -733,10 +733,16 @@ npm run build
 
 ### Phase 5: Workflow Selector Component
 **File**: `src/components/workspace/WorkflowSelector.tsx`
-- [ ] Create dropdown for workflow selection
-- [ ] Display workflow description
-- [ ] Show required/optional field counts
-- [ ] Add "Configure New Workflow" button
+- [x] Create dropdown for workflow selection
+- [x] Display workflow description
+- [x] Show required/optional field counts
+- [x] Add "Configure New Workflow" button
+- [x] **Enhancement**: Load saved workflows from workspace folder on mount
+- [x] **Enhancement**: Show loading state during fetch
+- [x] **Enhancement**: Show error state on API failure
+- [x] **Enhancement**: Replace localStorage workflows with fetched ones
+
+See `docs/media-gallery-workflow-loading-todos.md` for detailed implementation TODOs.
 
 ### Phase 6: Workflow Input Builder Component
 **File**: `src/components/workspace/WorkflowInputBuilder.tsx`
@@ -1501,7 +1507,7 @@ This is a checklist format that can be used during implementation. Each item sho
   - [ ] ImageDetail variant
   - [ ] VideoDetail variant
 - [ ] Create MediaToolbar component
-- [ ] Create WorkflowSelector component
+- [x] Create WorkflowSelector component (enhanced with auto-loading)
 - [ ] Create WorkflowInputBuilder component
   - [ ] Add post-processing options (delete source files checkbox)
 - [ ] Create WorkflowEditor component

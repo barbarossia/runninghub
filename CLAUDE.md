@@ -4,27 +4,111 @@ This document contains the global development rules that apply to the entire Run
 
 ## Feature Planning and Documentation Rules
 
+### Mandatory Documentation Storage
+
+**CRITICAL RULE**: **ALL** project plans and TODO lists **MUST** be saved to the relevant `docs/` folder. This is **NOT optional**.
+
+**Applies to**:
+- ✅ All new feature development
+- ✅ All bug fixes
+- ✅ All refactoring work
+- ✅ All enhancement requests
+- ✅ All architectural changes
+- ✅ All UX/UI improvements
+
+**Documentation Locations**:
+- **Frontend/Next.js work**: `runninghub-nextjs/docs/`
+- **Backend/General work**: `docs/`
+
+**Required Files** (minimum):
+1. **Plan Document**: `{feature-name}-plan.md`
+   - Contains: Overview, requirements, architecture, implementation approach
+2. **TODO List**: `{feature-name}-todos.md`
+   - Contains: Step-by-step implementation checklist with checkboxes
+
+**No Exceptions**:
+- ❌ DO NOT create plans in conversation or temporary locations
+- ❌ DO NOT implement features without first creating documentation
+- ❌ DO NOT skip TODO list creation
+- ✅ ALWAYS save plans to the appropriate `docs/` folder before coding
+- ✅ ALWAYS create TODO lists to track progress
+- ✅ ALWAYS update TODO lists as you complete steps
+
 ### Documentation-First Development
-**RULE 1**: Before implementing any new feature, check the `docs/` folder for existing plans and TODO lists.
+**RULE 1**: Before implementing any new feature, check the appropriate `docs/` folder for existing plans and TODO lists.
+- **Frontend features**: Check `runninghub-nextjs/docs/`
+- **Backend/General features**: Check `docs/`
 
 **Process**:
 1. **Search for existing documentation**:
    ```bash
+   # For frontend features
+   ls runninghub-nextjs/docs/                      # List frontend documentation
+   grep -r "feature-name" runninghub-nextjs/docs/  # Search frontend docs
+
+   # For backend/general features
    ls docs/                      # List all documentation files
    grep -r "feature-name" docs/  # Search for specific feature docs
    ```
 
 2. **If documentation exists**:
-   - Read the plan/TODO list in `docs/`
+   - Read the plan/TODO list in the appropriate `docs/` folder (frontend: `runninghub-nextjs/docs/`, backend: `docs/`)
    - Follow the implementation steps outlined
    - Check off completed items in the TODO list
    - Update the documentation if requirements change
 
 3. **If no documentation exists**:
-   - Create a plan document in `docs/` first
+   - Create a plan document in the appropriate `docs/` folder first
+     - Frontend features: `runninghub-nextjs/docs/`
+     - Backend/general: `docs/`
    - Include: requirements, architecture, implementation steps, TODO list
    - Get approval on the plan before implementing
-   - Reference: `docs/workspace-redesign-plan.md` as a template
+   - Reference: `runninghub-nextjs/docs/workspace-redesign-plan.md` as a template for frontend features
+
+### Requirement Submission Workflow
+
+**CRITICAL**: When you submit a requirement for a new feature, fix, or enhancement, the following workflow MUST be followed.
+
+**⚠️ MANDATORY FIRST STEP**: See "Mandatory Documentation Storage" section above - ALL plans and TODOs MUST be saved to the appropriate `docs/` folder. This rule applies to **every** requirement submission without exception.
+
+1. **Documentation First**:
+   - Before any code implementation begins, a plan document MUST be created in the appropriate `docs/` folder
+   - **UI/Frontend requirements**: Save plan in `runninghub-nextjs/docs/`
+   - **Backend/General requirements**: Save plan in `docs/`
+
+2. **Plan Document Requirements**:
+   - Document name: `{feature-name}-plan.md` (e.g., `workspace-redesign-plan.md`)
+   - Include TODO list: Create `{feature-name}-todos.md` to track implementation progress
+   - Must contain:
+     - Overview and objectives
+     - Current state vs. target state
+     - User requirements (if applicable)
+     - Technical approach/architecture
+     - Implementation phases/steps
+     - TODO checklist for tracking progress
+
+3. **Implementation Sequence**:
+   ```
+   Your Requirement
+        ↓
+   Create Plan Document in docs/
+        ↓
+   Review and Approve Plan
+        ↓
+   Create TODO List
+        ↓
+   Implement Following Plan
+        ↓
+   Update TODO as You Progress
+        ↓
+   Complete Implementation
+   ```
+
+4. **Examples**:
+   - UI feature request → `runninghub-nextjs/docs/new-feature-plan.md`
+   - Backend API change → `docs/api-redesign-plan.md`
+   - Bug fix (UI) → `runninghub-nextjs/docs/toolbar-fix-plan.md`
+   - Bug fix (backend) → `docs/conversion-fix-plan.md`
 
 **Rationale**: Ensures all features are properly planned, documented, and tracked. Prevents duplicate work, provides context for future developers, and maintains a historical record of design decisions.
 
@@ -69,6 +153,11 @@ git checkout -b fix/your-bug-fix
 cd runninghub-nextjs
 npm run build
 ```
+
+**See `runninghub-nextjs/CLAUDE.md` for:**
+- Phase-based development workflow
+- Frontend-specific build requirements
+- TypeScript compilation rules
 
 **For Python Backend** (if applicable):
 ```bash
@@ -166,24 +255,36 @@ runninghub/
 ├── CLAUDE.md                  # This file - Global rules
 ├── runninghub-nextjs/         # Next.js frontend
 │   ├── CLAUDE.md              # Frontend-specific rules
+│   ├── docs/                  # Frontend feature plans and documentation
+│   │   ├── workspace-redesign-plan.md
+│   │   ├── nextjs-migration-plan.md
+│   │   └── ...
 │   ├── src/
 │   ├── package.json
 │   └── ...
-├── docs/                      # Feature plans and documentation
-│   ├── workspace-redesign-plan.md
-│   ├── nextjs-migration-plan.md
-│   └── ...
+├── docs/                      # Backend/general documentation
+│   └── video-conversion-guide.md
 ├── .git/                      # Git repository
 └── README.md                  # Project overview
 ```
 
-**Important**: Always check `docs/` before implementing features. See RULE 1 above.
+**Important**: Always check the appropriate `docs/` folder before implementing features. See RULE 1 above.
 
 ## Quick Reference Checklist
 
+**FIRST AND FOREMOST**:
+
+- [ ] **📋 DOCUMENTATION MANDATE**: All plans and TODOs saved to relevant `docs/` folder
+  - Frontend: `runninghub-nextjs/docs/`
+  - Backend/General: `docs/`
+- [ ] Plan document created: `{feature-name}-plan.md`
+- [ ] TODO list created: `{feature-name}-todos.md`
+
 Before implementing any feature, verify:
 
-- [ ] Checked `docs/` folder for existing plan/TODO list
+- [ ] Checked appropriate `docs/` folder for existing plan/TODO list
+  - Frontend features: `runninghub-nextjs/docs/`
+  - Backend/general: `docs/`
 - [ ] If no plan exists, created documentation first
 - [ ] Followed implementation steps from plan
 - [ ] Updated TODO list with completed items
@@ -201,12 +302,15 @@ Before committing any changes, verify:
 
 ## Related Documentation
 
-- **Feature Documentation**: See `docs/` folder for feature plans, architecture designs, and TODO lists
-  - Example: `docs/workspace-redesign-plan.md` - Workspace feature redesign plan
+- **Backend/General Documentation**: See `docs/` folder for backend-related guides and general project documentation
+  - Example: `docs/video-conversion-guide.md` - Video format conversion with FFmpeg
+- **Frontend Documentation**: See `runninghub-nextjs/docs/` for Next.js-specific feature plans, implementation guides, and TODO lists
+  - Example: `runninghub-nextjs/docs/workspace-redesign-plan.md` - Workspace feature redesign plan
+  - Example: `runninghub-nextjs/docs/nextjs-migration-plan.md` - Next.js migration plan
 - **Frontend Rules**: See `runninghub-nextjs/CLAUDE.md` for Next.js-specific development rules, design system, and component standards
 - **Project README**: See `README.md` for project overview and setup instructions
 
 ---
 
-**Last Updated**: 2025-12-25
+**Last Updated**: 2025-12-26
 **Maintained By**: Development Team

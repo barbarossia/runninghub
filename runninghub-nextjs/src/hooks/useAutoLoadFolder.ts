@@ -53,7 +53,14 @@ export function useAutoLoadFolder({
           }),
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : { success: false };
+        } catch (e) {
+          console.error('Failed to parse auto-load response:', text);
+          data = { success: false };
+        }
 
         if (data.success || data.images || data.videos) {
           // Folder exists, set it as selected

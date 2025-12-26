@@ -5,10 +5,11 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore } from '@/store/folder-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
+import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { useFileSystem } from '@/hooks';
 import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout';
 import { SelectedFolderHeader } from '@/components/folder/SelectedFolderHeader';
@@ -20,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaGallery } from '@/components/workspace/MediaGallery';
+import { MediaSelectionToolbar } from '@/components/workspace/MediaSelectionToolbar';
 import { WorkflowList } from '@/components/workspace/WorkflowList';
 import { WorkflowEditor } from '@/components/workspace/WorkflowEditor';
 import { WorkflowSelector } from '@/components/workspace/WorkflowSelector';
@@ -37,7 +39,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
-import type { Workflow, Job } from '@/types/workspace';
+import type { Workflow, Job, MediaFile } from '@/types/workspace';
 
 export default function WorkspacePage() {
   // Folder store state - selectedFolder comes from here
@@ -56,8 +58,11 @@ export default function WorkspacePage() {
     updateWorkflow,
     deleteWorkflow,
     addJob,
+    updateJob,
     setSelectedJob,
     clearJobInputs,
+    getSelectedMediaFiles,
+    deselectAllMediaFiles,
   } = useWorkspaceStore();
 
   // Local state
@@ -67,22 +72,125 @@ export default function WorkspacePage() {
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
 
+  // Get selected files from store
+  const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
+
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
 
-  const handleRefresh = async (silent = false) => {
+  // Helper to process and update media files
+  const processFolderContents = useCallback((result: any) => {
+    if (!result) return;
+
+    // Convert images to MediaFile format with serve URLs
+    const imageFiles = (result.images || []).map((file: any) => ({
+      id: file.path,
+      name: file.name,
+      path: file.path,
+      type: 'image' as const,
+      extension: file.name.split('.').pop() || '',
+      size: file.size || 0,
+      width: file.width,
+      height: file.height,
+      thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
+      selected: false,
+    }));
+
+    // Convert videos to MediaFile format with serve URLs
+    const videoFiles = (result.videos || []).map((file: any) => ({
+      id: file.path,
+      name: file.name,
+      path: file.path,
+      type: 'video' as const,
+      extension: file.name.split('.').pop() || '',
+      size: file.size || 0,
+      width: file.width,
+      height: file.height,
+      fps: file.fps,
+      thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
+      blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
+      selected: false,
+    }));
+
+    // Combine both types and deduplicate by ID (path)
+    const allFiles = [...imageFiles, ...videoFiles];
+    const uniqueMap = new Map();
+    const duplicates: string[] = [];
+
+    allFiles.forEach(file => {
+      if (uniqueMap.has(file.id)) {
+        duplicates.push(file.id);
+      } else {
+        uniqueMap.set(file.id, file);
+      }
+    });
+
+    if (duplicates.length > 0) {
+      console.warn('Duplicate files detected and removed:', duplicates);
+    }
+
+    const uniqueFiles = Array.from(uniqueMap.values());
+    setMediaFiles(uniqueFiles as MediaFile[]);
+  }, [setMediaFiles]);
+
+  const handleRefresh = useCallback(async (silent = false) => {
     if (selectedFolder) {
-      await loadFolderContents(
+      const result = await loadFolderContents(
         selectedFolder.folder_path,
         selectedFolder.session_id,
         silent
       );
+      processFolderContents(result);
     }
-  };
+  }, [selectedFolder, loadFolderContents, processFolderContents]);
+
+  const handleTaskComplete = useCallback((taskId: string, status: 'completed' | 'failed') => {
+    // Find job associated with this task
+    const job = jobs.find(j => j.taskId === taskId);
+    if (job) {
+      updateJob(job.id, { 
+        status: status, 
+        completedAt: Date.now() 
+      });
+      
+      if (status === 'completed') {
+        toast.success('Job completed successfully');
+        handleRefresh(true); // Refresh folder contents to show new files
+      } else {
+        toast.error('Job failed');
+      }
+    }
+  }, [jobs, updateJob, handleRefresh]);
+
+  const handleStatusChange = useCallback((taskId: string, status: string) => {
+    // Map task status to job status
+    let jobStatus: Job['status'] = 'pending';
+    if (status === 'processing') jobStatus = 'running';
+    else if (status === 'completed') jobStatus = 'completed';
+    else if (status === 'failed') jobStatus = 'failed';
+
+    // Find and update job
+    const job = jobs.find(j => j.taskId === taskId);
+    if (job && job.status !== jobStatus) {
+      updateJob(job.id, { 
+        status: jobStatus,
+        startedAt: jobStatus === 'running' ? (job.startedAt || Date.now()) : job.startedAt
+      });
+    }
+  }, [jobs, updateJob]);
 
   // Use folder selection hook (using 'images' type for workspace)
   const { handleFolderSelected } = useFolderSelection({
     folderType: 'images',
+  });
+
+  // Auto-load last opened folder on mount
+  useAutoLoadFolder({
+    folderType: 'images',
+    onFolderLoaded: (folder) => {
+      // Folder is automatically set as selected by the hook
+      // The useEffect below will load contents when selectedFolder changes
+    },
   });
 
   // Load folder contents when folder is selected
@@ -90,45 +198,11 @@ export default function WorkspacePage() {
     if (selectedFolder) {
       loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id).then(
         (result) => {
-          if (result) {
-            // Convert images to MediaFile format with serve URLs
-            const imageFiles = (result.images || []).map((file: any) => ({
-              id: file.path,
-              name: file.name,
-              path: file.path,
-              type: 'image' as const,
-              extension: file.name.split('.').pop() || '',
-              size: file.size || 0,
-              width: file.width,
-              height: file.height,
-              thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
-              selected: false,
-            }));
-
-            // Convert videos to MediaFile format with serve URLs
-            const videoFiles = (result.videos || []).map((file: any) => ({
-              id: file.path,
-              name: file.name,
-              path: file.path,
-              type: 'video' as const,
-              extension: file.name.split('.').pop() || '',
-              size: file.size || 0,
-              width: file.width,
-              height: file.height,
-              duration: file.duration,
-              fps: file.fps,
-              thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
-              blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
-              selected: false,
-            }));
-
-            // Combine both types
-            setMediaFiles([...imageFiles, ...videoFiles]);
-          }
+          processFolderContents(result);
         }
       );
     }
-  }, [selectedFolder, loadFolderContents, setMediaFiles]);
+  }, [selectedFolder, loadFolderContents, processFolderContents]);
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
@@ -159,10 +233,30 @@ export default function WorkspacePage() {
     setIsEditingWorkflow(true);
   };
 
-  const handleDeleteWorkflow = (id: string) => {
+  const handleDeleteWorkflow = async (id: string) => {
     if (confirm('Delete this workflow? This action cannot be undone.')) {
-      deleteWorkflow(id);
-      toast.success('Workflow deleted');
+      try {
+        const response = await fetch(`${API_ENDPOINTS.WORKFLOW_DELETE}?id=${id}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          const text = await response.text();
+          let errorData;
+          try {
+            errorData = text ? JSON.parse(text) : { error: 'Unknown error' };
+          } catch (e) {
+            errorData = { error: `Server error: ${response.status}` };
+          }
+          throw new Error(errorData.error || 'Failed to delete workflow from server');
+        }
+
+        deleteWorkflow(id);
+        toast.success('Workflow deleted');
+      } catch (error) {
+        console.error('Delete workflow error:', error);
+        toast.error('Failed to delete workflow');
+      }
     }
   };
 
@@ -196,14 +290,22 @@ export default function WorkspacePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          workflowId: workflow.id,
+          workflowId: workflow.id,                        // Actual workflow ID
+          sourceWorkflowId: workflow.sourceWorkflowId,    // Template ID for CLI
           fileInputs: jobFiles,
           textInputs: jobInputs,
           folderPath: selectedFolder?.folder_path,
+          deleteSourceFiles: false,
         }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to execute job');
@@ -225,6 +327,9 @@ export default function WorkspacePage() {
 
       addJob(newJob);
 
+      // Select the newly created job
+      setSelectedJob(newJob.id);
+
       // Start tracking progress
       if (data.taskId) {
         setActiveConsoleTaskId(data.taskId);
@@ -238,6 +343,42 @@ export default function WorkspacePage() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to execute job';
       toast.error(errorMessage);
     }
+  };
+
+  const handleRenameFile = async (file: MediaFile, newName: string) => {
+    try {
+      // For now, just show a toast - actual API integration to be added
+      toast.success(`Rename "${file.name}" to "${newName}" - API integration pending`);
+      // TODO: Implement actual rename API call
+      // const response = await fetch(API_ENDPOINTS.WORKSPACE_RENAME, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ path: file.path, newName }),
+      // });
+      // Then reload folder contents
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to rename file';
+      toast.error(errorMessage);
+      throw err;
+    }
+  };
+
+  const handleDeleteFile = async (files: MediaFile[]) => {
+    try {
+      // For now, just show a toast - actual API integration to be added
+      toast.success(`Delete ${files.length} file${files.length !== 1 ? 's' : ''} - API integration pending`);
+      // TODO: Implement actual delete API call
+      // Then reload folder contents
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
+      toast.error(errorMessage);
+      throw err;
+    }
+  };
+
+  const handlePreviewFile = (file: MediaFile) => {
+    // Preview is handled internally by MediaGallery component
+    console.log('Preview file:', file);
   };
 
   // Feature cards for workspace
@@ -381,8 +522,21 @@ export default function WorkspacePage() {
                   </div>
                 </div>
 
+                {/* Media Selection Toolbar */}
+                {selectedFiles.length > 0 && (
+                  <MediaSelectionToolbar
+                    selectedFiles={selectedFiles}
+                    onRename={handleRenameFile}
+                    onDelete={handleDeleteFile}
+                  />
+                )}
+
                 {/* Media Gallery */}
-                <MediaGallery />
+                <MediaGallery
+                  onRename={handleRenameFile}
+                  onDelete={handleDeleteFile}
+                  onPreview={handlePreviewFile}
+                />
               </TabsContent>
 
               {/* Workflows Tab */}
@@ -408,6 +562,8 @@ export default function WorkspacePage() {
         {/* Console Viewer */}
         <ConsoleViewer
           onRefresh={handleRefresh}
+          onTaskComplete={handleTaskComplete}
+          onStatusChange={handleStatusChange}
           taskId={activeConsoleTaskId}
           defaultVisible={true}
         />
