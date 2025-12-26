@@ -109,6 +109,27 @@ export interface SaveTextResponse {
 // ============================================================================
 
 /**
+ * Node information from CLI
+ */
+export interface CliNode {
+  id: number;
+  name: string;
+  type: string;
+  description: string;
+  inputType?: 'image' | 'video' | 'text' | 'number' | 'boolean';
+}
+
+/**
+ * Workflow template configuration
+ */
+export interface WorkflowTemplate {
+  workflowId: string;
+  workflowName: string;
+  nodes: CliNode[];
+  fetchedAt: number;
+}
+
+/**
  * Parameter type for workflow inputs
  */
 export type ParameterType = 'text' | 'file' | 'number' | 'boolean';
@@ -127,6 +148,8 @@ export interface ParameterValidation {
   max?: number;
   /** Regex pattern for text validation */
   pattern?: string;
+  /** Media file type for file inputs ('image' or 'video') */
+  mediaType?: 'image' | 'video';
 }
 
 /**
@@ -163,6 +186,8 @@ export interface Workflow {
   output?: WorkflowOutput;
   createdAt: number;
   updatedAt: number;
+  sourceWorkflowId?: string; // Original workflow ID from .env.local
+  sourceType?: 'template' | 'custom'; // How this workflow was created
 }
 
 // ============================================================================

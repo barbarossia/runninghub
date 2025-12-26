@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { X, Plus, Trash2, GripVertical } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,7 +28,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import type { Workflow, WorkflowInputParameter } from '@/types/workspace';
+import { AVAILABLE_WORKFLOWS } from '@/constants/workflows';
+import type { Workflow, WorkflowInputParameter, CliNode } from '@/types/workspace';
 
 export interface WorkflowEditorProps {
   workflow?: Workflow;
@@ -46,6 +47,11 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   const [parameters, setParameters] = useState<WorkflowInputParameter[]>(
     workflow?.inputs || []
   );
+
+  // Template loading state
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
+  const [templateLoaded, setTemplateLoaded] = useState(false);
 
   // Add new parameter
   const addParameter = useCallback(() => {
@@ -70,8 +76,73 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     setParameters(parameters.filter((_, i) => i !== index));
   }, [parameters]);
 
+  // Load template from CLI
+  const handleLoadTemplate = useCallback(async () => {
+    if (!selectedWorkflowId) return;
+
+    setIsLoadingTemplate(true);
+
+    try {
+      const response = await fetch(`/api/workflow/nodes?workflowId=${selectedWorkflowId}`);
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch nodes');
+      }
+
+      const data = await response.json();
+
+      // Convert CLI nodes to workflow input parameters
+      const newParameters: WorkflowInputParameter[] = data.nodes.map((node: CliNode, index: number) => {
+        // Determine parameter type from inputType or description
+        let paramType: WorkflowInputParameter['type'] = 'text';
+        let mediaType: 'image' | 'video' | undefined;
+
+        if (node.inputType === 'image') {
+          paramType = 'file';
+          mediaType = 'image';
+        } else if (node.inputType === 'video') {
+          paramType = 'file';
+          mediaType = 'video';
+        } else if (node.inputType === 'number') {
+          paramType = 'number';
+        } else if (node.inputType === 'boolean') {
+          paramType = 'boolean';
+        }
+
+        return {
+          id: `param_${node.id}`,
+          name: node.name,
+          type: paramType,
+          required: index === 0, // First parameter is required by default
+          description: node.description,
+          validation: paramType === 'file' ? {
+            mediaType,
+            fileType: mediaType ? [`${mediaType}/*`] : undefined,
+          } : undefined,
+        };
+      });
+
+      setParameters(newParameters);
+
+      // Set workflow name from template
+      const workflowName = AVAILABLE_WORKFLOWS.find(wf => wf.id === selectedWorkflowId)?.name;
+      if (workflowName && !name) {
+        setName(workflowName);
+      }
+
+      setDescription(`Workflow created from template ${selectedWorkflowId}`);
+      setTemplateLoaded(true);
+    } catch (error) {
+      console.error('Failed to load template:', error);
+      alert(error instanceof Error ? error.message : 'Failed to load template');
+    } finally {
+      setIsLoadingTemplate(false);
+    }
+  }, [selectedWorkflowId, name]);
+
   // Handle save
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!name.trim()) {
       return;
     }
@@ -83,10 +154,31 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       inputs: parameters,
       createdAt: workflow?.createdAt || Date.now(),
       updatedAt: Date.now(),
+      sourceWorkflowId: templateLoaded ? selectedWorkflowId : workflow?.sourceWorkflowId,
+      sourceType: templateLoaded ? 'template' : workflow?.sourceType || 'custom',
     };
 
+    // Save to workspace folder
+    try {
+      const response = await fetch('/api/workflow/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(workflowData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save workflow');
+      }
+    } catch (error) {
+      console.error('Failed to save workflow to file:', error);
+      // Continue with save even if file save fails
+    }
+
     onSave(workflowData);
-  }, [name, description, parameters, workflow, onSave]);
+  }, [name, description, parameters, workflow, templateLoaded, selectedWorkflowId, onSave]);
 
   const isValid = name.trim() && parameters.length > 0;
 
@@ -128,12 +220,67 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
             </div>
           </div>
 
+          {/* Template selection (for new workflows only) */}
+          {!isEditing && (
+            <Card className="p-4 bg-blue-50 border-blue-200">
+              <div className="space-y-3">
+                <div>
+                  <h3 className="text-sm font-medium text-blue-900">Step 1: Select Workflow Template</h3>
+                  <p className="text-xs text-blue-700">Load input fields from an existing workflow</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Select value={selectedWorkflowId} onValueChange={setSelectedWorkflowId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select a workflow template..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AVAILABLE_WORKFLOWS.map((wf) => (
+                        <SelectItem key={wf.id} value={wf.id}>
+                          {wf.name} ({wf.id})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    onClick={handleLoadTemplate}
+                    disabled={!selectedWorkflowId || isLoadingTemplate}
+                    size="sm"
+                    variant="default"
+                  >
+                    {isLoadingTemplate ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      'Load Template'
+                    )}
+                  </Button>
+                </div>
+
+                {templateLoaded && (
+                  <div className="text-xs text-green-700 bg-green-50 p-2 rounded">
+                    ✓ Template loaded successfully! You can now customize the fields below.
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
           {/* Parameters */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium">Input Parameters</h3>
-                <p className="text-xs text-gray-500">Define the inputs this workflow accepts</p>
+                <h3 className="text-sm font-medium">
+                  {templateLoaded ? 'Step 2: Configure Fields' : 'Input Parameters'}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {templateLoaded
+                    ? 'Customize the loaded fields or add new ones'
+                    : 'Define the inputs this workflow accepts'}
+                </p>
               </div>
               <Button onClick={addParameter} size="sm" variant="outline">
                 <Plus className="h-4 w-4 mr-1" />
@@ -156,6 +303,8 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
                     onUpdate={(updates) => updateParameter(index, updates)}
                     onRemove={() => removeParameter(index)}
                     canRemove={parameters.length > 1}
+                    lockedFields={templateLoaded ? ['id', 'name', 'type'] : []}
+                    fromTemplate={templateLoaded}
                   />
                 ))}
               </div>
@@ -194,38 +343,60 @@ interface ParameterEditorProps {
   onUpdate: (updates: Partial<WorkflowInputParameter>) => void;
   onRemove: () => void;
   canRemove: boolean;
+  lockedFields?: string[];
+  fromTemplate?: boolean;
 }
 
-function ParameterEditor({ parameter, index, onUpdate, onRemove, canRemove }: ParameterEditorProps) {
+function ParameterEditor({ parameter, index, onUpdate, onRemove, canRemove, lockedFields = [], fromTemplate = false }: ParameterEditorProps) {
+  const isFieldLocked = (field: string) => lockedFields.includes(field);
+
+  const handleMediaTypeChange = (mediaType: 'image' | 'video') => {
+    onUpdate({
+      validation: {
+        ...parameter.validation,
+        mediaType,
+        fileType: [`${mediaType}/*`],
+      }
+    });
+  };
+
   return (
-    <Card className="p-4">
+    <Card className={cn("p-4", fromTemplate && "border-blue-200 bg-blue-50/30")}>
       <div className="flex items-start gap-3">
         <GripVertical className="h-5 w-5 text-gray-400 mt-1 cursor-move" />
 
         <div className="flex-1 space-y-3">
           {/* Header: Name and Type */}
           <div className="flex items-center gap-3">
-            <Input
-              value={parameter.name}
-              onChange={(e) => onUpdate({ name: e.target.value })}
-              placeholder="Parameter name"
-              className="flex-1"
-            />
+            <div className="flex-1 flex items-center gap-2">
+              {isFieldLocked('name') && <Lock className="h-3 w-3 text-gray-400" />}
+              <Input
+                value={parameter.name}
+                onChange={(e) => onUpdate({ name: e.target.value })}
+                placeholder="Parameter name"
+                className="flex-1"
+                disabled={isFieldLocked('name')}
+              />
+            </div>
 
-            <Select
-              value={parameter.type}
-              onValueChange={(value: any) => onUpdate({ type: value })}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="text">Text</SelectItem>
-                <SelectItem value="file">File</SelectItem>
-                <SelectItem value="number">Number</SelectItem>
-                <SelectItem value="boolean">Boolean</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              {isFieldLocked('type') && <Lock className="h-3 w-3 text-gray-400" />}
+              <Select
+                value={parameter.type}
+                onValueChange={(value: any) => onUpdate({ type: value })}
+                disabled={isFieldLocked('type')}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text</SelectItem>
+                  <SelectItem value="file">File</SelectItem>
+                  <SelectItem value="number">Number</SelectItem>
+                  <SelectItem value="boolean">Boolean</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             <Checkbox
               checked={parameter.required}
@@ -254,7 +425,33 @@ function ParameterEditor({ parameter, index, onUpdate, onRemove, canRemove }: Pa
 
           {/* Validation rules based on type */}
           {parameter.type === 'file' && (
-            <div className="flex gap-2">
+            <div className="space-y-2">
+              {/* Media Type Selector */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-600">Media Type:</span>
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="radio"
+                    name={`media-type-${parameter.id}`}
+                    checked={parameter.validation?.mediaType === 'image'}
+                    onChange={() => handleMediaTypeChange('image')}
+                    className="mr-1"
+                  />
+                  Image
+                </label>
+                <label className="flex items-center gap-1 text-xs">
+                  <input
+                    type="radio"
+                    name={`media-type-${parameter.id}`}
+                    checked={parameter.validation?.mediaType === 'video'}
+                    onChange={() => handleMediaTypeChange('video')}
+                    className="mr-1"
+                  />
+                  Video
+                </label>
+              </div>
+
+              {/* Extensions */}
               <Input
                 value={parameter.validation?.extensions?.join(', ') || ''}
                 onChange={(e) => onUpdate({
