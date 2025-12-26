@@ -83,11 +83,17 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
           }),
         });
 
-        const data = (await response.json()) as {
+        const text = await response.text();
+        let data: {
           success: boolean;
           uploadedFiles?: FileUploadResponse[];
           error?: string;
         };
+        try {
+          data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+        } catch (e) {
+          throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+        }
 
         if (!response.ok || !data.success) {
           throw new Error(data.error || ERROR_MESSAGES.UPLOAD_FAILED);
@@ -184,7 +190,13 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
           } as ProcessRequest),
         });
 
-        const data = (await response.json()) as ProcessResponse;
+        const text = await response.text();
+        let data: ProcessResponse;
+        try {
+          data = text ? JSON.parse(text) : { success: false, error: 'Empty response' } as any;
+        } catch (e) {
+          throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+        }
 
         if (!response.ok || !data.success) {
           throw new Error(data.error || 'Processing failed');
@@ -262,7 +274,13 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
           } as SaveTextRequest),
         });
 
-        const data = (await response.json()) as SaveTextResponse;
+        const text = await response.text();
+        let data: SaveTextResponse;
+        try {
+          data = text ? JSON.parse(text) : { success: false, error: 'Empty response' } as any;
+        } catch (e) {
+          throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+        }
 
         if (!response.ok || !data.success) {
           throw new Error(data.error || ERROR_MESSAGES.SAVE_FAILED);

@@ -178,7 +178,16 @@ export function useProgressTracking(options: UseProgressTrackingOptions = {}): U
           throw new Error('Failed to fetch task status');
         }
 
-        const data = await response.json();
+        const text = await response.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch (e) {
+          console.error('Failed to parse task status response:', text);
+          return; // Skip this tick
+        }
+
+        if (!data) return;
 
         // Update task based on status
         if (data.status === 'completed') {

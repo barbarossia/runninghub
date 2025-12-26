@@ -117,12 +117,17 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     try {
       const response = await fetch(`/api/workflow/nodes?workflowId=${targetWorkflowId}`);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch nodes');
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { nodes: [] };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch nodes');
+      }
 
       // Convert CLI nodes to workflow input parameters
       const newParameters: WorkflowInputParameter[] = data.nodes.map((node: CliNode, index: number) => {
@@ -205,8 +210,14 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to save workflow');
+        const text = await response.text();
+        let errorData;
+        try {
+          errorData = text ? JSON.parse(text) : { error: 'Unknown error' };
+        } catch (e) {
+          errorData = { error: `Server error: ${response.status}` };
+        }
+        throw new Error(errorData.error || 'Failed to save workflow');
       }
     } catch (error) {
       console.error('Failed to save workflow to file:', error);

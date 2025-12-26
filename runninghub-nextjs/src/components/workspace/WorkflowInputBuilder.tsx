@@ -107,6 +107,25 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     setDraggedOverParam(null);
   }, []);
 
+  // Handle assigning selected files from gallery
+  const handleAssignSelected = useCallback(
+    (paramId: string) => {
+      const selectedFiles = mediaFiles.filter((f) => f.selected);
+      if (selectedFiles.length === 0) {
+        toast.info("No files selected in gallery");
+        return;
+      }
+
+      // Assign each selected file to this parameter
+      selectedFiles.forEach((file) => {
+        assignFileToParameter(file.path, paramId, file);
+      });
+      
+      toast.success(`${selectedFiles.length} file(s) assigned to ${workflow.inputs.find(p => p.id === paramId)?.name}`);
+    },
+    [mediaFiles, assignFileToParameter, workflow.inputs]
+  );
+
   // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, paramId: string) => {
     const files = e.target.files;
@@ -290,30 +309,40 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
               disabled={isUploading}
             />
             
-            <Button
-              variant="outline"
-              onClick={() => document.getElementById(`file-upload-${param.id}`)?.click()}
-              disabled={isUploading}
-              className="mb-2"
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Browse & Upload
-                </>
-              )}
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2 mb-2">
+              <Button
+                variant="outline"
+                onClick={() => document.getElementById(`file-upload-${param.id}`)?.click()}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Browse & Upload
+                  </>
+                )}
+              </Button>
+
+              <Button
+                variant="secondary"
+                onClick={() => handleAssignSelected(param.id)}
+                disabled={isUploading || mediaFiles.filter(f => f.selected).length === 0}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Assign Selected
+              </Button>
+            </div>
             
             <p className="text-xs text-gray-500">
               {isDraggedOver ? (
                 <span className="text-blue-600 font-medium">Drop files here...</span>
               ) : (
-                <span>Or select files from the gallery below</span>
+                <span>Browse, drag & drop, or select from gallery</span>
               )}
             </p>
           </div>

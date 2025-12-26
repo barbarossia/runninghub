@@ -241,7 +241,14 @@ export default function WorkspacePage() {
         });
         
         if (!response.ok) {
-          throw new Error('Failed to delete workflow from server');
+          const text = await response.text();
+          let errorData;
+          try {
+            errorData = text ? JSON.parse(text) : { error: 'Unknown error' };
+          } catch (e) {
+            errorData = { error: `Server error: ${response.status}` };
+          }
+          throw new Error(errorData.error || 'Failed to delete workflow from server');
         }
 
         deleteWorkflow(id);
@@ -292,7 +299,13 @@ export default function WorkspacePage() {
         }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to execute job');

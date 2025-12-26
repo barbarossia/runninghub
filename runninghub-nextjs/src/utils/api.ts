@@ -42,7 +42,14 @@ export async function apiRequest<T>(
 
   try {
     const response = await fetch(url, config);
-    const data = await response.json();
+    
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (e) {
+      data = { error: `Invalid JSON response: ${text.slice(0, 100)}` };
+    }
 
     if (!response.ok) {
       throw new ApiError(

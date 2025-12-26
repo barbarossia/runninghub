@@ -44,12 +44,18 @@ export async function translateText(
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Server translation error: ${response.status}`);
+    const responseText = await response.text();
+    let data;
+    try {
+      data = responseText ? JSON.parse(responseText) : { success: false, error: 'Empty response' };
+    } catch (e) {
+      throw new Error(`Invalid JSON response: ${responseText.slice(0, 100)}`);
     }
 
-    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `Server translation error: ${response.status}`);
+    }
+
     return data;
   } catch (error) {
     console.error('Translation error:', error);

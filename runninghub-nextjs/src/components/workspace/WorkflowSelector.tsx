@@ -55,12 +55,17 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
       try {
         const response = await fetch('/api/workflow/list');
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to load workflows');
+        const text = await response.text();
+        let data;
+        try {
+          data = text ? JSON.parse(text) : { workflows: [] };
+        } catch (e) {
+          throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
         }
 
-        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load workflows');
+        }
 
         // Replace localStorage workflows with fetched workflows
         setWorkflows(data.workflows || []);
