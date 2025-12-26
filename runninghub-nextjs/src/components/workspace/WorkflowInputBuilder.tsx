@@ -18,8 +18,10 @@ import {
   CheckCircle2,
   Trash2,
   Upload,
+  Loader2,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
+import { useFolderStore } from '@/store/folder-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,6 +32,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { validateFileForParameter, filterValidFilesForParameter, formatFileSize } from '@/utils/workspace-validation';
 import type { Workflow, WorkflowInputParameter, MediaFile } from '@/types/workspace';
+import { toast } from 'sonner';
 
 export interface WorkflowInputBuilderProps {
   workflow: Workflow;
@@ -46,10 +49,14 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     removeFileAssignment,
     setJobTextInput,
     validateJobInputs,
+    addMediaFile,
   } = useWorkspaceStore();
+
+  const { selectedFolder } = useFolderStore();
 
   const [deleteSourceFiles, setDeleteSourceFiles] = useState(false);
   const [draggedOverParam, setDraggedOverParam] = useState<string | null>(null);
+  const [uploadingParams, setUploadingParams] = useState<Record<string, boolean>>({});
 
   // Group assigned files by parameter
   const assignedFilesByParam = useMemo(() => {
@@ -100,6 +107,76 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     setDraggedOverParam(null);
   }, []);
 
+  // Handle file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, paramId: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (!selectedFolder) {
+      toast.error("No folder selected");
+      return;
+    }
+
+    setUploadingParams(prev => ({ ...prev, [paramId]: true }));
+
+    try {
+      // Process each selected file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // Convert to base64
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
+          reader.onerror = error => reject(error);
+        });
+
+        // Upload
+        const response = await fetch('/api/workspace/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: [{ name: file.name, data: base64Data }],
+            workspacePath: selectedFolder.folder_path
+          })
+        });
+        
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || 'Upload failed');
+
+        // Add to mediaFiles store
+        if (data.uploadedFiles && data.uploadedFiles.length > 0) {
+          const uploadedFile = data.uploadedFiles[0];
+          const newMediaFile: MediaFile = {
+            id: uploadedFile.workspacePath,
+            name: uploadedFile.name,
+            path: uploadedFile.workspacePath,
+            type: file.type.startsWith('video') ? 'video' : 'image',
+            extension: file.name.split('.').pop() ? '.' + file.name.split('.').pop() : '',
+            size: file.size,
+            width: 0,
+            height: 0,
+            selected: false,
+            thumbnail: `/api/images/serve?path=${encodeURIComponent(uploadedFile.workspacePath)}`,
+          };
+
+          addMediaFile(newMediaFile);
+          assignFileToParameter(newMediaFile.path, paramId, newMediaFile);
+        }
+      }
+      
+      toast.success("File(s) uploaded and assigned");
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error("Upload failed: " + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setUploadingParams(prev => ({ ...prev, [paramId]: false }));
+      // Reset input
+      e.target.value = '';
+    }
+  };
+
   // Get assigned files for parameter
   const getAssignedFiles = useCallback(
     (paramId: string) => {
@@ -135,6 +212,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     const invalidCount = getInvalidFilesCount(param);
     const validFiles = filterValidFilesForParameter(mediaFiles, param);
     const isDraggedOver = draggedOverParam === param.id;
+    const isUploading = uploadingParams[param.id] || false;
 
     return (
       <div
@@ -201,14 +279,43 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
           </div>
         )}
 
-        {/* Drop zone hint */}
+        {/* Upload Button Area */}
         {assigned.length === 0 && (
-          <div className="text-center py-4 text-gray-500 text-sm">
-            {isDraggedOver ? (
-              <span className="text-blue-600 font-medium">Drop files here...</span>
-            ) : (
-              <span>Drag and drop files here, or select files from the gallery</span>
-            )}
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <input
+              type="file"
+              id={`file-upload-${param.id}`}
+              className="hidden"
+              onChange={(e) => handleFileUpload(e, param.id)}
+              disabled={isUploading}
+            />
+            
+            <Button
+              variant="outline"
+              onClick={() => document.getElementById(`file-upload-${param.id}`)?.click()}
+              disabled={isUploading}
+              className="mb-2"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Browse & Upload
+                </>
+              )}
+            </Button>
+            
+            <p className="text-xs text-gray-500">
+              {isDraggedOver ? (
+                <span className="text-blue-600 font-medium">Drop files here...</span>
+              ) : (
+                <span>Or select files from the gallery below</span>
+              )}
+            </p>
           </div>
         )}
 
