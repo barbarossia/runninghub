@@ -1,6 +1,6 @@
 /**
  * Translation API
- * Provides server-side translation using MyMemory Translation API (free, no API key)
+ * Provides server-side translation using official Google Cloud Translation API v2
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,45 +27,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Language code mapping
-    const langMap: Record<string, string> = {
-      'en': 'en-GB',
-      'zh': 'zh-CN',
-    };
+    const target = targetLang === 'zh' ? 'zh-CN' : targetLang;
+    const source = sourceLang && sourceLang !== 'auto' ? sourceLang : undefined;
 
-    const target = langMap[targetLang] || targetLang;
-    const source = sourceLang && langMap[sourceLang] ? langMap[sourceLang] : 'autodetect';
+    const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_TRANSLATE_API_KEY is not configured');
+    }
 
-    // Use MyMemory Translation API (free, no API key required)
-    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${source}|${target}`;
+    // Official Google Cloud Translation API v2
+    const googleUrl = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
 
-    const response = await fetch(myMemoryUrl);
+    const response = await fetch(googleUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        q: text,
+        target: target,
+        source: source,
+        format: 'text'
+      }),
+    });
 
     if (!response.ok) {
-      console.error(`Translation service error: ${response.status} ${response.statusText}`);
-      const text = await response.text();
-      console.error('Service response body:', text);
-      throw new Error(`Translation service error: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Google API error: ${response.status}`, errorText);
+      throw new Error(`Google API error: ${response.status}`);
     }
 
-    const responseText = await response.text();
-    // console.log('MyMemory Raw Response:', responseText); // Uncomment for deep debugging if needed
-
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Failed to parse MyMemory response:', responseText);
-      throw new Error('Invalid JSON from translation service');
-    }
-
-    if (data.responseStatus === 200) {
+    const data = await response.json();
+    
+    if (data && data.data && data.data.translations && data.data.translations[0]) {
       return NextResponse.json({
         success: true,
-        translatedText: data.responseData.translatedText,
+        translatedText: data.data.translations[0].translatedText,
+        detectedSourceLanguage: data.data.translations[0].detectedSourceLanguage
       });
     } else {
-      throw new Error(data.responseDetails || 'Translation failed');
+      throw new Error('Unexpected response format from Google API');
     }
   } catch (error) {
     console.error('Translation error:', error);
@@ -92,22 +93,45 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Simple language detection
-    const chineseRegex = /[\u4e00-\u9fa5]/;
-    const englishRegex = /[a-zA-Z]/;
-
-    const hasChinese = chineseRegex.test(text);
-    const hasEnglish = englishRegex.test(text);
-
-    let detectedLang = 'en';
-    if (hasChinese && !hasEnglish) {
-      detectedLang = 'zh';
+    const apiKey = process.env.GOOGLE_TRANSLATE_API_KEY;
+    if (!apiKey) {
+      throw new Error('GOOGLE_TRANSLATE_API_KEY is not configured');
     }
 
-    return NextResponse.json({
-      success: true,
-      detectedLang,
+    // Official Google Cloud Translation API v2 Detection
+    const googleUrl = `https://translation.googleapis.com/language/translate/v2/detect?key=${apiKey}`;
+
+    const response = await fetch(googleUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        q: text
+      }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Google Detection error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data && data.data && data.data.detections && data.data.detections[0] && data.data.detections[0][0]) {
+      const detected = data.data.detections[0][0].language;
+      // Map Google language codes to our internal ones
+      let detectedLang = 'en';
+      if (detected.startsWith('zh')) detectedLang = 'zh';
+      else if (detected === 'en') detectedLang = 'en';
+      else detectedLang = detected;
+
+      return NextResponse.json({
+        success: true,
+        detectedLang,
+      });
+    }
+
+    throw new Error('Failed to detect language');
   } catch (error) {
     console.error('Language detection error:', error);
     return NextResponse.json(

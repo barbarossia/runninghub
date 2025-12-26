@@ -1,126 +1,12 @@
 /**
  * Translation service wrapper
- * Supports Chrome AI Translator API with fallback to Server API
+ * Uses Server-side API (Google Translate)
  */
 
 import type { TranslationResponse, Language } from '@/types/workspace';
 
-// Chrome AI Translator API types
-interface ChromeTranslatorAPI {
-  translator: {
-    create: (options: {
-      sourceLanguage: string;
-      targetLanguage: string;
-    }) => Promise<ChromeTranslator>;
-  };
-}
-
-interface ChromeTranslator {
-  translate: (text: string) => Promise<string>;
-}
-
-// Extend Window interface for Chrome AI API
-declare global {
-  interface Window {
-    translation?: ChromeTranslatorAPI;
-  }
-}
-
-/**
- * Convert language code to Chrome AI format
- */
-function toChromeLanguageCode(lang: Language): string {
-  switch (lang) {
-    case 'en':
-      return 'en-US';
-    case 'zh':
-      return 'zh-CN';
-    case 'auto':
-      return 'en-US'; // Default to English for auto-detect source
-    default:
-      return 'en-US';
-  }
-}
-
-/**
- * Check if Chrome AI Translator API is available
- */
-export function isChromeAITranslatorAvailable(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    'translation' in window &&
-    !!(window as any).translation?.translator
-  );
-}
-
 /**
  * Translate text using Server-side API (Google Translate)
- */
-async function translateWithServer(
-  text: string,
-  from: Language,
-  to: Language
-): Promise<TranslationResponse> {
-  try {
-    const response = await fetch('/api/translate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text,
-        sourceLang: from === 'auto' ? undefined : from,
-        targetLang: to,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server translation error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Server translation error:', error);
-    return {
-      success: false,
-      translatedText: '',
-      error: error instanceof Error ? error.message : 'Translation failed',
-    };
-  }
-}
-
-/**
- * Translate text using Chrome AI Translator API
- */
-async function translateWithChromeAI(
-  text: string,
-  from: Language,
-  to: Language
-): Promise<TranslationResponse> {
-  try {
-    const api = (window as any).translation.translator;
-    const translator = await api.create({
-      sourceLanguage: toChromeLanguageCode(from),
-      targetLanguage: toChromeLanguageCode(to),
-    });
-
-    const translatedText = await translator.translate(text);
-
-    return {
-      success: true,
-      translatedText,
-      detectedLanguage: from === 'auto' ? undefined : from,
-    };
-  } catch (error) {
-    console.error('Chrome AI Translator API error:', error);
-    // Fallback to server on Chrome AI failure
-    return translateWithServer(text, from, to);
-  }
-}
-
-/**
- * Translate text (Chrome AI with Server Fallback)
  */
 export async function translateText(
   text: string,
@@ -145,13 +31,34 @@ export async function translateText(
     };
   }
 
-  // Use Chrome AI Translator API if available
-  if (isChromeAITranslatorAvailable()) {
-    return translateWithChromeAI(text, from, to);
-  }
+  try {
+    const response = await fetch('/api/translate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        sourceLang: from === 'auto' ? undefined : from,
+        targetLang: to,
+      }),
+    });
 
-  // Fallback to Server-side API
-  return translateWithServer(text, from, to);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server translation error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Translation error:', error);
+    return {
+      success: false,
+      translatedText: '',
+      error: error instanceof Error ? error.message : 'Translation failed',
+    };
+  }
 }
 
 /**
@@ -199,12 +106,5 @@ export class Translator {
    */
   async toChinese(text: string, from: Language = 'auto'): Promise<TranslationResponse> {
     return this.translate(text, from, 'zh');
-  }
-
-  /**
-   * Check if Chrome AI Translator is available
-   */
-  isChromeAIAvailable(): boolean {
-    return isChromeAITranslatorAvailable();
   }
 }

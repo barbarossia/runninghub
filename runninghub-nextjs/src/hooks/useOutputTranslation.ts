@@ -60,20 +60,6 @@ export function useOutputTranslation(jobId: string) {
 
         const originalText = textOutput.content.original;
 
-        // Skip if text is too long for free API (500 char limit)
-        if (originalText.length > 500) {
-          updatedTextOutputs[i].translationError = 'Text too long for auto-translation (>500 chars)';
-          
-          // Update job with error
-          updateJob(jobId, {
-            results: {
-              ...jobResults,
-              textOutputs: updatedTextOutputs,
-            },
-          });
-          continue;
-        }
-
         try {
           // Detect language (truncate for detection to save bandwidth/url length)
           const detectTextSlice = originalText.slice(0, 500);
