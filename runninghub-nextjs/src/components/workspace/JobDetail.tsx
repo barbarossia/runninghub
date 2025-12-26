@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   RefreshCw,
@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { downloadFile } from '@/lib/download';
 import { useOutputTranslation } from '@/hooks/useOutputTranslation';
 import { toast } from 'sonner';
+import { API_ENDPOINTS } from '@/constants';
 import type { Job } from '@/types/workspace';
 
 export interface JobDetailProps {
@@ -39,13 +40,41 @@ export interface JobDetailProps {
 }
 
 export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
-  const { getJobById, reRunJob, deleteJob } = useWorkspaceStore();
+  const { getJobById, reRunJob, deleteJob, updateJob } = useWorkspaceStore();
   const [isReRunning, setIsReRunning] = useState(false);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
 
   // Auto-translate outputs
   const { isTranslating, translatedCount } = useOutputTranslation(jobId);
 
   const job = getJobById(jobId);
+
+  // Fetch job results when job is completed and results are not loaded
+  useEffect(() => {
+    const fetchJobResults = async () => {
+      if (!job || job.status !== 'completed' || job.results || isLoadingResults) {
+        return;
+      }
+
+      setIsLoadingResults(true);
+
+      try {
+        const response = await fetch(`${API_ENDPOINTS.WORKSPACE_JOB_RESULTS}?jobId=${jobId}`);
+        const data = await response.json();
+
+        if (data.success && data.results) {
+          // Update job with results
+          updateJob(jobId, { results: data.results });
+        }
+      } catch (error) {
+        console.error('Failed to fetch job results:', error);
+      } finally {
+        setIsLoadingResults(false);
+      }
+    };
+
+    fetchJobResults();
+  }, [job, jobId, updateJob, isLoadingResults]);
 
   if (!job) {
     return (
@@ -195,6 +224,16 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
           <div className="flex items-center gap-2 text-sm text-blue-900">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Translating outputs ({translatedCount}/{job?.results?.textOutputs?.length || 0})...</span>
+          </div>
+        </Card>
+      )}
+
+      {/* Loading results */}
+      {isLoadingResults && (
+        <Card className="p-3 bg-gray-50 border-gray-200">
+          <div className="flex items-center gap-2 text-sm text-gray-900">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading output files...</span>
           </div>
         </Card>
       )}
