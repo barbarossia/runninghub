@@ -57,6 +57,7 @@
 - [x] Step 8.2: Auto-load template when workflow ID is selected
 - [x] Step 8.3: Show loading state in Select dropdown
 - [x] Step 8.4: Update UI description to indicate automatic loading
+- [x] Step 8.5: Remove "Add Parameter" button (parameters loaded from template)
 
 ## Build Verification
 
