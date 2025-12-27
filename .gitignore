@@ -43,6 +43,9 @@ ENV/
 env/
 .venv
 
+# Re-include Next.js lib folder (negate Python lib/ pattern)
+!runninghub-nextjs/src/lib/
+
 # Node.js / Next.js
 node_modules/
 .next/
