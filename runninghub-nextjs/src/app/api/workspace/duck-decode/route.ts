@@ -35,12 +35,25 @@ export async function POST(request: NextRequest) {
 
     // Determine output directory (result directory in job folder)
     const jobDir = path.dirname(duckImagePath);
-    const resultDir = path.join(jobDir, 'result');
+    const resultDir = jobDir; // duck image is already in result directory
 
-    // Ensure result directory exists
-    if (!fs.existsSync(resultDir)) {
-      fs.mkdirSync(resultDir, { recursive: true });
+    // Create encoded subdirectory for original duck images
+    const encodedDir = path.join(resultDir, 'encoded');
+    if (!fs.existsSync(encodedDir)) {
+      fs.mkdirSync(encodedDir, { recursive: true });
     }
+
+    // Get the filename and extension
+    const originalFileName = path.basename(duckImagePath);
+    const originalFileNameWithoutExt = path.parse(originalFileName).name;
+    const originalFileExt = path.parse(originalFileName).ext;
+
+    // Determine output path for decoded file (same name as original)
+    // The decoded file will replace the duck image in the result folder
+    const finalOutputPath = path.join(resultDir, originalFileName);
+
+    // Temporary output path (with _decoded suffix to avoid conflict)
+    const tempOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}_decoded${originalFileExt}`);
 
     // Determine runninghub CLI path
     // Try environment variable first, then common locations
@@ -69,13 +82,13 @@ export async function POST(request: NextRequest) {
       runninghubPath = 'runninghub';
     }
 
-    // Build duck-decode command
+    // Build duck-decode command with explicit output path
     const duckDecodeCommand = [
       `"${runninghubPath}"`,
       'duck-decode',
       `"${duckImagePath}"`,
       password ? `--password "${password}"` : '',
-      outputPath ? `--out "${outputPath}"` : ''
+      `--out "${tempOutputPath}"`
     ].filter(Boolean).join(' ');
 
     // Execute decode command (timeout: 60 seconds)
@@ -93,13 +106,42 @@ export async function POST(request: NextRequest) {
     // Parse output to find decoded file path
     // Command prints: "Successfully saved extracted data to: /path/to/file.jpg"
     const decodedPathMatch = result.match(/Successfully saved extracted data to: (.+)/);
-    const decodedFilePath = decodedPathMatch ? decodedPathMatch[1].trim() : null;
+    let decodedFilePath = decodedPathMatch ? decodedPathMatch[1].trim() : null;
 
     if (!decodedFilePath) {
       return NextResponse.json(
         { error: 'Failed to extract decoded file path from output' },
         { status: 500 }
       );
+    }
+
+    // Move original duck image to encoded folder
+    try {
+      const encodedImagePath = path.join(encodedDir, originalFileName);
+      fs.renameSync(duckImagePath, encodedImagePath);
+      console.log(`Moved original duck image to: ${encodedImagePath}`);
+    } catch (error) {
+      console.error('Failed to move original duck image to encoded folder:', error);
+      // Continue anyway - this is not a critical failure
+    }
+
+    // Rename decoded file to have the same name as the original
+    try {
+      // If the final output path already exists, remove it first
+      if (fs.existsSync(finalOutputPath)) {
+        fs.unlinkSync(finalOutputPath);
+      }
+
+      // Rename the decoded file to the final output path
+      fs.renameSync(decodedFilePath, finalOutputPath);
+      decodedFilePath = finalOutputPath;
+      console.log(`Decoded file saved as: ${finalOutputPath}`);
+    } catch (error) {
+      console.error('Failed to rename decoded file:', error);
+      // If rename fails, try to keep the temp file
+      if (!fs.existsSync(decodedFilePath)) {
+        decodedFilePath = tempOutputPath;
+      }
     }
 
     // Get file size
@@ -115,7 +157,8 @@ export async function POST(request: NextRequest) {
       success: true,
       decodedFilePath,
       fileType: path.extname(decodedFilePath),
-      fileSize
+      fileSize,
+      originalDuckImagePath: path.join(encodedDir, originalFileName), // Path to original duck image in encoded folder
     });
 
   } catch (error: any) {
