@@ -424,7 +424,7 @@ export function MediaGallery({
                         {file.type === 'video' && file.blobUrl ? (
                           <video
                             src={file.blobUrl}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                             muted
                             preload="metadata"
                           />
@@ -433,7 +433,7 @@ export function MediaGallery({
                             src={file.thumbnail || file.blobUrl || ''}
                             alt={file.name}
                             fill
-                            className="object-cover"
+                            className="object-contain"
                             sizes="48px"
                             loading="lazy"
                           />
@@ -501,7 +501,7 @@ export function MediaGallery({
                       // Video with blobUrl - show video element
                       <video
                         src={file.blobUrl}
-                        className="w-full h-full object-cover p-1"
+                        className="w-full h-full object-contain p-1"
                         muted
                         preload="metadata"
                       />
@@ -512,7 +512,7 @@ export function MediaGallery({
                         alt={file.name}
                         fill
                         className={cn(
-                          'object-cover p-1 transition-transform',
+                          'object-contain p-1 transition-transform',
                           isSelected ? 'scale-95' : 'group-hover:scale-105'
                         )}
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
@@ -525,7 +525,7 @@ export function MediaGallery({
                         alt={file.name}
                         fill
                         className={cn(
-                          'object-cover p-1 transition-transform',
+                          'object-contain p-1 transition-transform',
                           isSelected ? 'scale-95' : 'group-hover:scale-105'
                         )}
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"

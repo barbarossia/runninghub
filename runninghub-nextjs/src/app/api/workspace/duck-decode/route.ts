@@ -3,6 +3,11 @@ import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
+/**
+ * Duck Decode API
+ * Decodes hidden data from duck images using LSB steganography
+ */
+
 export async function POST(request: NextRequest) {
   try {
     const { duckImagePath, password = "", outputPath, jobId } = await request.json();
@@ -35,39 +40,87 @@ export async function POST(request: NextRequest) {
 
     // Determine output directory (result directory in job folder)
     const jobDir = path.dirname(duckImagePath);
-    const resultDir = path.join(jobDir, 'result');
+    const resultDir = jobDir; // duck image is already in result directory
 
-    // Ensure result directory exists
-    if (!fs.existsSync(resultDir)) {
-      fs.mkdirSync(resultDir, { recursive: true });
+    // Create encoded subdirectory for original duck images
+    const encodedDir = path.join(resultDir, 'encoded');
+    if (!fs.existsSync(encodedDir)) {
+      fs.mkdirSync(encodedDir, { recursive: true });
     }
 
-    // Build duck-decode command
-    const duckDecodeCommand = [
-      'runninghub',
-      'duck-decode',
-      `"${duckImagePath}"`,
-      password ? `--password "${password}"` : '',
-      outputPath ? `--out "${outputPath}"` : ''
-    ].filter(Boolean).join(' ');
+    // Get the filename and extension
+    const originalFileName = path.basename(duckImagePath);
+    const originalFileNameWithoutExt = path.parse(originalFileName).name;
+    const originalFileExt = path.parse(originalFileName).ext;
+
+    // Determine output path for decoded file (same name as original)
+    // The decoded file will replace the duck image in the result folder
+    const finalOutputPath = path.join(resultDir, originalFileName);
+
+    // Temporary output path (with _decoded suffix to avoid conflict)
+    const tempOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}_decoded${originalFileExt}`);
+
+    // Build duck-decode command using Python module (like other workspace APIs)
+    const args = ["-m", "runninghub_cli.cli", "duck-decode", duckImagePath];
+    if (password) {
+      args.push("--password", password);
+    }
+    args.push("--out", tempOutputPath);
+
+    console.log('[Duck Decode] Executing: python', args.join(' '));
 
     // Execute decode command (timeout: 60 seconds)
-    const result = execSync(duckDecodeCommand, {
+    const result = execSync(`python ${args.map(arg => `"${arg}"`).join(' ')}`, {
       encoding: 'utf-8',
       timeout: 60000,
-      cwd: process.env.WORKSPACE_PATH || path.join(process.env.HOME || '', 'Downloads', 'workspace')
+      env: {
+        ...process.env,
+        RUNNINGHUB_API_KEY: process.env.RUNNINGHUB_API_KEY || process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY,
+        RUNNINGHUB_WORKFLOW_ID: process.env.RUNNINGHUB_WORKFLOW_ID || process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID,
+      }
     });
+
+    console.log('[Duck Decode] Command completed, output length:', result.length);
 
     // Parse output to find decoded file path
     // Command prints: "Successfully saved extracted data to: /path/to/file.jpg"
     const decodedPathMatch = result.match(/Successfully saved extracted data to: (.+)/);
-    const decodedFilePath = decodedPathMatch ? decodedPathMatch[1].trim() : null;
+    let decodedFilePath = decodedPathMatch ? decodedPathMatch[1].trim() : null;
 
     if (!decodedFilePath) {
       return NextResponse.json(
         { error: 'Failed to extract decoded file path from output' },
         { status: 500 }
       );
+    }
+
+    // Move original duck image to encoded folder
+    try {
+      const encodedImagePath = path.join(encodedDir, originalFileName);
+      fs.renameSync(duckImagePath, encodedImagePath);
+      console.log(`Moved original duck image to: ${encodedImagePath}`);
+    } catch (error) {
+      console.error('Failed to move original duck image to encoded folder:', error);
+      // Continue anyway - this is not a critical failure
+    }
+
+    // Rename decoded file to have the same name as the original
+    try {
+      // If the final output path already exists, remove it first
+      if (fs.existsSync(finalOutputPath)) {
+        fs.unlinkSync(finalOutputPath);
+      }
+
+      // Rename the decoded file to the final output path
+      fs.renameSync(decodedFilePath, finalOutputPath);
+      decodedFilePath = finalOutputPath;
+      console.log(`Decoded file saved as: ${finalOutputPath}`);
+    } catch (error) {
+      console.error('Failed to rename decoded file:', error);
+      // If rename fails, try to keep the temp file
+      if (!fs.existsSync(decodedFilePath)) {
+        decodedFilePath = tempOutputPath;
+      }
     }
 
     // Get file size
@@ -83,11 +136,15 @@ export async function POST(request: NextRequest) {
       success: true,
       decodedFilePath,
       fileType: path.extname(decodedFilePath),
-      fileSize
+      fileSize,
+      originalDuckImagePath: path.join(encodedDir, originalFileName), // Path to original duck image in encoded folder
     });
 
   } catch (error: any) {
-    console.error('Duck decode failed:', error);
+    console.error('[Duck Decode] Error:', error);
+    console.error('[Duck Decode] Error code:', error.code);
+    console.error('[Duck Decode] Error message:', error.message);
+    console.error('[Duck Decode] Error stderr:', error.stderr);
 
     // Check for common errors
     const errorMessage = error.message || error.stderr || error.stdout || '';

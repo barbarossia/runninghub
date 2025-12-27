@@ -76,6 +76,8 @@ export interface FileUploadResponse {
   id: string;
   name: string;
   workspacePath: string;
+  width?: number;
+  height?: number;
 }
 
 export interface ProcessRequest {
@@ -279,6 +281,8 @@ export interface FileInputAssignment {
   fileType: MediaType;
   valid: boolean;
   validationError?: string;
+  width?: number; // Image width in pixels
+  height?: number; // Image height in pixels
 }
 
 /**

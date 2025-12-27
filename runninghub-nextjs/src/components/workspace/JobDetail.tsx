@@ -64,6 +64,8 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
 
   // State for tracking decoded files from duck images
   const [decodedFiles, setDecodedFiles] = useState<Record<string, { decodedPath: string; fileType: string }>>({});
+  // State for cache busting to force image reload after decode
+  const [imageVersion, setImageVersion] = useState<Record<string, number>>({});
 
   // Auto-translate outputs (uses server-side API)
   const { isTranslating, translatedCount } = useOutputTranslation(jobId);
@@ -370,6 +372,11 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       ...prev,
       [sourcePath]: { decodedPath, fileType }
     }));
+    // Increment image version to force cache refresh
+    setImageVersion(prev => ({
+      ...prev,
+      [sourcePath]: (prev[sourcePath] || 0) + 1
+    }));
   };
 
   // Format file size
@@ -448,7 +455,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                  <img
                    src={`/api/images/serve?path=${encodeURIComponent(input.filePath)}`}
                    alt={input.fileName}
-                   className="object-cover w-full h-full"
+                   className="object-contain w-full h-full"
                  />
                ) : (
                  <div className="flex items-center justify-center w-full h-full text-gray-400">
@@ -681,46 +688,45 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                          </div>
                       </div>
 
-                      {/* Show original image */}
+                      {/* Show original image or decoded image */}
                       {output.fileType === 'image' && output.workspacePath && (
                          <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mb-2">
+                           {/* Use decoded path if available, otherwise use original path */}
                            <img
-                             src={`/api/images/serve?path=${encodeURIComponent(output.workspacePath)}`}
-                             alt={output.fileName}
+                             src={`/api/images/serve?path=${encodeURIComponent(decodedFile?.decodedPath || output.workspacePath)}&v=${imageVersion[output.workspacePath] || 0}`}
+                             alt={decodedFile ? `Decoded: ${output.fileName}` : output.fileName}
                              className="object-contain w-full h-full"
                            />
+                           {/* Show badge if decoded */}
+                           {decodedFile && (
+                             <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                               <CheckCircle2 className="h-3 w-3" />
+                               Decoded
+                             </div>
+                           )}
                          </div>
                       )}
 
-                      {/* Show decoded file if available */}
+                      {/* Show decoded file info if available */}
                       {decodedFile && (
                          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                            <div className="flex items-center gap-2 mb-1">
-                              <CheckCircle2 className="h-3 w-3 text-green-600" />
-                              <p className="text-xs font-medium text-green-800">
-                                Decoded: {path.basename(decodedFile.decodedPath)}
-                              </p>
-                            </div>
-                            {/* Thumbnail of decoded file */}
-                            {decodedFile.fileType.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
-                              <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mt-2">
-                                <img
-                                  src={`/api/images/serve?path=${encodeURIComponent(decodedFile.decodedPath)}`}
-                                  alt={`Decoded: ${path.basename(decodedFile.decodedPath)}`}
-                                  className="object-contain w-full h-full"
-                                />
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3 w-3 text-green-600" />
+                                <p className="text-xs font-medium text-green-800">
+                                  Decoded: {path.basename(decodedFile.decodedPath)}
+                                </p>
                               </div>
-                            )}
-                            {/* Download decoded file */}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-2 w-full text-xs"
-                              onClick={() => downloadFile(decodedFile.decodedPath, path.basename(decodedFile.decodedPath))}
-                            >
-                              <Download className="h-3 w-3 mr-1" />
-                              Download Decoded File
-                            </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7"
+                                onClick={() => downloadFile(decodedFile.decodedPath, path.basename(decodedFile.decodedPath))}
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Download
+                              </Button>
+                            </div>
                          </div>
                       )}
                    </Card>

@@ -122,7 +122,7 @@ export function QuickRunWorkflowDialog({
                   <img
                     src={file.thumbnail || file.blobUrl}
                     alt={file.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">

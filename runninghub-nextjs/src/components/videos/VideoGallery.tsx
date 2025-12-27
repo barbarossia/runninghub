@@ -455,7 +455,7 @@ function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay, onRen
         >
           <video
             src={videoSrc}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
             preload="metadata"
             muted
             playsInline

@@ -86,19 +86,28 @@ export default function WorkspacePage() {
   const processFolderContents = useCallback((result: any) => {
     if (!result) return;
 
+    // DEBUG: Log raw API data
+    console.log('[processFolderContents] Raw API result images:', result.images?.slice(0, 3));
+    console.log('[processFolderContents] First image dimensions:', result.images?.[0]?.width, 'x', result.images?.[0]?.height);
+
     // Convert images to MediaFile format with serve URLs
-    const imageFiles = (result.images || []).map((file: any) => ({
-      id: file.path,
-      name: file.name,
-      path: file.path,
-      type: 'image' as const,
-      extension: file.name.split('.').pop() || '',
-      size: file.size || 0,
-      width: file.width,
-      height: file.height,
-      thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
-      selected: false,
-    }));
+    const imageFiles = (result.images || []).map((file: any) => {
+      // DEBUG: Log each file's dimensions
+      console.log(`[processFolderContents] Processing ${file.name}: width=${file.width}, height=${file.height}`);
+
+      return {
+        id: file.path,
+        name: file.name,
+        path: file.path,
+        type: 'image' as const,
+        extension: file.name.split('.').pop() || '',
+        size: file.size || 0,
+        width: file.width,
+        height: file.height,
+        thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
+        selected: false,
+      };
+    });
 
     // Convert videos to MediaFile format with serve URLs
     const videoFiles = (result.videos || []).map((file: any) => ({
@@ -371,15 +380,19 @@ export default function WorkspacePage() {
 
   const handleRenameFile = async (file: MediaFile, newName: string) => {
     try {
-      // For now, just show a toast - actual API integration to be added
-      toast.success(`Rename "${file.name}" to "${newName}" - API integration pending`);
-      // TODO: Implement actual rename API call
-      // const response = await fetch(API_ENDPOINTS.WORKSPACE_RENAME, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ path: file.path, newName }),
-      // });
-      // Then reload folder contents
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_RENAME, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: file.path, newName }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to rename file');
+      }
+
+      // Silent refresh to update UI without toast
+      await handleRefresh(true);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to rename file';
       toast.error(errorMessage);
@@ -389,10 +402,19 @@ export default function WorkspacePage() {
 
   const handleDeleteFile = async (files: MediaFile[]) => {
     try {
-      // For now, just show a toast - actual API integration to be added
-      toast.success(`Delete ${files.length} file${files.length !== 1 ? 's' : ''} - API integration pending`);
-      // TODO: Implement actual delete API call
-      // Then reload folder contents
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_DELETE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths: files.map(f => f.path) }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete files');
+      }
+
+      // Silent refresh to update UI without toast
+      await handleRefresh(true);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
       toast.error(errorMessage);
