@@ -82,7 +82,12 @@ export async function POST(request: NextRequest) {
     const result = execSync(duckDecodeCommand, {
       encoding: 'utf-8',
       timeout: 60000,
-      cwd: process.env.WORKSPACE_PATH || path.join(process.env.HOME || '', 'Downloads', 'workspace')
+      cwd: process.env.WORKSPACE_PATH || path.join(process.env.HOME || '', 'Downloads', 'workspace'),
+      env: {
+        ...process.env,
+        RUNNINGHUB_API_KEY: process.env.RUNNINGHUB_API_KEY || process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY,
+        RUNNINGHUB_WORKFLOW_ID: process.env.RUNNINGHUB_WORKFLOW_ID || process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID,
+      }
     });
 
     // Parse output to find decoded file path
