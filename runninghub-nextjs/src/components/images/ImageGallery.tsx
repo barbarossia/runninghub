@@ -303,7 +303,7 @@ export function ImageGallery({
                           src={image.blob_url || `${API_ENDPOINTS.IMAGES_SERVE}?path=${encodeURIComponent(image.path)}`}
                           alt={image.name}
                           fill
-                          className="object-cover"
+                          className="object-contain"
                           sizes="48px"
                           loading="lazy"
                         />

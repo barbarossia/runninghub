@@ -455,7 +455,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                  <img
                    src={`/api/images/serve?path=${encodeURIComponent(input.filePath)}`}
                    alt={input.fileName}
-                   className="object-cover w-full h-full"
+                   className="object-contain w-full h-full"
                  />
                ) : (
                  <div className="flex items-center justify-center w-full h-full text-gray-400">

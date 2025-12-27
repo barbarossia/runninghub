@@ -307,7 +307,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                         <img
                           src={`/api/images/serve?path=${encodeURIComponent(assignment.filePath)}`}
                           alt={assignment.fileName}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-contain"
                           onLoad={(e) => {
                             const img = e.currentTarget;
                             if (img.naturalWidth && img.naturalHeight) {

@@ -137,7 +137,7 @@ export function WorkspaceUploadArea({
                   <img
                     src={URL.createObjectURL(file)}
                     alt={file.name}
-                    className="w-12 h-12 object-cover rounded"
+                    className="w-12 h-12 object-contain rounded"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{file.name}</p>
