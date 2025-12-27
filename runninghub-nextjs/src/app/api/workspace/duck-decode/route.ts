@@ -42,9 +42,36 @@ export async function POST(request: NextRequest) {
       fs.mkdirSync(resultDir, { recursive: true });
     }
 
+    // Determine runninghub CLI path
+    // Try environment variable first, then common locations
+    let runninghubPath = process.env.RUNNINGHUB_CLI_PATH;
+
+    if (!runninghubPath) {
+      // Try common installation paths
+      const commonPaths = [
+        '/opt/homebrew/Caskroom/miniconda/base/bin/runninghub',
+        '/usr/local/bin/runninghub',
+        '/opt/homebrew/bin/runninghub',
+        `${process.env.HOME}/miniconda3/bin/runninghub`,
+        `${process.env.HOME}/anaconda3/bin/runninghub`,
+      ];
+
+      for (const testPath of commonPaths) {
+        if (fs.existsSync(testPath)) {
+          runninghubPath = testPath;
+          break;
+        }
+      }
+    }
+
+    // If still not found, use fallback (will fail with clear error)
+    if (!runninghubPath) {
+      runninghubPath = 'runninghub';
+    }
+
     // Build duck-decode command
     const duckDecodeCommand = [
-      'runninghub',
+      `"${runninghubPath}"`,
       'duck-decode',
       `"${duckImagePath}"`,
       password ? `--password "${password}"` : '',
@@ -88,6 +115,17 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Duck decode failed:', error);
+
+    // Check for ENOENT error (command not found)
+    if (error.code === 'ENOENT') {
+      return NextResponse.json(
+        {
+          error: 'runninghub CLI not found. Please ensure it is installed and RUNNINGHUB_CLI_PATH environment variable is set correctly.',
+          details: `Tried path: ${process.env.RUNNINGHUB_CLI_PATH || 'default locations'}`
+        },
+        { status: 500 }
+      );
+    }
 
     // Check for common errors
     const errorMessage = error.message || error.stderr || error.stdout || '';
