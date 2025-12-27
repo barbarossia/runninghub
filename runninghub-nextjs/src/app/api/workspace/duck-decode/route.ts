@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
     // Try environment variable first, then common locations
     let runninghubPath = process.env.RUNNINGHUB_CLI_PATH;
 
+    console.log('[Duck Decode] RUNNINGHUB_CLI_PATH from env:', runninghubPath);
+
     if (!runninghubPath) {
       // Try common installation paths
       const commonPaths = [
@@ -70,8 +72,10 @@ export async function POST(request: NextRequest) {
       ];
 
       for (const testPath of commonPaths) {
+        console.log(`[Duck Decode] Testing path: ${testPath}`);
         if (fs.existsSync(testPath)) {
           runninghubPath = testPath;
+          console.log(`[Duck Decode] Found runninghub at: ${runninghubPath}`);
           break;
         }
       }
@@ -79,8 +83,11 @@ export async function POST(request: NextRequest) {
 
     // If still not found, use fallback (will fail with clear error)
     if (!runninghubPath) {
+      console.log('[Duck Decode] WARNING: runninghub not found, using fallback');
       runninghubPath = 'runninghub';
     }
+
+    console.log('[Duck Decode] Final runninghub path:', runninghubPath);
 
     // Build duck-decode command with explicit output path
     const duckDecodeCommand = [
@@ -90,6 +97,9 @@ export async function POST(request: NextRequest) {
       password ? `--password "${password}"` : '',
       `--out "${tempOutputPath}"`
     ].filter(Boolean).join(' ');
+
+    console.log('[Duck Decode] Command:', duckDecodeCommand);
+    console.log('[Duck Decode] Working directory:', process.env.WORKSPACE_PATH || path.join(process.env.HOME || '', 'Downloads', 'workspace'));
 
     // Execute decode command (timeout: 60 seconds)
     const result = execSync(duckDecodeCommand, {
@@ -102,6 +112,8 @@ export async function POST(request: NextRequest) {
         RUNNINGHUB_WORKFLOW_ID: process.env.RUNNINGHUB_WORKFLOW_ID || process.env.NEXT_PUBLIC_RUNNINGHUB_WORKFLOW_ID,
       }
     });
+
+    console.log('[Duck Decode] Command output length:', result.length);
 
     // Parse output to find decoded file path
     // Command prints: "Successfully saved extracted data to: /path/to/file.jpg"
@@ -162,7 +174,11 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Duck decode failed:', error);
+    console.error('[Duck Decode] Error:', error);
+    console.error('[Duck Decode] Error code:', error.code);
+    console.error('[Duck Decode] Error message:', error.message);
+    console.error('[Duck Decode] Error stdout:', error.stdout);
+    console.error('[Duck Decode] Error stderr:', error.stderr);
 
     // Check for ENOENT error (command not found)
     if (error.code === 'ENOENT') {
