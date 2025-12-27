@@ -277,6 +277,9 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                 ? assignment.width / assignment.height
                 : 1; // Default to square if dimensions unavailable
 
+              // DEBUG: Log to verify dimensions are present
+              console.log('[LoadImage]', assignment.fileName, 'dimensions:', assignment.width, 'x', assignment.height, 'ratio:', aspectRatio);
+
               // Determine aspect ratio class
               const getAspectClass = () => {
                 if (aspectRatio > 1.2) return 'aspect-video'; // Landscape (16:9, 4:3)
