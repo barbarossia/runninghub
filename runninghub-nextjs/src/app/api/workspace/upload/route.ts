@@ -9,6 +9,7 @@ import path from 'path';
 import crypto from 'crypto';
 import type { FileUploadRequest, FileUploadResponse } from '@/types/workspace';
 import { ERROR_MESSAGES } from '@/constants';
+import { getFileMetadata } from '@/lib/metadata';
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,10 +74,31 @@ export async function POST(request: NextRequest) {
         // Write file to disk
         await fs.writeFile(filePath, buffer);
 
+        // Extract image metadata (dimensions)
+        const fileExtension = path.extname(file.name).toLowerCase();
+        const supportedImageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+        const supportedVideoExtensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv'];
+
+        let width: number | undefined;
+        let height: number | undefined;
+
+        if (supportedImageExtensions.includes(fileExtension)) {
+          const metadata = await getFileMetadata(filePath, 'image');
+          width = metadata?.width;
+          height = metadata?.height;
+          console.log(`[Upload] ${file.name} dimensions: ${width} x ${height}`);
+        } else if (supportedVideoExtensions.includes(fileExtension)) {
+          const metadata = await getFileMetadata(filePath, 'video') as any;
+          width = metadata?.width;
+          height = metadata?.height;
+        }
+
         uploadedFiles.push({
           id: fileId,
           name: file.name,
           workspacePath: filePath,
+          width,
+          height,
         });
       } catch (fileError) {
         console.error(`Failed to save file ${file.name}:`, fileError);

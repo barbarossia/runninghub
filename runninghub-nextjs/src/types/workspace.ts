@@ -76,6 +76,8 @@ export interface FileUploadResponse {
   id: string;
   name: string;
   workspacePath: string;
+  width?: number;
+  height?: number;
 }
 
 export interface ProcessRequest {
