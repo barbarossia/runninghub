@@ -6,6 +6,7 @@ import {
   Trash2,
   Loader2,
   X,
+  Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,12 +30,15 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BaseSelectionToolbar } from '@/components/selection/BaseSelectionToolbar';
-import type { MediaFile } from '@/types/workspace';
+import { QuickRunWorkflowDialog } from '@/components/workspace/QuickRunWorkflowDialog';
+import { useWorkspaceStore } from '@/store/workspace-store';
+import type { MediaFile, Workflow } from '@/types/workspace';
 
 interface MediaSelectionToolbarProps {
   selectedFiles: MediaFile[];
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
   onDelete?: (files: MediaFile[]) => Promise<void>;
+  onRunWorkflow?: (workflowId?: string) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -43,6 +47,7 @@ export function MediaSelectionToolbar({
   selectedFiles,
   onRename,
   onDelete,
+  onRunWorkflow,
   disabled = false,
   className = '',
 }: MediaSelectionToolbarProps) {
@@ -51,9 +56,13 @@ export function MediaSelectionToolbar({
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Get workflows from store
+  const { workflows } = useWorkspaceStore();
 
   // Handle rename
   const handleRename = useCallback(async () => {
@@ -100,6 +109,13 @@ export function MediaSelectionToolbar({
     // The toolbar just emits an event
   }, []);
 
+  // Handle quick run workflow
+  const handleQuickRunConfirm = useCallback((workflowId: string) => {
+    if (onRunWorkflow) {
+      onRunWorkflow(workflowId);
+    }
+  }, [onRunWorkflow]);
+
   const toolbarDisabled = disabled || isRenaming || isDeleting;
 
   return (
@@ -126,6 +142,20 @@ export function MediaSelectionToolbar({
           if (mode === 'expanded-actions') {
             return (
               <>
+                {/* Run Workflow */}
+                {onRunWorkflow && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setShowQuickRunDialog(true)}
+                    disabled={toolbarDisabled}
+                    className="h-9 bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Play className="h-4 w-4 mr-2" />
+                    Run Workflow
+                  </Button>
+                )}
+
                 {/* Rename - only for single selection */}
                 {isSingleSelection && onRename && (
                   <Button
@@ -160,6 +190,21 @@ export function MediaSelectionToolbar({
           if (mode === 'floating') {
             return (
               <>
+                {/* Run Workflow */}
+                {onRunWorkflow && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowQuickRunDialog(true)}
+                    disabled={toolbarDisabled}
+                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+                    title="Run Workflow"
+                  >
+                    <Play className="h-3.5 w-3.5 mr-2 text-blue-400" />
+                    <span className="text-xs">Run Workflow</span>
+                  </Button>
+                )}
+
                 {/* Rename - only for single selection */}
                 {isSingleSelection && onRename && (
                   <Button
@@ -275,6 +320,17 @@ export function MediaSelectionToolbar({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      )}
+
+      {/* Quick Run Workflow Dialog */}
+      {onRunWorkflow && (
+        <QuickRunWorkflowDialog
+          open={showQuickRunDialog}
+          onOpenChange={setShowQuickRunDialog}
+          selectedFiles={selectedFiles}
+          workflows={workflows}
+          onConfirm={handleQuickRunConfirm}
+        />
       )}
     </>
   );

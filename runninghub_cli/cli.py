@@ -1083,6 +1083,66 @@ def clip(ctx, file_path, mode, image_format, quality, frame_count, interval_seco
         sys.exit(1)
 
 
+@cli.command("duck-decode")
+@click.argument("duck_image", type=click.Path(exists=True))
+@click.option(
+    "--password",
+    help="Password for decryption (if required)"
+)
+@click.option(
+    "--out",
+    "output",
+    help="Output file path or directory (default: auto-generate)"
+)
+@click.option(
+    "--output-dir",
+    help="Output directory (alternative to --out)"
+)
+@click.option(
+    "--quiet",
+    is_flag=True,
+    help="Suppress verbose output"
+)
+@click.pass_context
+def duck_decode(ctx, duck_image, password, output, output_dir, quiet):
+    """Decode hidden media from a duck image.
+
+    Extracts images, videos, or other files hidden in cartoon duck images
+    using LSB steganography.
+
+    Example:
+        runninghub duck-decode my_duck.png
+        runninghub duck-decode my_duck.png --password "secret123"
+        runninghub duck-decode my_duck.png --out recovered.jpg
+        runninghub duck-decode my_duck.png --output-dir ./recovered/
+    """
+    from .duck_utils import decode_duck_image
+
+    try:
+        result = decode_duck_image(
+            duck_path=duck_image,
+            password=password or "",
+            output=output,
+            output_dir=output_dir,
+            quiet=quiet
+        )
+
+        if result['success']:
+            if not quiet:
+                print_success(f"Successfully decoded duck image!")
+                print(f"Output file: {result['output_path']}")
+                print(f"File type: {result['file_type']}")
+                print(f"Data size: {result['data_size']} bytes")
+            sys.exit(0)
+        else:
+            print_error(f"Failed to decode duck image: {result['error']}")
+            sys.exit(1)
+
+    except Exception as e:
+        print_error(f"Decoding failed: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main entry point for the CLI."""
     cli()
