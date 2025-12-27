@@ -80,6 +80,8 @@ export const API_ENDPOINTS = {
   WORKSPACE_JOB_RESULTS: '/api/workspace/job-results',
   WORKSPACE_SERVE_OUTPUT: '/api/workspace/serve-output',
   WORKSPACE_UPDATE_CONTENT: '/api/workspace/update-content',
+  WORKSPACE_RENAME: '/api/workspace/rename',
+  WORKSPACE_DELETE: '/api/workspace/delete',
 
   // Workflows
   WORKFLOW_SAVE: '/api/workflow/save',

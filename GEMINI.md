@@ -142,6 +142,8 @@ export default function YourPage() {
 ## 5. Recent Changes & Changelog (Dec 2025)
 
 *   **2025-12-27**:
+    *   **File Operations**: Enhanced feedback for delete/rename operations by moving from toasts to persistent console logs.
+    *   **Thumbnails**: Fixed image/video cropping issues by using `object-contain`.
     *   **Workflow Input**: Fixed LoadImage grid not adapting to uploaded images. Implemented adaptive grid layout (larger preview for single files) and client-side dimension auto-detection fallback.
     *   **Duck Decode**: Full integration (CLI + UI).
     *   **UI Fixes**: Resolved dropdown overlay issues (`z-50`) and text display bugs.

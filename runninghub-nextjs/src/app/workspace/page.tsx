@@ -380,15 +380,19 @@ export default function WorkspacePage() {
 
   const handleRenameFile = async (file: MediaFile, newName: string) => {
     try {
-      // For now, just show a toast - actual API integration to be added
-      toast.success(`Rename "${file.name}" to "${newName}" - API integration pending`);
-      // TODO: Implement actual rename API call
-      // const response = await fetch(API_ENDPOINTS.WORKSPACE_RENAME, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ path: file.path, newName }),
-      // });
-      // Then reload folder contents
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_RENAME, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: file.path, newName }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to rename file');
+      }
+
+      // Silent refresh to update UI without toast
+      await handleRefresh(true);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to rename file';
       toast.error(errorMessage);
@@ -398,10 +402,19 @@ export default function WorkspacePage() {
 
   const handleDeleteFile = async (files: MediaFile[]) => {
     try {
-      // For now, just show a toast - actual API integration to be added
-      toast.success(`Delete ${files.length} file${files.length !== 1 ? 's' : ''} - API integration pending`);
-      // TODO: Implement actual delete API call
-      // Then reload folder contents
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_DELETE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths: files.map(f => f.path) }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete files');
+      }
+
+      // Silent refresh to update UI without toast
+      await handleRefresh(true);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
       toast.error(errorMessage);
