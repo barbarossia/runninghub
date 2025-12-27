@@ -23,3 +23,5 @@ export type { JobListProps } from './JobList';
 
 export { JobDetail } from './JobDetail';
 export type { JobDetailProps } from './JobDetail';
+
+export { DuckDecodeButton } from './DuckDecodeButton';

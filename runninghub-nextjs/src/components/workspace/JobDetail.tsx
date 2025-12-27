@@ -38,6 +38,8 @@ import { useOutputTranslation } from '@/hooks/useOutputTranslation';
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
 import type { Job, JobResult } from '@/types/workspace';
+import { DuckDecodeButton } from './DuckDecodeButton';
+import path from 'path';
 
 export interface JobDetailProps {
   jobId: string;
@@ -59,6 +61,9 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const [editedText, setEditedText] = useState<Record<string, { original: string; en?: string; zh?: string }>>({});
   const [translating, setTranslating] = useState<Record<string, 'left' | 'right' | null>>({});
   const [debouncedTimers, setDebouncedTimers] = useState<Record<string, NodeJS.Timeout>>({});
+
+  // State for tracking decoded files from duck images
+  const [decodedFiles, setDecodedFiles] = useState<Record<string, { decodedPath: string; fileType: string }>>({});
 
   // Auto-translate outputs (uses server-side API)
   const { isTranslating, translatedCount } = useOutputTranslation(jobId);
@@ -359,6 +364,14 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
     setRightLang(leftLang);
   };
 
+  // Handle decoded file from duck decode
+  const handleFileDecoded = (sourcePath: string, decodedPath: string, fileType: string) => {
+    setDecodedFiles(prev => ({
+      ...prev,
+      [sourcePath]: { decodedPath, fileType }
+    }));
+  };
+
   // Format file size
   function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -639,7 +652,10 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
             <div className="space-y-2">
                <h3 className="text-sm font-medium text-gray-500">Output Files</h3>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 {job.results.outputs.map((output, idx) => (
+                 {job.results.outputs.map((output, idx) => {
+                   const decodedFile = output.workspacePath ? decodedFiles[output.workspacePath] : null;
+
+                   return (
                    <Card key={idx} className="p-3">
                       <div className="flex items-center gap-3 mb-3">
                          {output.fileType === 'image' ? <ImageIcon className="h-5 w-5 text-blue-500"/> : <FileText className="h-5 w-5 text-gray-500"/>}
@@ -647,14 +663,27 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                            <p className="text-sm font-medium truncate" title={output.fileName}>{output.fileName}</p>
                            <p className="text-xs text-gray-500">{formatFileSize(output.fileSize || 0)}</p>
                          </div>
-                         {output.workspacePath && (
-                            <Button variant="outline" size="sm" onClick={() => handleDownloadOutput(output)}>
-                              <Download className="h-4 w-4" />
-                            </Button>
-                         )}
+                         <div className="flex gap-2">
+                            {output.fileType === 'image' && output.workspacePath && (
+                              <DuckDecodeButton
+                                imagePath={output.workspacePath}
+                                jobId={jobId}
+                                onDecoded={(decodedPath, fileType) =>
+                                  handleFileDecoded(output.workspacePath!, decodedPath, fileType)
+                                }
+                              />
+                            )}
+                            {output.workspacePath && (
+                              <Button variant="outline" size="sm" onClick={() => handleDownloadOutput(output)}>
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            )}
+                         </div>
                       </div>
+
+                      {/* Show original image */}
                       {output.fileType === 'image' && output.workspacePath && (
-                         <div className="relative aspect-video bg-gray-100 rounded overflow-hidden">
+                         <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mb-2">
                            <img
                              src={`/api/images/serve?path=${encodeURIComponent(output.workspacePath)}`}
                              alt={output.fileName}
@@ -662,8 +691,41 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                            />
                          </div>
                       )}
+
+                      {/* Show decoded file if available */}
+                      {decodedFile && (
+                         <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                            <div className="flex items-center gap-2 mb-1">
+                              <CheckCircle2 className="h-3 w-3 text-green-600" />
+                              <p className="text-xs font-medium text-green-800">
+                                Decoded: {path.basename(decodedFile.decodedPath)}
+                              </p>
+                            </div>
+                            {/* Thumbnail of decoded file */}
+                            {decodedFile.fileType.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                              <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mt-2">
+                                <img
+                                  src={`/api/images/serve?path=${encodeURIComponent(decodedFile.decodedPath)}`}
+                                  alt={`Decoded: ${path.basename(decodedFile.decodedPath)}`}
+                                  className="object-contain w-full h-full"
+                                />
+                              </div>
+                            )}
+                            {/* Download decoded file */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-2 w-full text-xs"
+                              onClick={() => downloadFile(decodedFile.decodedPath, path.basename(decodedFile.decodedPath))}
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              Download Decoded File
+                            </Button>
+                         </div>
+                      )}
                    </Card>
-                 ))}
+                   );
+                 })}
                </div>
             </div>
           ) : job.status === 'completed' ? (
