@@ -498,6 +498,8 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
             fileSize: mediaFile.size,
             fileType: mediaFile.type,
             valid: true, // Will be validated by WorkflowInputBuilder
+            width: mediaFile.width,
+            height: mediaFile.height,
           };
 
           return {
