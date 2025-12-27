@@ -50,6 +50,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     setJobTextInput,
     validateJobInputs,
     addMediaFile,
+    updateMediaFile,
   } = useWorkspaceStore();
 
   const { selectedFolder } = useFolderStore();
@@ -67,6 +68,13 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     });
     return grouped;
   }, [jobFiles]);
+
+  // Adaptive grid columns based on number of items
+  const getGridClass = (count: number) => {
+    if (count === 1) return 'grid-cols-1 max-w-sm'; // Single large item
+    if (count <= 4) return 'grid-cols-2 sm:grid-cols-3'; // Medium grid
+    return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'; // Compact grid
+  };
 
   // Get invalid files count for a parameter
   const getInvalidFilesCount = useCallback(
@@ -174,11 +182,13 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
             type: file.type.startsWith('video') ? 'video' : 'image',
             extension: file.name.split('.').pop() ? '.' + file.name.split('.').pop() : '',
             size: file.size,
-            width: 0,
-            height: 0,
+            width: uploadedFile.width,
+            height: uploadedFile.height,
             selected: false,
             thumbnail: `/api/images/serve?path=${encodeURIComponent(uploadedFile.workspacePath)}`,
           };
+
+          console.log(`[Direct Upload] ${uploadedFile.name} dimensions: ${uploadedFile.width} x ${uploadedFile.height}`);
 
           addMediaFile(newMediaFile);
           assignFileToParameter(newMediaFile.path, paramId, newMediaFile);
@@ -270,81 +280,96 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
 
         {/* Assigned files */}
         {assigned.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-3">
+          <div className={cn("grid gap-3 mb-3", getGridClass(assigned.length))}>
             {assigned.map((assignment) => {
               // Calculate aspect ratio from image dimensions
               const aspectRatio = assignment.width && assignment.height
                 ? assignment.width / assignment.height
                 : 1; // Default to square if dimensions unavailable
 
-              // DEBUG: Log to verify dimensions are present
-              console.log('[LoadImage]', assignment.fileName, 'dimensions:', assignment.width, 'x', assignment.height, 'ratio:', aspectRatio);
-
-              // Determine aspect ratio class
-              const getAspectClass = () => {
-                if (aspectRatio > 1.2) return 'aspect-video'; // Landscape (16:9, 4:3)
-                if (aspectRatio < 0.8) return 'aspect-[3/4]'; // Portrait (9:16, 3:4)
-                return 'aspect-square'; // Square or near-square
+              // Use padding-bottom hack for aspect ratio
+              // padding-bottom as percentage = (height / width) * 100
+              const paddingBottom = aspectRatio > 0 ? `${(1 / aspectRatio) * 100}%` : '100%';
+              const aspectStyle = {
+                paddingBottom
               };
 
               return (
-                <Card
+                <div
                   key={assignment.filePath}
-                  className={`group relative ${getAspectClass()} overflow-hidden bg-gray-50 hover:ring-2 hover:ring-blue-500 transition-all cursor-default`}
+                  className="relative group"
+                  style={aspectStyle}
                 >
-                  {/* Thumbnail fills entire card */}
-                  <div className="absolute inset-0">
-                    {assignment.fileType === 'image' ? (
-                      <img
-                        src={`/api/images/serve?path=${encodeURIComponent(assignment.filePath)}`}
-                        alt={assignment.fileName}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400">
-                        <Video className="h-12 w-12" />
-                      </div>
+                  <Card className="absolute inset-0 group-hover:ring-2 group-hover:ring-blue-500 transition-all cursor-default overflow-hidden">
+                    {/* Thumbnail fills entire card */}
+                    <div className="absolute inset-0">
+                      {assignment.fileType === 'image' ? (
+                        <img
+                          src={`/api/images/serve?path=${encodeURIComponent(assignment.filePath)}`}
+                          alt={assignment.fileName}
+                          className="h-full w-full object-cover"
+                          onLoad={(e) => {
+                            const img = e.currentTarget;
+                            if (img.naturalWidth && img.naturalHeight) {
+                              // Check if we need to update dimensions (if missing or different)
+                              if (!assignment.width || !assignment.height || 
+                                  assignment.width !== img.naturalWidth || 
+                                  assignment.height !== img.naturalHeight) {
+                                console.log(`[Auto-Detect] Updating dimensions for ${assignment.fileName}: ${img.naturalWidth}x${img.naturalHeight}`);
+                                updateMediaFile(assignment.filePath, {
+                                  width: img.naturalWidth,
+                                  height: img.naturalHeight
+                                });
+                              }
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400">
+                          <Video className="h-12 w-12" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Validation badge - always visible if invalid */}
+                    {!assignment.valid && (
+                      <Badge variant="destructive" className="absolute top-2 left-2 text-xs z-10">
+                        {assignment.validationError}
+                      </Badge>
                     )}
-                  </div>
 
-                  {/* Validation badge - always visible if invalid */}
-                  {!assignment.valid && (
-                    <Badge variant="destructive" className="absolute top-2 left-2 text-xs z-10">
-                      {assignment.validationError}
-                    </Badge>
-                  )}
+                    {/* Hover overlay with gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                  {/* Hover overlay with gradient */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    {/* Info and controls - reveal on hover */}
+                    <div className="absolute inset-0 p-3 flex flex-col justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Top: Filename */}
+                      <div className="flex items-start justify-between gap-2">
+                        <p
+                          className="text-xs font-medium text-white truncate flex-1 drop-shadow-lg"
+                          title={assignment.fileName}
+                        >
+                          {assignment.fileName}
+                        </p>
+                      </div>
 
-                  {/* Info and controls - reveal on hover */}
-                  <div className="absolute inset-0 p-3 flex flex-col justify-between opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* Top: Filename */}
-                    <div className="flex items-start justify-between gap-2">
-                      <p
-                        className="text-xs font-medium text-white truncate flex-1 drop-shadow-lg"
-                        title={assignment.fileName}
-                      >
-                        {assignment.fileName}
-                      </p>
+                      {/* Bottom: File size and remove button */}
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-white/90 drop-shadow-lg">
+                          {formatFileSize(assignment.fileSize)}
+                        </p>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="h-7 w-7 bg-white/20 hover:bg-white/30 backdrop-blur-sm border-0 shrink-0"
+                          onClick={() => removeFileAssignment(assignment.filePath)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-
-                    {/* Bottom: File size and remove button */}
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-white/90 drop-shadow-lg">
-                        {formatFileSize(assignment.fileSize)}
-                      </p>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="h-7 w-7 bg-white/20 hover:bg-white/30 backdrop-blur-sm border-0 shrink-0"
-                        onClick={() => removeFileAssignment(assignment.filePath)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
+                  </Card>
+                </div>
               );
             })}
           </div>

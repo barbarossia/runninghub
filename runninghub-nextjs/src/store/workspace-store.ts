@@ -412,11 +412,31 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
         })),
 
       updateMediaFile: (fileId, updates) =>
-        set((state) => ({
-          mediaFiles: state.mediaFiles.map((f) =>
+        set((state) => {
+          // Update mediaFiles
+          const updatedMediaFiles = state.mediaFiles.map((f) =>
             f.id === fileId ? { ...f, ...updates } : f
-          ),
-        })),
+          );
+
+          // Update corresponding assignments in jobFiles
+          const updatedJobFiles = state.jobFiles.map((jf) => {
+            if (jf.filePath === fileId) {
+              const jobUpdates: Partial<FileInputAssignment> = {};
+              if (updates.width !== undefined) jobUpdates.width = updates.width;
+              if (updates.height !== undefined) jobUpdates.height = updates.height;
+              
+              if (Object.keys(jobUpdates).length > 0) {
+                return { ...jf, ...jobUpdates };
+              }
+            }
+            return jf;
+          });
+
+          return {
+            mediaFiles: updatedMediaFiles,
+            jobFiles: updatedJobFiles,
+          };
+        }),
 
       toggleMediaFileSelection: (fileId) =>
         set((state) => ({
@@ -487,6 +507,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       assignFileToParameter: (filePath, parameterId, mediaFile) =>
         set((state) => {
+          // DEBUG: Log mediaFile dimensions
+          console.log(`[assignFileToParameter] Assigning ${mediaFile.name}: width=${mediaFile.width}, height=${mediaFile.height}`);
+
           // Remove existing assignment for this file
           const filtered = state.jobFiles.filter((jf) => jf.filePath !== filePath);
 
@@ -501,6 +524,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
             width: mediaFile.width,
             height: mediaFile.height,
           };
+
+          // DEBUG: Log assignment dimensions
+          console.log(`[assignFileToParameter] Created assignment:`, assignment);
 
           return {
             jobFiles: [...filtered, assignment],
