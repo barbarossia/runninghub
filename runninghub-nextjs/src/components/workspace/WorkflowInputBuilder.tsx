@@ -272,8 +272,8 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
         {assigned.length > 0 && (
           <div className="grid grid-cols-1 gap-2 mb-3">
             {assigned.map((assignment) => (
-              <Card key={assignment.filePath} className="p-2 flex items-center gap-3 bg-gray-50">
-                <div className="relative h-10 w-10 shrink-0 rounded overflow-hidden bg-gray-200">
+              <Card key={assignment.filePath} className="p-3 flex items-center gap-3 bg-gray-50">
+                <div className="relative h-16 w-16 shrink-0 rounded overflow-hidden bg-gray-200">
                   {assignment.fileType === 'image' ? (
                     <img
                       src={`/api/images/serve?path=${encodeURIComponent(assignment.filePath)}`}
@@ -282,7 +282,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full w-full text-gray-400">
-                      <Video className="h-5 w-5" />
+                      <Video className="h-6 w-6" />
                     </div>
                   )}
                 </div>
