@@ -117,7 +117,49 @@ This document contains the global development rules that apply to the entire Run
 ### Branch Management
 **RULE 2**: Every new branch must be created from the latest `main` branch.
 
-**Process**:
+**RULE 2.5**: ⚠️ **CRITICAL** - Check if current branch is merged before creating a new branch.
+
+**Before creating ANY new branch, you MUST**:
+1. Check if the current branch has been merged to `main`
+2. If NOT merged, ASK THE USER before proceeding
+3. Do NOT create a new branch from an unmerged feature/fix branch
+
+**Check Process**:
+```bash
+# Check current branch
+git branch --show-current
+
+# Check if current branch is merged to main
+git branch --merged main | grep "$(git branch --show-current)"
+
+# If the current branch appears in the list, it's merged ✅
+# If NOT found, the branch is NOT merged ⚠️ - ASK USER FIRST
+```
+
+**Example Scenario**:
+```bash
+# You're currently on: feature/some-feature
+# User asks to create a new branch
+
+# WRONG - Don't do this:
+git checkout -b feature/new-feature  # ❌ Creating from unmerged branch
+
+# CORRECT - Do this instead:
+1. Check if feature/some-feature is merged:
+   git branch --merged main | grep "feature/some-feature"
+
+2. If NOT merged, ask user:
+   ⚠️ "Current branch 'feature/some-feature' has not been merged to main yet.
+       Should I:
+       a) Create PR for current branch first
+       b) Merge current branch to main
+       c) Create new branch from main (abandoning current branch work)
+       d) Continue anyway (create new branch from current unmerged branch)"
+
+3. Follow user's instruction
+```
+
+**Process for creating new branch**:
 ```bash
 # Always pull latest changes before creating a new branch
 git checkout main
@@ -289,6 +331,16 @@ Before implementing any feature, verify:
 - [ ] Followed implementation steps from plan
 - [ ] Updated TODO list with completed items
 
+Before creating a new branch, verify:
+
+- [ ] **⚠️ CRITICAL CHECK**: Current branch is merged to `main`
+  - Check: `git branch --merged main | grep "$(git branch --show-current)"`
+  - If NOT merged, ASK USER before proceeding
+- [ ] Switch to `main` branch: `git checkout main`
+- [ ] Pull latest changes: `git pull origin main`
+- [ ] Create new branch from `main`
+- [ ] Branch follows naming convention (`feature/`, `fix/`, etc.)
+
 Before committing any changes, verify:
 
 - [ ] Branch created from latest `main`
@@ -312,5 +364,5 @@ Before committing any changes, verify:
 
 ---
 
-**Last Updated**: 2025-12-26
+**Last Updated**: 2025-12-27
 **Maintained By**: Development Team
