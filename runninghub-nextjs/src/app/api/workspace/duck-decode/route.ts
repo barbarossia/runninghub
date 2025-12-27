@@ -3,6 +3,11 @@ import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
+/**
+ * Duck Decode API
+ * Decodes hidden data from duck images using LSB steganography
+ */
+
 export async function POST(request: NextRequest) {
   try {
     const { duckImagePath, password = "", outputPath, jobId } = await request.json();
@@ -55,57 +60,19 @@ export async function POST(request: NextRequest) {
     // Temporary output path (with _decoded suffix to avoid conflict)
     const tempOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}_decoded${originalFileExt}`);
 
-    // Determine runninghub CLI path
-    // Try environment variable first, then common locations
-    let runninghubPath = process.env.RUNNINGHUB_CLI_PATH;
-
-    console.log('[Duck Decode] RUNNINGHUB_CLI_PATH from env:', runninghubPath);
-
-    if (!runninghubPath) {
-      // Try common installation paths
-      const commonPaths = [
-        '/opt/homebrew/Caskroom/miniconda/base/bin/runninghub',
-        '/usr/local/bin/runninghub',
-        '/opt/homebrew/bin/runninghub',
-        `${process.env.HOME}/miniconda3/bin/runninghub`,
-        `${process.env.HOME}/anaconda3/bin/runninghub`,
-      ];
-
-      for (const testPath of commonPaths) {
-        console.log(`[Duck Decode] Testing path: ${testPath}`);
-        if (fs.existsSync(testPath)) {
-          runninghubPath = testPath;
-          console.log(`[Duck Decode] Found runninghub at: ${runninghubPath}`);
-          break;
-        }
-      }
+    // Build duck-decode command using Python module (like other workspace APIs)
+    const args = ["-m", "runninghub_cli.cli", "duck-decode", duckImagePath];
+    if (password) {
+      args.push("--password", password);
     }
+    args.push("--out", tempOutputPath);
 
-    // If still not found, use fallback (will fail with clear error)
-    if (!runninghubPath) {
-      console.log('[Duck Decode] WARNING: runninghub not found, using fallback');
-      runninghubPath = 'runninghub';
-    }
-
-    console.log('[Duck Decode] Final runninghub path:', runninghubPath);
-
-    // Build duck-decode command with explicit output path
-    const duckDecodeCommand = [
-      `"${runninghubPath}"`,
-      'duck-decode',
-      `"${duckImagePath}"`,
-      password ? `--password "${password}"` : '',
-      `--out "${tempOutputPath}"`
-    ].filter(Boolean).join(' ');
-
-    console.log('[Duck Decode] Command:', duckDecodeCommand);
-    console.log('[Duck Decode] Working directory:', process.env.WORKSPACE_PATH || path.join(process.env.HOME || '', 'Downloads', 'workspace'));
+    console.log('[Duck Decode] Executing: python', args.join(' '));
 
     // Execute decode command (timeout: 60 seconds)
-    const result = execSync(duckDecodeCommand, {
+    const result = execSync(`python ${args.map(arg => `"${arg}"`).join(' ')}`, {
       encoding: 'utf-8',
       timeout: 60000,
-      cwd: process.env.WORKSPACE_PATH || path.join(process.env.HOME || '', 'Downloads', 'workspace'),
       env: {
         ...process.env,
         RUNNINGHUB_API_KEY: process.env.RUNNINGHUB_API_KEY || process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY,
@@ -113,7 +80,7 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    console.log('[Duck Decode] Command output length:', result.length);
+    console.log('[Duck Decode] Command completed, output length:', result.length);
 
     // Parse output to find decoded file path
     // Command prints: "Successfully saved extracted data to: /path/to/file.jpg"
@@ -177,19 +144,7 @@ export async function POST(request: NextRequest) {
     console.error('[Duck Decode] Error:', error);
     console.error('[Duck Decode] Error code:', error.code);
     console.error('[Duck Decode] Error message:', error.message);
-    console.error('[Duck Decode] Error stdout:', error.stdout);
     console.error('[Duck Decode] Error stderr:', error.stderr);
-
-    // Check for ENOENT error (command not found)
-    if (error.code === 'ENOENT') {
-      return NextResponse.json(
-        {
-          error: 'runninghub CLI not found. Please ensure it is installed and RUNNINGHUB_CLI_PATH environment variable is set correctly.',
-          details: `Tried path: ${process.env.RUNNINGHUB_CLI_PATH || 'default locations'}`
-        },
-        { status: 500 }
-      );
-    }
 
     // Check for common errors
     const errorMessage = error.message || error.stderr || error.stdout || '';
