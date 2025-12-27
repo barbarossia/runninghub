@@ -19,6 +19,7 @@ import {
   Trash2,
   Upload,
   Loader2,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore } from '@/store/folder-store';
@@ -529,10 +530,57 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     }
   }, [validationResult, deleteSourceFiles, onRunJob]);
 
+  // Check for swap capability
+  const fileParams = useMemo(() => workflow.inputs.filter(p => p.type === 'file'), [workflow.inputs]);
+  const canSwap = fileParams.length === 2;
+
+  const handleSwapInputs = useCallback(() => {
+    if (!canSwap) return;
+    
+    const [p1, p2] = fileParams;
+    const files1 = getAssignedFiles(p1.id);
+    const files2 = getAssignedFiles(p2.id);
+    
+    // Helper to reconstruct media file object
+    const getMediaFile = (assignment: any): MediaFile => {
+      const found = mediaFiles.find(f => f.path === assignment.filePath);
+      if (found) return found;
+      return {
+        id: assignment.filePath,
+        path: assignment.filePath,
+        name: assignment.fileName,
+        size: assignment.fileSize,
+        type: assignment.fileType,
+        width: assignment.width,
+        height: assignment.height,
+        extension: assignment.fileName.split('.').pop() ? '.' + assignment.fileName.split('.').pop() : '',
+        selected: false,
+        thumbnail: undefined // Optional
+      };
+    };
+
+    // Swap files
+    // Move files from p2 to p1
+    files2.forEach(f => assignFileToParameter(f.filePath, p1.id, getMediaFile(f)));
+    // Move files from p1 to p2
+    files1.forEach(f => assignFileToParameter(f.filePath, p2.id, getMediaFile(f)));
+
+    toast.success('Inputs swapped');
+  }, [canSwap, fileParams, getAssignedFiles, mediaFiles, assignFileToParameter]);
+
   return (
     <div className={cn('space-y-6', className)}>
       {/* Input parameters */}
       <div className="space-y-4">
+        {canSwap && (
+           <div className="flex justify-end -mb-2">
+             <Button variant="ghost" size="sm" onClick={handleSwapInputs} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+               <ArrowRightLeft className="w-4 h-4 mr-2" />
+               Swap Inputs
+             </Button>
+           </div>
+        )}
+
         {workflow.inputs.length === 0 ? (
           <Alert>
             <AlertTriangle className="h-4 w-4" />
