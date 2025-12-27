@@ -76,6 +76,41 @@ function parseNodesOutput(output: string): CliNode[] {
 }
 
 /**
+ * Convert CLI nodes to workflow input parameters
+ */
+function convertNodesToInputs(nodes: CliNode[]) {
+  return nodes.map((node, index) => {
+    // Determine parameter type from inputType or description
+    let type: 'text' | 'file' | 'number' | 'boolean' = 'text';
+    let mediaType: 'image' | 'video' | undefined;
+
+    if (node.inputType === 'image') {
+      type = 'file';
+      mediaType = 'image';
+    } else if (node.inputType === 'video') {
+      type = 'file';
+      mediaType = 'video';
+    } else if (node.inputType === 'number') {
+      type = 'number';
+    } else if (node.inputType === 'boolean') {
+      type = 'boolean';
+    }
+
+    return {
+      id: `param_${node.id}`,
+      name: node.name,
+      type,
+      required: index === 0, // First parameter is required by default
+      description: node.description,
+      validation: type === 'file' ? {
+        mediaType,
+        fileType: mediaType ? [`${mediaType}/*`] : undefined,
+      } : undefined,
+    };
+  });
+}
+
+/**
  * Fetch nodes from RunningHub CLI
  */
 function fetchNodesFromCLI(
@@ -127,47 +162,65 @@ function fetchNodesFromCLI(
 }
 
 /**
- * GET /api/workflow/nodes?workflowId=<id>
- * Fetch available nodes for a workflow from the CLI
+ * POST /api/workflow/validate-custom-id
+ * Validates a custom workflow ID by fetching its nodes from RunningHub API
  */
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const workflowId = searchParams.get('workflowId');
-
-  if (!workflowId) {
-    return NextResponse.json(
-      { error: 'workflowId is required' },
-      { status: 400 }
-    );
-  }
-
-  const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
-  const apiHost = process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || 'www.runninghub.cn';
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'NEXT_PUBLIC_RUNNINGHUB_API_KEY not configured' },
-      { status: 500 }
-    );
-  }
-
+export async function POST(request: NextRequest) {
   try {
+    const { workflowId } = await request.json();
+
+    if (!workflowId) {
+      return NextResponse.json(
+        { error: 'Workflow ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+    const apiHost = process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || 'www.runninghub.cn';
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'NEXT_PUBLIC_RUNNINGHUB_API_KEY not configured' },
+        { status: 500 }
+      );
+    }
+
+    // Fetch workflow nodes from RunningHub CLI
     const nodes = await fetchNodesFromCLI(workflowId, apiKey, apiHost);
 
+    // Convert nodes to workflow inputs
+    const inputs = convertNodesToInputs(nodes);
+
     return NextResponse.json({
-      workflowId,
-      nodes,
-      count: nodes.length,
+      success: true,
+      workflow: {
+        id: workflowId,
+        inputs,
+        outputs: {},
+      },
     });
   } catch (error) {
-    console.error('Failed to fetch nodes:', error);
+    console.error('Failed to validate custom workflow ID:', error);
+
+    // Provide more specific error messages
+    let errorMessage = 'Invalid workflow ID or failed to fetch workflow details';
+
+    if (error instanceof Error) {
+      if (error.message.includes('timed out')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else if (error.message.includes('ENOTFOUND')) {
+        errorMessage = 'Unable to connect to RunningHub API. Please check your network connection.';
+      } else if (error.message.includes('401') || error.message.includes('403')) {
+        errorMessage = 'Invalid API key. Please check your RunningHub API credentials.';
+      } else if (error.message.includes('404')) {
+        errorMessage = 'Workflow ID not found. Please verify the workflow ID.';
+      }
+    }
 
     return NextResponse.json(
-      {
-        error: 'Failed to fetch nodes from CLI',
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
+      { error: errorMessage },
+      { status: 400 }
     );
   }
 }

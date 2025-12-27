@@ -6,7 +6,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Settings, Plus, Loader2, AlertCircle } from 'lucide-react';
+import { Settings, Plus, Loader2, AlertCircle, Key } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useWorkspaceStore } from '@/store/workspace-store';
+import { CustomWorkflowIdDialog } from '@/components/workspace/CustomWorkflowIdDialog';
 import type { Workflow } from '@/types/workspace';
 
 export interface WorkflowSelectorProps {
@@ -31,6 +32,7 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
   // Loading and error states for workflow fetching
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showCustomWorkflowDialog, setShowCustomWorkflowDialog] = useState(false);
 
   // Load workflows from workspace folder on component mount
   useEffect(() => {
@@ -72,6 +74,8 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
   const handleValueChange = (value: string) => {
     if (value === 'add_new') {
       onAddWorkflow?.();
+    } else if (value === 'add_custom_id') {
+      setShowCustomWorkflowDialog(true);
     } else {
       setSelectedWorkflow(value);
     }
@@ -121,11 +125,59 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
                     <span>Configure New Workflow</span>
                   </div>
                 </SelectItem>
+                <SelectItem value="add_custom_id">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    <span>Add Custom Workflow ID</span>
+                  </div>
+                </SelectItem>
               </>
             )}
           </SelectContent>
         </Select>
       </div>
+
+      {/* Custom Workflow ID Dialog */}
+      <CustomWorkflowIdDialog
+        open={showCustomWorkflowDialog}
+        onOpenChange={setShowCustomWorkflowDialog}
+        onWorkflowSaved={() => {
+          // Reload workflows
+          const loadWorkflows = async () => {
+            setIsLoadingWorkflows(true);
+            setLoadError(null);
+
+            try {
+              const response = await fetch('/api/workflow/list');
+
+              const text = await response.text();
+              let data;
+              try {
+                data = text ? JSON.parse(text) : { workflows: [] };
+              } catch (e) {
+                throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+              }
+
+              if (!response.ok) {
+                throw new Error(data.error || 'Failed to load workflows');
+              }
+
+              // Replace localStorage workflows with fetched workflows
+              setWorkflows(data.workflows || []);
+            } catch (error) {
+              console.error('Failed to load workflows:', error);
+              setLoadError(error instanceof Error ? error.message : 'Failed to load workflows');
+
+              // Clear workflows on error (empty state)
+              setWorkflows([]);
+            } finally {
+              setIsLoadingWorkflows(false);
+            }
+          };
+
+          loadWorkflows();
+        }}
+      />
     </div>
   );
 }
