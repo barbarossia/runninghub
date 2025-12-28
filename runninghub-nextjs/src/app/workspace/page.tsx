@@ -353,7 +353,8 @@ export default function WorkspacePage() {
         body: JSON.stringify({
           workflowId: workflow.id,                        // Actual workflow ID
           sourceWorkflowId: workflow.sourceWorkflowId,    // Template ID for CLI
-          fileInputs: jobFiles,
+          workflowName: workflow.name,                    // Workflow Name
+          fileInputs: jobFiles,                           // Full file assignments
           textInputs: jobInputs,
           folderPath: selectedFolder?.folder_path,
           deleteSourceFiles: false,

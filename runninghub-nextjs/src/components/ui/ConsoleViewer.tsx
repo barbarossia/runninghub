@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 interface LogEntry {
   timestamp: string;
@@ -40,6 +42,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
   const [isMinimized, setIsMinimized] = useState(!taskId); // Default to minimized, auto-expand if taskId exists
   const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
+  const [isPaused, setIsPaused] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastStatusRef = useRef<string | null>(null);
@@ -98,9 +101,12 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
     };
 
     fetchTask();
-    const interval = setInterval(fetchTask, 1000);
-    return () => clearInterval(interval);
-  }, [taskId, onTaskComplete]); // Removed taskStatus dependency to avoid infinite loops if it was used
+    
+    if (!isPaused) {
+      const interval = setInterval(fetchTask, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [taskId, onTaskComplete, isPaused]); // Removed taskStatus dependency to avoid infinite loops if it was used
 
   // Polling logs
   useEffect(() => {
@@ -126,17 +132,19 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
     };
 
     fetchLogs(); // Initial fetch
-    const interval = setInterval(fetchLogs, 1000); // Poll every 1s for logs
-
-    return () => clearInterval(interval);
-  }, []);
+    
+    if (!isPaused) {
+      const interval = setInterval(fetchLogs, 1000); // Poll every 1s for logs
+      return () => clearInterval(interval);
+    }
+  }, [isPaused]);
 
   // Auto-scroll to bottom
   useEffect(() => {
-    if (scrollRef.current && !isMinimized && isVisible) {
+    if (scrollRef.current && !isMinimized && isVisible && !isPaused) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs, isMinimized, isVisible]);
+  }, [logs, isMinimized, isVisible, isPaused]);
 
   const clearLogs = async () => {
     try {
@@ -375,10 +383,21 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
 
       {/* Footer Status */}
       <div className={`${footerBg} p-1 px-2 text-[9px] ${footerText} flex justify-between items-center shrink-0 border-t ${consoleBorder}`}>
-         <span className="flex items-center gap-1 italic">
-           <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-           Monitoring active (1s)
-         </span>
+         <div className="flex items-center gap-4">
+           <span className="flex items-center gap-1 italic">
+             <div className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-yellow-500' : 'bg-green-500 animate-pulse'}`} />
+             {isPaused ? 'Monitoring paused' : 'Monitoring active (1s)'}
+           </span>
+           <div className="flex items-center gap-1.5">
+              <Checkbox 
+                id="console-auto-refresh" 
+                checked={!isPaused}
+                onCheckedChange={(checked) => setIsPaused(checked === false)}
+                className="w-3.5 h-3.5"
+              />
+              <Label htmlFor="console-auto-refresh" className="text-[9px] font-normal cursor-pointer">Auto-refresh</Label>
+           </div>
+         </div>
          {onRefresh && (
            <div className="flex items-center gap-2">
              <Button

@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Clock,
@@ -14,6 +14,7 @@ import {
   Loader2,
   Calendar,
   FileText,
+  RefreshCcw,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Card } from '@/components/ui/card';
@@ -35,10 +36,15 @@ export interface JobListProps {
 }
 
 export function JobList({ onJobClick, className = '' }: JobListProps) {
-  const { jobs, selectedJobId, setSelectedJob, deleteJob, getJobById } = useWorkspaceStore();
+  const { jobs, selectedJobId, setSelectedJob, deleteJob, getJobById, fetchJobs, isLoadingJobs } = useWorkspaceStore();
 
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
   const [workflowFilter, setWorkflowFilter] = useState<string>('all');
+
+  // Fetch jobs on mount
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
   // Get unique workflow IDs
   const workflowIds = useMemo(() => {
@@ -102,11 +108,22 @@ export function JobList({ onJobClick, className = '' }: JobListProps) {
     <div className={cn('space-y-4', className)}>
       {/* Header and filters */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Job History</h2>
-          <p className="text-sm text-gray-500">
-            {jobs.length} job{jobs.length !== 1 ? 's' : ''} total
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h2 className="text-lg font-semibold">Job History</h2>
+            <p className="text-sm text-gray-500">
+              {jobs.length} job{jobs.length !== 1 ? 's' : ''} total
+            </p>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => fetchJobs()} 
+            disabled={isLoadingJobs}
+            className={cn(isLoadingJobs && "animate-spin")}
+          >
+            <RefreshCcw className="h-4 w-4" />
+          </Button>
         </div>
 
         <div className="flex gap-2">

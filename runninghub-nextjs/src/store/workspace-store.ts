@@ -76,6 +76,8 @@ interface WorkspaceState {
   jobs: Job[];
   // Currently selected job for viewing details
   selectedJobId: string | null;
+  // Loading state for jobs history
+  isLoadingJobs: boolean;
 
   // ============================================================
   // NEW STATE - UI State
@@ -185,6 +187,7 @@ interface WorkspaceActions extends WorkspaceState {
   clearJobs: () => void;
   getJobsByWorkflow: (workflowId: string) => Job[];
   getJobsByStatus: (status: JobStatus) => Job[];
+  fetchJobs: () => Promise<void>;
 
   // ============================================================
   // NEW ACTIONS - UI State
@@ -234,6 +237,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       // New state - Job History
       jobs: [],
       selectedJobId: null,
+      isLoadingJobs: false,
 
       // New state - UI State
       viewMode: 'grid',
@@ -733,6 +737,25 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
         return get().jobs.filter((j) => j.status === status);
       },
 
+      fetchJobs: async () => {
+        set({ isLoadingJobs: true, error: null });
+        try {
+          // Use string literal to avoid import issues if API_ENDPOINTS is not available in store
+          const response = await fetch('/api/workspace/jobs');
+          if (!response.ok) {
+            throw new Error('Failed to fetch jobs');
+          }
+          const data = await response.json();
+          set({ jobs: data.jobs || [], isLoadingJobs: false });
+        } catch (error) {
+          console.error('Fetch jobs error:', error);
+          set({ 
+            isLoadingJobs: false, 
+            error: error instanceof Error ? error.message : 'Failed to fetch jobs' 
+          });
+        }
+      },
+
       // ============================================================
       // NEW ACTIONS - UI State
       // ============================================================
@@ -756,7 +779,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
         // New state - Workflows and Jobs
         workflows: state.workflows,
-        jobs: state.jobs,
+        // jobs: state.jobs, // Jobs are now fetched from server
         selectedWorkflowId: state.selectedWorkflowId,
 
         // UI state

@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
     });
 
     console.log('[Duck Decode] Command completed, output length:', result.length);
+    console.log('[Duck Decode] CLI Output:', result);
 
     // Parse output to find decoded file path
     // Command prints: "Successfully saved extracted data to: /path/to/file.jpg"
@@ -138,17 +139,32 @@ export async function POST(request: NextRequest) {
     let decodedFilePath = decodedPathMatch ? decodedPathMatch[1].trim() : null;
 
     if (!decodedFilePath) {
+      console.error('[Duck Decode] Failed to extract path. output:', result);
       return NextResponse.json(
         { error: 'Failed to extract decoded file path from output' },
         { status: 500 }
       );
     }
 
+    console.log(`[Duck Decode] Extracted decoded file path: ${decodedFilePath}`);
+
+    // Verify the file exists
+    if (!fs.existsSync(decodedFilePath)) {
+       console.error(`[Duck Decode] Decoded file not found at: ${decodedFilePath}`);
+       // Try to find it by checking if CLI added an extension
+       // This is a fallback if regex matched but path is somehow wrong or relative
+    }
+
     // Move original duck image to encoded folder
     try {
       const encodedImagePath = path.join(encodedDir, originalFileName);
-      fs.renameSync(duckImagePath, encodedImagePath);
-      console.log(`Moved original duck image to: ${encodedImagePath}`);
+      // Ensure source exists before moving
+      if (fs.existsSync(duckImagePath)) {
+          fs.renameSync(duckImagePath, encodedImagePath);
+          console.log(`Moved original duck image to: ${encodedImagePath}`);
+      } else {
+          console.warn(`Original duck image not found at ${duckImagePath}, skipping move`);
+      }
     } catch (error) {
       console.error('Failed to move original duck image to encoded folder:', error);
       // Continue anyway - this is not a critical failure
@@ -195,13 +211,19 @@ export async function POST(request: NextRequest) {
       }
 
       // If the final output path already exists, remove it first
-      if (fs.existsSync(finalOutputPath)) {
+      if (fs.existsSync(finalOutputPath) && finalOutputPath !== decodedFilePath) {
         fs.unlinkSync(finalOutputPath);
       }
 
       // Rename the decoded file to the final output path
-      fs.renameSync(decodedFilePath, finalOutputPath);
-      decodedFilePath = finalOutputPath;
+      if (decodedFilePath !== finalOutputPath) {
+          fs.renameSync(decodedFilePath, finalOutputPath);
+          console.log(`Renamed ${decodedFilePath} to ${finalOutputPath}`);
+          decodedFilePath = finalOutputPath;
+      } else {
+          console.log(`Decoded file is already at final path: ${finalOutputPath}`);
+      }
+      
       console.log(`Decoded file saved as: ${finalOutputPath}`);
     } catch (error) {
       console.error('Failed to rename decoded file:', error);

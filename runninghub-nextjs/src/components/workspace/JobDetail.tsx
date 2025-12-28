@@ -39,7 +39,11 @@ import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
 import type { Job, JobResult } from '@/types/workspace';
 import { DuckDecodeButton } from './DuckDecodeButton';
-import path from 'path';
+
+// Helper to get filename from path (client-side safe)
+const getBasename = (filePath: string) => {
+  return filePath.split(/[\\/]/).pop() || filePath;
+};
 
 export interface JobDetailProps {
   jobId: string;
@@ -167,10 +171,10 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
 
   // Handle download output
   const handleDownloadOutput = async (output: any) => {
-    if (!output.workspacePath || !output.fileName) return;
+    if (!output.path || !output.fileName) return;
 
     try {
-      await downloadFile(output.workspacePath, output.fileName);
+      await downloadFile(output.path, output.fileName);
       toast.success('Download started');
     } catch (error) {
       toast.error('Download failed');
@@ -660,7 +664,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                <h3 className="text-sm font-medium text-gray-500">Output Files</h3>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                  {job.results.outputs.map((output, idx) => {
-                   const decodedFile = output.workspacePath ? decodedFiles[output.workspacePath] : null;
+                   const decodedFile = output.path ? decodedFiles[output.path] : null;
 
                    return (
                    <Card key={idx} className="p-3">
@@ -671,16 +675,16 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                            <p className="text-xs text-gray-500">{formatFileSize(output.fileSize || 0)}</p>
                          </div>
                          <div className="flex gap-2">
-                            {output.fileType === 'image' && output.workspacePath && (
+                            {output.fileType === 'image' && output.path && (
                               <DuckDecodeButton
-                                imagePath={output.workspacePath}
+                                imagePath={output.path}
                                 jobId={jobId}
                                 onDecoded={(decodedPath, fileType, decodedFileType) =>
-                                  handleFileDecoded(output.workspacePath!, decodedPath, fileType, decodedFileType)
+                                  handleFileDecoded(output.path!, decodedPath, fileType, decodedFileType)
                                 }
                               />
                             )}
-                            {output.workspacePath && (
+                            {output.path && (
                               <Button variant="outline" size="sm" onClick={() => handleDownloadOutput(output)}>
                                 <Download className="h-4 w-4" />
                               </Button>
@@ -689,19 +693,19 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                       </div>
 
                       {/* Show original image or decoded image */}
-                      {output.fileType === 'image' && output.workspacePath && (
+                      {output.fileType === 'image' && output.path && (
                          <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mb-2">
                            {/* Use decoded path if available, otherwise use original path */}
                            {decodedFile?.decodedFileType === 'video' ? (
                              <video
-                               src={`/api/videos/serve?path=${encodeURIComponent(decodedFile.decodedPath)}&v=${imageVersion[output.workspacePath] || 0}`}
+                               src={`/api/videos/serve?path=${encodeURIComponent(decodedFile.decodedPath)}&v=${imageVersion[output.path] || 0}`}
                                className="w-full h-full object-contain"
                                controls
                                preload="metadata"
                              />
                            ) : (
                              <img
-                               src={`/api/images/serve?path=${encodeURIComponent(decodedFile?.decodedPath || output.workspacePath)}&v=${imageVersion[output.workspacePath] || 0}`}
+                               src={`/api/images/serve?path=${encodeURIComponent(decodedFile?.decodedPath || output.path)}&v=${imageVersion[output.path] || 0}`}
                                alt={decodedFile ? `Decoded: ${output.fileName}` : output.fileName}
                                className="object-contain w-full h-full"
                              />
@@ -723,14 +727,14 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                               <div className="flex items-center gap-2">
                                 <CheckCircle2 className="h-3 w-3 text-green-600" />
                                 <p className="text-xs font-medium text-green-800">
-                                  Decoded: {path.basename(decodedFile.decodedPath)}
+                                  Decoded: {getBasename(decodedFile.decodedPath)}
                                 </p>
                               </div>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 className="text-xs h-7"
-                                onClick={() => downloadFile(decodedFile.decodedPath, path.basename(decodedFile.decodedPath))}
+                                onClick={() => downloadFile(decodedFile.decodedPath, getBasename(decodedFile.decodedPath))}
                               >
                                 <Download className="h-3 w-3 mr-1" />
                                 Download

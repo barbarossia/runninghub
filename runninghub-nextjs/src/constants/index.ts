@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
   WORKSPACE_SAVE: '/api/workspace/save',
   WORKSPACE_SERVE: '/api/workspace/serve',
   WORKSPACE_EXECUTE: '/api/workspace/execute',
+  WORKSPACE_JOBS: '/api/workspace/jobs',
   WORKSPACE_JOB_RESULTS: '/api/workspace/job-results',
   WORKSPACE_SERVE_OUTPUT: '/api/workspace/serve-output',
   WORKSPACE_UPDATE_CONTENT: '/api/workspace/update-content',

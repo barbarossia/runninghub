@@ -380,10 +380,8 @@ export interface JobValidationResult {
 export interface ExecuteJobRequest {
   workflowId: string;           // Actual workflow ID (for loading output config)
   sourceWorkflowId?: string;    // Template ID (for CLI)
-  fileInputs: Array<{
-    parameterId: string;
-    filePath: string;
-  }>;
+  workflowName: string;         // Name of the workflow for display
+  fileInputs: FileInputAssignment[]; // Full file assignment details
   textInputs: Record<string, string>;
   folderPath?: string;
   deleteSourceFiles: boolean;
