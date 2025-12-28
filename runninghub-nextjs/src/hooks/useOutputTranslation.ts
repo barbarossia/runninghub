@@ -246,6 +246,13 @@ export function useOutputTranslation(jobId: string) {
 
           const detectedLang = detectData.detectedLang;
 
+          // Set the content for the detected language if it's one of our target languages
+          if (detectedLang === 'en' && !updatedTextOutputs[i].content.en) {
+            updatedTextOutputs[i].content.en = originalText;
+          } else if (detectedLang === 'zh' && !updatedTextOutputs[i].content.zh) {
+            updatedTextOutputs[i].content.zh = originalText;
+          }
+
           // Translate to English if not already English
           if (detectedLang !== 'en' && !textOutput.content.en) {
             const enText = await translateText(

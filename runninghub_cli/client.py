@@ -135,6 +135,44 @@ class RunningHubClient:
 
         return result.get("data", {}).get("taskId", "")
 
+    def submit_workflow_task(
+        self,
+        workflow_id: str,
+        node_info_list: List[Dict[str, Any]]
+    ) -> str:
+        """Submit a workflow task to RunningHub.
+
+        Args:
+            workflow_id: The workflow ID.
+            node_info_list: List of node configurations.
+
+        Returns:
+            The task ID.
+
+        Raises:
+            requests.RequestException: If the submission fails.
+        """
+        url = f"{self.base_url}/task/openapi/create"
+
+        payload = {
+            "apiKey": self.api_key,
+            "workflowId": workflow_id,
+            "nodeInfoList": node_info_list
+        }
+
+        response = self.session.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        if result.get("code") != 0:
+            raise Exception(f"Workflow task submission failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}")
+
+        return result.get("data", {}).get("taskId", "")
+
     def get_task_status(self, task_id: str) -> Dict[str, Any]:
         """Get the status of a task.
 

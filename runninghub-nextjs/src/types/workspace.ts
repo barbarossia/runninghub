@@ -177,6 +177,12 @@ export interface WorkflowOutput {
 }
 
 /**
+ * Workflow execution type
+ * Determines which API endpoint to use for execution
+ */
+export type WorkflowExecutionType = 'ai-app' | 'workflow';
+
+/**
  * Workflow configuration
  * Represents a user-configured workflow with input parameters
  */
@@ -188,8 +194,27 @@ export interface Workflow {
   output?: WorkflowOutput;
   createdAt: number;
   updatedAt: number;
-  sourceWorkflowId?: string; // Original workflow ID from .env.local
-  sourceType?: 'template' | 'custom'; // How this workflow was created
+  sourceWorkflowId?: string; // RunningHub workflow ID (numeric ID from URL like "1980237776367083521")
+  sourceType?: 'template' | 'custom' | 'local'; // How this workflow was created
+  executionType?: WorkflowExecutionType; // Which API endpoint to use ('ai-app' or 'workflow')
+}
+
+/**
+ * Import workflow JSON request
+ */
+export interface ImportWorkflowJsonRequest {
+  jsonContent: string;
+  workflowName?: string;
+  workflowId?: string;
+}
+
+/**
+ * Import workflow JSON response
+ */
+export interface ImportWorkflowJsonResponse {
+  success: boolean;
+  workflow?: Workflow;
+  error?: string;
 }
 
 // ============================================================================
