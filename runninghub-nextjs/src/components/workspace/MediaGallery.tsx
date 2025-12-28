@@ -458,6 +458,12 @@ export function MediaGallery({
                             className="w-full h-full object-contain"
                             muted
                             preload="metadata"
+                            playsInline
+                            onMouseOver={(e) => e.currentTarget.play()}
+                            onMouseOut={(e) => {
+                              e.currentTarget.pause();
+                              e.currentTarget.currentTime = 0;
+                            }}
                           />
                         ) : file.thumbnail || file.blobUrl ? (
                           <Image
@@ -535,6 +541,12 @@ export function MediaGallery({
                         className="w-full h-full object-contain p-1"
                         muted
                         preload="metadata"
+                        playsInline
+                        onMouseOver={(e) => e.currentTarget.play()}
+                        onMouseOut={(e) => {
+                          e.currentTarget.pause();
+                          e.currentTarget.currentTime = 0;
+                        }}
                       />
                     ) : file.type === 'video' && file.thumbnail ? (
                       // Video with thumbnail image
