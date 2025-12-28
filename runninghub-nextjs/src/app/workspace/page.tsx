@@ -229,8 +229,8 @@ export default function WorkspacePage() {
       // Only validate images
       if (file.type !== 'image') return;
 
-      // Skip if already validated or validation is in progress
-      if (file.isDuckEncoded || file.duckValidationPending) return;
+      // Skip if already validated (true or false) or validation is in progress
+      if (file.isDuckEncoded !== undefined || file.duckValidationPending) return;
 
       console.log('[Workspace] Validating duck encoding for selected image:', file.name);
 

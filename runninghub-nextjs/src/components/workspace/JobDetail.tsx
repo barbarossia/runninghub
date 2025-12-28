@@ -63,7 +63,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const [debouncedTimers, setDebouncedTimers] = useState<Record<string, NodeJS.Timeout>>({});
 
   // State for tracking decoded files from duck images
-  const [decodedFiles, setDecodedFiles] = useState<Record<string, { decodedPath: string; fileType: string }>>({});
+  const [decodedFiles, setDecodedFiles] = useState<Record<string, { decodedPath: string; fileType: string; decodedFileType: 'image' | 'video' }>>({});
   // State for cache busting to force image reload after decode
   const [imageVersion, setImageVersion] = useState<Record<string, number>>({});
 
@@ -367,15 +367,15 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   };
 
   // Handle decoded file from duck decode
-  const handleFileDecoded = (sourcePath: string, decodedPath: string, fileType: string) => {
+  const handleFileDecoded = (sourcePath: string, decodedPath: string, fileType: string, decodedFileType: 'image' | 'video') => {
     setDecodedFiles(prev => ({
       ...prev,
-      [sourcePath]: { decodedPath, fileType }
+      [sourcePath]: { decodedPath, fileType, decodedFileType }
     }));
-    // Increment image version to force cache refresh
+    // Update image version to force cache refresh (using timestamp)
     setImageVersion(prev => ({
       ...prev,
-      [sourcePath]: (prev[sourcePath] || 0) + 1
+      [sourcePath]: Date.now()
     }));
   };
 
@@ -675,8 +675,8 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                               <DuckDecodeButton
                                 imagePath={output.workspacePath}
                                 jobId={jobId}
-                                onDecoded={(decodedPath, fileType) =>
-                                  handleFileDecoded(output.workspacePath!, decodedPath, fileType)
+                                onDecoded={(decodedPath, fileType, decodedFileType) =>
+                                  handleFileDecoded(output.workspacePath!, decodedPath, fileType, decodedFileType)
                                 }
                               />
                             )}
@@ -692,11 +692,20 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                       {output.fileType === 'image' && output.workspacePath && (
                          <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mb-2">
                            {/* Use decoded path if available, otherwise use original path */}
-                           <img
-                             src={`/api/images/serve?path=${encodeURIComponent(decodedFile?.decodedPath || output.workspacePath)}&v=${imageVersion[output.workspacePath] || 0}`}
-                             alt={decodedFile ? `Decoded: ${output.fileName}` : output.fileName}
-                             className="object-contain w-full h-full"
-                           />
+                           {decodedFile?.decodedFileType === 'video' ? (
+                             <video
+                               src={`/api/videos/serve?path=${encodeURIComponent(decodedFile.decodedPath)}&v=${imageVersion[output.workspacePath] || 0}`}
+                               className="w-full h-full object-contain"
+                               controls
+                               preload="metadata"
+                             />
+                           ) : (
+                             <img
+                               src={`/api/images/serve?path=${encodeURIComponent(decodedFile?.decodedPath || output.workspacePath)}&v=${imageVersion[output.workspacePath] || 0}`}
+                               alt={decodedFile ? `Decoded: ${output.fileName}` : output.fileName}
+                               className="object-contain w-full h-full"
+                             />
+                           )}
                            {/* Show badge if decoded */}
                            {decodedFile && (
                              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">

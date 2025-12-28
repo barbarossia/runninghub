@@ -19,12 +19,13 @@ import path from 'path';
 interface DuckDecodeButtonProps {
   imagePath: string;
   jobId: string;
-  onDecoded?: (decodedFilePath: string, fileType: string) => void;
+  onDecoded?: (decodedFilePath: string, fileType: string, decodedFileType: 'image' | 'video') => void;
 }
 
 interface DecodeResult {
   decodedFilePath: string;
   fileType: string;
+  decodedFileType: 'image' | 'video';
   fileSize: number;
 }
 
@@ -65,6 +66,7 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
       setDecodedResult({
         decodedFilePath: data.decodedFilePath,
         fileType: data.fileType,
+        decodedFileType: data.decodedFileType || 'image',
         fileSize: data.fileSize
       });
 
@@ -72,7 +74,7 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
 
       // Notify parent component
       if (onDecoded) {
-        onDecoded(data.decodedFilePath, data.fileType);
+        onDecoded(data.decodedFilePath, data.fileType, data.decodedFileType || 'image');
       }
 
       // Close dialog after success
