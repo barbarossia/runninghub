@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/navigation/PageHeader';
 import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
 import type { VideoFile } from '@/types';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { Video } from 'lucide-react';
 
 export default function VideosPage() {
@@ -172,8 +173,10 @@ export default function VideosPage() {
       const data = await response.json();
 
       if (data.success) {
-        toast.success(`Deleted ${video.name}`);
-        
+        logger.success(`Deleted ${video.name}`, {
+          metadata: { videoName: video.name, videoPath: video.path }
+        });
+
         // Refresh folder
         handleRefresh(true);
         
@@ -195,7 +198,7 @@ export default function VideosPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:bg-[#0d1117] dark:from-[#0d1117] dark:to-[#161b22]">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <PageHeader

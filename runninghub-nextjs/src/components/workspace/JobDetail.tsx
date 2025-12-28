@@ -728,7 +728,13 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                    return (
                    <Card key={idx} className="p-3">
                       <div className="flex items-center gap-3 mb-3">
-                         {output.fileType === 'image' ? <ImageIcon className="h-5 w-5 text-blue-500"/> : <FileText className="h-5 w-5 text-gray-500"/>}
+                         {output.fileType === 'image' ? (
+                           <ImageIcon className="h-5 w-5 text-blue-500"/>
+                         ) : output.fileType === 'video' ? (
+                           <Video className="h-5 w-5 text-purple-500"/>
+                         ) : (
+                           <FileText className="h-5 w-5 text-gray-500"/>
+                         )}
                          <div className="min-w-0 flex-1">
                            <p className="text-sm font-medium truncate" title={output.fileName}>{output.fileName}</p>
                            <p className="text-xs text-gray-500">{formatFileSize(output.fileSize || 0)}</p>
@@ -751,13 +757,13 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                          </div>
                       </div>
 
-                      {/* Show original image or decoded image */}
-                      {output.fileType === 'image' && output.path && (
+                      {/* Show original media or decoded media */}
+                      {(output.fileType === 'image' || output.fileType === 'video') && output.path && (
                          <div className="relative aspect-video bg-gray-100 rounded overflow-hidden mb-2">
                            {/* Use decoded path if available, otherwise use original path */}
-                           {decodedFile?.decodedFileType === 'video' ? (
+                           {decodedFile?.decodedFileType === 'video' || output.fileType === 'video' ? (
                              <video
-                               src={`/api/videos/serve?path=${encodeURIComponent(decodedFile.decodedPath)}&v=${imageVersion[output.path] || 0}`}
+                               src={`/api/videos/serve?path=${encodeURIComponent(decodedFile?.decodedPath || output.path)}&v=${imageVersion[output.path] || 0}`}
                                className="w-full h-full object-contain"
                                controls
                                preload="metadata"
