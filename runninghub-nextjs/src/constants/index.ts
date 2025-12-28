@@ -77,11 +77,14 @@ export const API_ENDPOINTS = {
   WORKSPACE_SAVE: '/api/workspace/save',
   WORKSPACE_SERVE: '/api/workspace/serve',
   WORKSPACE_EXECUTE: '/api/workspace/execute',
+  WORKSPACE_JOBS: '/api/workspace/jobs',
   WORKSPACE_JOB_RESULTS: '/api/workspace/job-results',
   WORKSPACE_SERVE_OUTPUT: '/api/workspace/serve-output',
   WORKSPACE_UPDATE_CONTENT: '/api/workspace/update-content',
   WORKSPACE_RENAME: '/api/workspace/rename',
   WORKSPACE_DELETE: '/api/workspace/delete',
+  WORKSPACE_DUCK_VALIDATE: '/api/workspace/duck-validate',
+  WORKSPACE_DUCK_DECODE: '/api/workspace/duck-decode',
 
   // Workflows
   WORKFLOW_SAVE: '/api/workflow/save',

@@ -14,17 +14,22 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Eye, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import path from 'path';
+
+// Helper to get filename from path (client-side safe)
+const getBasename = (filePath: string) => {
+  return filePath.split(/[\\/]/).pop() || filePath;
+};
 
 interface DuckDecodeButtonProps {
   imagePath: string;
   jobId: string;
-  onDecoded?: (decodedFilePath: string, fileType: string) => void;
+  onDecoded?: (decodedFilePath: string, fileType: string, decodedFileType: 'image' | 'video') => void;
 }
 
 interface DecodeResult {
   decodedFilePath: string;
   fileType: string;
+  decodedFileType: 'image' | 'video';
   fileSize: number;
 }
 
@@ -65,14 +70,15 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
       setDecodedResult({
         decodedFilePath: data.decodedFilePath,
         fileType: data.fileType,
+        decodedFileType: data.decodedFileType || 'image',
         fileSize: data.fileSize
       });
 
-      toast.success(`Successfully decoded: ${path.basename(data.decodedFilePath)}`);
+      toast.success(`Successfully decoded: ${getBasename(data.decodedFilePath)}`);
 
       // Notify parent component
       if (onDecoded) {
-        onDecoded(data.decodedFilePath, data.fileType);
+        onDecoded(data.decodedFilePath, data.fileType, data.decodedFileType || 'image');
       }
 
       // Close dialog after success
@@ -128,7 +134,7 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
             {/* File path */}
             <div className="text-sm">
               <span className="font-medium">Image:</span>{' '}
-              <span className="text-gray-600">{path.basename(imagePath)}</span>
+              <span className="text-gray-600">{getBasename(imagePath)}</span>
             </div>
 
             {/* Password input */}
@@ -170,7 +176,7 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
                 <AlertDescription className="text-sm">
                   <div className="font-medium">Decode Successful!</div>
                   <div className="mt-1">
-                    File: {path.basename(decodedResult.decodedFilePath)}
+                    File: {getBasename(decodedResult.decodedFilePath)}
                   </div>
                   <div className="text-xs text-gray-600">
                     Type: {decodedResult.fileType}

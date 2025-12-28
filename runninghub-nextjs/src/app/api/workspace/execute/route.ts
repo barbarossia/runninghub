@@ -60,6 +60,35 @@ export async function POST(request: NextRequest) {
       env.RUNNINGHUB_DOWNLOAD_DIR = downloadDir;
     }
 
+    // Create job directory and save initial job.json
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const workspaceJobDir = path.join(
+      process.env.HOME || '~',
+      'Downloads',
+      'workspace',
+      jobId
+    );
+    await fs.mkdir(workspaceJobDir, { recursive: true });
+
+    const initialJob: Job = {
+        id: jobId,
+        workflowId: body.workflowId,
+        workflowName: body.workflowName || 'Unknown Workflow',
+        fileInputs: body.fileInputs || [],
+        textInputs: body.textInputs || {},
+        status: 'pending',
+        taskId: taskId,
+        createdAt: Date.now(),
+        folderPath: body.folderPath,
+        deleteSourceFiles: body.deleteSourceFiles,
+    };
+
+    await fs.writeFile(
+        path.join(workspaceJobDir, 'job.json'),
+        JSON.stringify(initialJob, null, 2)
+    );
+
     // Start background processing
     processWorkflowInBackground(
       taskId,
@@ -85,6 +114,30 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : 'Failed to execute job',
     } as ExecuteJobResponse, { status: 500 });
   }
+}
+
+/**
+ * Helper to update job.json
+ */
+async function updateJobFile(jobId: string, updates: Partial<Job>) {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const jobFilePath = path.join(
+      process.env.HOME || '~',
+      'Downloads',
+      'workspace',
+      jobId,
+      'job.json'
+    );
+    
+    try {
+        const content = await fs.readFile(jobFilePath, 'utf-8');
+        const job = JSON.parse(content);
+        const updatedJob = { ...job, ...updates };
+        await fs.writeFile(jobFilePath, JSON.stringify(updatedJob, null, 2));
+    } catch (e) {
+        console.error(`Failed to update job file for ${jobId}:`, e);
+    }
 }
 
 /**
@@ -116,13 +169,47 @@ async function processJobOutputs(
     let cliResponse: any = null;
     try {
       // Extract JSON from stdout (might be mixed with log lines)
-      const jsonMatch = cliStdout.match(/\{[\s\S]*"code":[\s\S]*\}/);
-      if (jsonMatch) {
-        cliResponse = JSON.parse(jsonMatch[0]);
-        await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+      // CLI outputs formatted JSON at the end, so find the last complete JSON object
+      const lines = cliStdout.split('\n');
+      let jsonStartIndex = -1;
+      let braceCount = 0;
+      let inJson = false;
+
+      // Find the last well-formed JSON object
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+
+        // Look for the start of a JSON object
+        if (!inJson && trimmed.startsWith('{')) {
+          inJson = true;
+          jsonStartIndex = i;
+          braceCount = 0;
+        }
+
+        // Count braces to find the end of the JSON object
+        if (inJson) {
+          for (const char of lines[i]) {
+            if (char === '{') braceCount++;
+            if (char === '}') braceCount--;
+          }
+
+          // When braces balance, we've found a complete JSON object
+          if (braceCount === 0 && jsonStartIndex >= 0) {
+            const jsonStr = lines.slice(jsonStartIndex, i + 1).join('\n');
+            cliResponse = JSON.parse(jsonStr);
+            await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+            break;
+          }
+        }
+      }
+
+      if (!cliResponse) {
+        await writeLog('No valid JSON found in CLI output', 'warning', taskId);
+        await writeLog(`CLI stdout preview: ${cliStdout.slice(0, 200)}...`, 'info', taskId);
       }
     } catch (parseError) {
       await writeLog(`Failed to parse CLI JSON response: ${parseError}`, 'warning', taskId);
+      await writeLog(`CLI stdout: ${cliStdout.slice(0, 500)}`, 'info', taskId);
     }
 
     if (!cliResponse || cliResponse.code !== 0 || !cliResponse.data || cliResponse.data.length === 0) {
@@ -146,6 +233,8 @@ async function processJobOutputs(
     // Download each output file from remote URL
     const outputFiles = cliResponse.data;
     await writeLog(`Found ${outputFiles.length} output file(s) in CLI response`, 'info', taskId);
+    
+    const processedOutputs: any[] = [];
 
     for (const output of outputFiles) {
       const fileUrl = output.fileUrl;
@@ -176,12 +265,37 @@ async function processJobOutputs(
         // Write to workspace outputs directory
         await fs.writeFile(workspacePath, uint8Array);
 
+        // Determine file type based on extension
+        const ext = path.extname(fileName).toLowerCase();
+        let determinedFileType: 'image' | 'text' | 'file' = 'file';
+        
+        if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'].includes(ext)) {
+            determinedFileType = 'image';
+        } else if (['.txt', '.md', '.json', '.log', '.xml', '.csv'].includes(ext)) {
+            determinedFileType = 'text';
+        }
+
+        processedOutputs.push({
+            type: determinedFileType === 'text' ? 'text' : 'file',
+            path: workspacePath,
+            fileName: fileName,
+            fileType: determinedFileType === 'image' ? 'image' : 'text', // Keeping limited types for now as per UI support
+            workspacePath: path.join(jobId, 'result', fileName)
+        });
+
         await writeLog(`Downloaded ${fileName} to workspace outputs`, 'success', taskId);
       } catch (downloadError) {
         const errorMsg = downloadError instanceof Error ? downloadError.message : 'Unknown error';
         await writeLog(`Failed to download ${fileUrl}: ${errorMsg}`, 'error', taskId);
       }
     }
+    
+    // Update job.json with results
+    await updateJobFile(jobId, {
+        results: {
+            outputs: processedOutputs,
+        }
+    });
 
     // Note: Text translation will be done client-side
     // Server just prepares the files for download/viewing
@@ -285,6 +399,9 @@ async function processWorkflowInBackground(
     await writeLog(`=== WORKFLOW JOB STARTED: ${taskId} ===`, 'info', taskId);
     await writeLog(`Files: ${fileInputs.length}, Text Inputs: ${Object.keys(textInputs).length}`, 'info', taskId);
     await updateTask(taskId, { status: 'processing', completedCount: 0 });
+    
+    // Update job status to running
+    await updateJobFile(jobId, { status: 'running', startedAt: Date.now() });
 
     // Copy input files to job directory and get new paths
     const jobFileInputs = await copyInputFilesToJobDirectory(fileInputs, jobId, taskId);
@@ -370,6 +487,9 @@ async function processWorkflowInBackground(
         await writeLog("Workflow execution completed successfully", 'success', taskId);
         await updateTask(taskId, { status: 'completed', completedCount: fileInputs.length + Object.keys(textInputs).length });
 
+        // Update job status
+        await updateJobFile(jobId, { status: 'completed', completedAt: Date.now() });
+
         // NEW: Process outputs - pass stdout for JSON parsing
         await processJobOutputs(taskId, workflowId, jobId, env, stdout);
 
@@ -395,17 +515,26 @@ async function processWorkflowInBackground(
       } else {
         await writeLog(`Workflow execution failed with code ${code}`, 'error', taskId);
         await updateTask(taskId, { status: 'failed', error: `Exit code ${code}` });
+        
+        // Update job status
+        await updateJobFile(jobId, { status: 'failed', error: `Exit code ${code}`, completedAt: Date.now() });
       }
     });
 
     childProcess.on("error", async (error) => {
       await writeLog(`Process error: ${error.message}`, 'error', taskId);
       await updateTask(taskId, { status: 'failed', error: error.message });
+
+      // Update job status
+      await updateJobFile(jobId, { status: 'failed', error: error.message, completedAt: Date.now() });
     });
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     await writeLog(`Job failed to start: ${errorMessage}`, 'error', taskId);
     await updateTask(taskId, { status: 'failed', error: errorMessage });
+    
+    // Update job status
+    await updateJobFile(jobId, { status: 'failed', error: errorMessage, completedAt: Date.now() });
   }
 }

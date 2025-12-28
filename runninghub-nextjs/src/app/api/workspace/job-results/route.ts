@@ -63,7 +63,18 @@ export async function GET(request: NextRequest) {
       const fileName = file;
       const workspacePath = filePath;
 
-      if (ext === '.txt') {
+      // Determine file type
+      let fileType: 'text' | 'image' | 'video' | 'file' = 'file';
+      
+      if (['.txt', '.md', '.json', '.xml', '.csv', '.log'].includes(ext)) {
+        fileType = 'text';
+      } else if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) {
+        fileType = 'image';
+      } else if (['.mp4', '.mov', '.avi', '.webm', '.mkv'].includes(ext)) {
+        fileType = 'video';
+      }
+
+      if (fileType === 'text') {
         // Read text file content
         const content = await fs.readFile(filePath, 'utf-8');
 
@@ -78,25 +89,17 @@ export async function GET(request: NextRequest) {
           autoTranslated: false,
           translationError: undefined,
         });
-
-        // Also add to outputs
-        outputs.push({
-          type: 'file' as const,
-          fileName,
-          fileType: 'text' as const,
-          fileSize: stat.size,
-          workspacePath,
-        });
-      } else if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-        // Image file
-        outputs.push({
-          type: 'file' as const,
-          fileName,
-          fileType: 'image' as const,
-          fileSize: stat.size,
-          workspacePath,
-        });
       }
+
+      // Add to outputs list (all files)
+      outputs.push({
+        type: 'file' as const,
+        fileName,
+        fileType,
+        fileSize: stat.size,
+        path: workspacePath, // Use absolute path for API consistency
+        workspacePath, // Keep for backward compatibility if needed
+      });
     }
 
     const results = {

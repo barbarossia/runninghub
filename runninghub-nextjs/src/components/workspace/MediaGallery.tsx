@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
@@ -23,13 +23,18 @@ import {
   Eye,
   Info,
   Copy,
+  Loader2,
+  AlertCircle,
+  PlayCircle,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,6 +55,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -98,6 +104,7 @@ export interface MediaGalleryProps {
   onFileDoubleClick?: (file: MediaFile) => void;
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
   onDelete?: (files: MediaFile[]) => Promise<void>;
+  onDecode?: (file: MediaFile, password?: string) => Promise<void>;
   onPreview?: (file: MediaFile) => void;
   className?: string;
 }
@@ -107,6 +114,7 @@ export function MediaGallery({
   onFileDoubleClick,
   onRename,
   onDelete,
+  onDecode,
   onPreview,
   className = '',
 }: MediaGalleryProps) {
@@ -121,12 +129,16 @@ export function MediaGallery({
     getSelectedMediaFiles,
     setViewMode,
     setSelectedExtension,
+    updateMediaFile,
   } = useWorkspaceStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [renameDialogFile, setRenameDialogFile] = useState<MediaFile | null>(null);
   const [deleteDialogFile, setDeleteDialogFile] = useState<MediaFile | null>(null);
+  const [decodeDialogFile, setDecodeDialogFile] = useState<MediaFile | null>(null);
   const [newFileName, setNewFileName] = useState('');
+  const [decodePassword, setDecodePassword] = useState('');
+  const [isDecoding, setIsDecoding] = useState(false);
   const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
@@ -213,6 +225,26 @@ export function MediaGallery({
   const setDeleteDialogOpen = useCallback((file: MediaFile) => {
     setDeleteDialogFile(file);
   }, []);
+
+  const setDecodeDialogOpen = useCallback((file: MediaFile) => {
+    setDecodeDialogFile(file);
+    setDecodePassword('');
+  }, []);
+
+  const handleDecodeConfirm = async (file?: MediaFile) => {
+    const targetFile = file || decodeDialogFile;
+    if (!targetFile || !onDecode) return;
+    try {
+      setIsDecoding(true);
+      await onDecode(targetFile, decodePassword || undefined);
+      setDecodeDialogFile(null);
+      setDecodePassword('');
+    } catch (error) {
+      console.error('Failed to decode file:', error);
+    } finally {
+      setIsDecoding(false);
+    }
+  };
 
   const handleRenameConfirm = async () => {
     if (!renameDialogFile || !onRename || !newFileName.trim()) return;
@@ -422,12 +454,23 @@ export function MediaGallery({
                         )}
                       >
                         {file.type === 'video' && file.blobUrl ? (
-                          <video
-                            src={file.blobUrl}
-                            className="w-full h-full object-contain"
-                            muted
-                            preload="metadata"
-                          />
+                          <>
+                            <video
+                              src={file.blobUrl}
+                              className="w-full h-full object-contain"
+                              muted
+                              preload="metadata"
+                              playsInline
+                              onMouseOver={(e) => e.currentTarget.play()}
+                              onMouseOut={(e) => {
+                                e.currentTarget.pause();
+                                e.currentTarget.currentTime = 0;
+                              }}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                              <PlayCircle className="h-6 w-6 text-white/80 drop-shadow-md" />
+                            </div>
+                          </>
                         ) : file.thumbnail || file.blobUrl ? (
                           <Image
                             src={file.thumbnail || file.blobUrl || ''}
@@ -499,12 +542,25 @@ export function MediaGallery({
                   <div className="relative bg-gray-100 aspect-square">
                     {file.type === 'video' && file.blobUrl ? (
                       // Video with blobUrl - show video element
-                      <video
-                        src={file.blobUrl}
-                        className="w-full h-full object-contain p-1"
-                        muted
-                        preload="metadata"
-                      />
+                      <>
+                        <video
+                          src={file.blobUrl}
+                          className="w-full h-full object-contain p-1"
+                          muted
+                          preload="metadata"
+                          playsInline
+                          onMouseOver={(e) => e.currentTarget.play()}
+                          onMouseOut={(e) => {
+                            e.currentTarget.pause();
+                            e.currentTarget.currentTime = 0;
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                          <div className="bg-black/30 rounded-full p-2 backdrop-blur-[2px] text-white/90 shadow-lg">
+                            <PlayCircle className="h-10 w-10" />
+                          </div>
+                        </div>
+                      </>
                     ) : file.type === 'video' && file.thumbnail ? (
                       // Video with thumbnail image
                       <Image
@@ -560,6 +616,13 @@ export function MediaGallery({
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleMediaFileSelection(file.id)} />
                       </div>
 
+                      {/* Duck-encoded indicator */}
+                      {file.isDuckEncoded && (
+                        <Badge className="absolute top-2 left-2 z-10 bg-green-600 text-xs">
+                          Duck
+                        </Badge>
+                      )}
+
                       {/* More menu */}
                       <div
                         className={cn(
@@ -582,6 +645,19 @@ export function MediaGallery({
                               <Eye className="h-4 w-4 mr-2" />
                               Preview
                             </DropdownMenuItem>
+                            {onDecode && file.isDuckEncoded && (
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                if (file.duckRequiresPassword) {
+                                  setDecodeDialogOpen(file);
+                                } else {
+                                  handleDecodeConfirm(file);
+                                }
+                              }} className="text-green-600">
+                                <Eye className="h-4 w-4 mr-2" />
+                                Decode
+                              </DropdownMenuItem>
+                            )}
                             {onRename && (
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameDialogOpen(file); }}>
                                 <Pencil className="h-4 w-4 mr-2" />
@@ -687,6 +763,65 @@ export function MediaGallery({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      )}
+
+      {/* Decode Password Dialog */}
+      {onDecode && (
+        <Dialog open={!!decodeDialogFile} onOpenChange={(open) => !open && setDecodeDialogFile(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Decode Duck Image</DialogTitle>
+              <DialogDescription>
+                This image contains hidden data. Enter password if required.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div>
+                <Label htmlFor="decode-password">Password (Optional)</Label>
+                <Input
+                  id="decode-password"
+                  type="password"
+                  placeholder="Leave empty if not password-protected"
+                  value={decodePassword}
+                  onChange={(e) => setDecodePassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleDecodeConfirm()}
+                  autoFocus
+                />
+              </div>
+              {decodeDialogFile?.duckRequiresPassword && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-sm">
+                    This image requires a password to decode.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDecodeDialogFile(null)}
+                disabled={isDecoding}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleDecodeConfirm()}
+                disabled={isDecoding}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isDecoding ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Decoding...
+                  </>
+                ) : (
+                  'Decode'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Preview Dialog */}

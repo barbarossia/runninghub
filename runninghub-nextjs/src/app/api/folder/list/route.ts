@@ -64,6 +64,12 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 
       for (const item of items) {
         const itemPath = path.join(folder, item);
+
+        // Skip 'encoded' folder (contains original duck-encoded images after decode)
+        if (item === 'encoded') {
+          continue;
+        }
+
         try {
           const itemStats = await fs.stat(itemPath);
 
