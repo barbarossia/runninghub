@@ -242,6 +242,46 @@ export async function POST(request: NextRequest) {
       console.error('Failed to get file size:', error);
     }
 
+    // Determine if this is a job output and update job.json if so
+    // Job outputs are in .../job_xxx/result/filename.png
+    const jobDir = path.dirname(resultDir);
+    const isJobOutput = path.basename(resultDir) === 'result' && path.basename(jobDir).startsWith('job_');
+
+    if (isJobOutput) {
+      try {
+        const jobJsonPath = path.join(jobDir, 'job.json');
+        if (fs.existsSync(jobJsonPath)) {
+          const jobData = JSON.parse(fs.readFileSync(jobJsonPath, 'utf-8'));
+          
+          if (jobData.results && jobData.results.outputs) {
+            let updated = false;
+            jobData.results.outputs = jobData.results.outputs.map((output: any) => {
+              // Match by path or workspacePath
+              if (output.path === duckImagePath || output.workspacePath === duckImagePath) {
+                updated = true;
+                return {
+                  ...output,
+                  path: decodedFilePath,
+                  fileName: path.basename(decodedFilePath),
+                  fileType: path.extname(decodedFilePath) === '.mp4' ? 'video' : 'image',
+                  fileSize: fileSize,
+                  workspacePath: decodedFilePath
+                };
+              }
+              return output;
+            });
+
+            if (updated) {
+              fs.writeFileSync(jobJsonPath, JSON.stringify(jobData, null, 2));
+              console.log(`[Duck Decode] Updated job.json at ${jobJsonPath}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[Duck Decode] Failed to update job.json:', e);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       decodedFilePath,
