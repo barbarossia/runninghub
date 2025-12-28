@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Loader2, Lock, Key } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Loader2, Lock, Key, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,6 +45,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
 
   const [name, setName] = useState(workflow?.name || '');
   const [description, setDescription] = useState(workflow?.description || '');
+  const [runninghubWorkflowId, setRunninghubWorkflowId] = useState(workflow?.sourceWorkflowId || '');
   const [parameters, setParameters] = useState<WorkflowInputParameter[]>(
     workflow?.inputs || []
   );
@@ -57,6 +58,15 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   // Custom workflow ID state
   const [customWorkflowId, setCustomWorkflowId] = useState<string>('');
   const [isLoadingCustomId, setIsLoadingCustomId] = useState(false);
+
+  // Local JSON import state
+  const [jsonFile, setJsonFile] = useState<File | null>(null);
+  const [isImportingJson, setIsImportingJson] = useState(false);
+
+  // Execution type state
+  const [executionType, setExecutionType] = useState<'ai-app' | 'workflow' | undefined>(
+    workflow?.executionType
+  );
 
   // Output configuration state
   const [outputType, setOutputType] = useState<'none' | 'text' | 'image' | 'mixed'>(
@@ -71,9 +81,11 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     if (workflow) {
       setName(workflow.name);
       setDescription(workflow.description || '');
+      setRunninghubWorkflowId(workflow.sourceWorkflowId || '');
       setParameters(workflow.inputs);
       setOutputType(workflow.output?.type || 'none');
       setOutputDescription(workflow.output?.description || '');
+      setExecutionType(workflow.executionType);
       // Reset template state when editing existing workflow
       setSelectedWorkflowId('');
       setCustomWorkflowId('');
@@ -82,9 +94,11 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       // Reset for new workflow
       setName('');
       setDescription('');
+      setRunninghubWorkflowId('');
       setParameters([]);
       setOutputType('none');
       setOutputDescription('');
+      setExecutionType(undefined);
       setSelectedWorkflowId('');
       setCustomWorkflowId('');
       setTemplateLoaded(false);
@@ -176,6 +190,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       }
 
       setDescription(`Workflow created from template ${targetWorkflowId}`);
+      setRunninghubWorkflowId(targetWorkflowId);
       setTemplateLoaded(true);
     } catch (error) {
       console.error('Failed to load template:', error);
@@ -241,6 +256,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       }
 
       setDescription(`Workflow created from custom ID: ${customWorkflowId}`);
+      setRunninghubWorkflowId(customWorkflowId);
       setSelectedWorkflowId(customWorkflowId);
       setTemplateLoaded(true);
 
@@ -252,6 +268,52 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       setIsLoadingCustomId(false);
     }
   }, [customWorkflowId, name]);
+
+  // Import local workflow JSON
+  const handleImportJson = useCallback(async () => {
+    if (!jsonFile) return;
+
+    setIsImportingJson(true);
+
+    try {
+      // Read file content
+      const text = await jsonFile.text();
+      const jsonContent = JSON.parse(text);
+
+      // Call import API
+      const response = await fetch('/api/workflow/import-json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonContent: text,
+          workflowName: jsonFile.name.replace('.json', ''),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to import workflow JSON');
+      }
+
+      const data = await response.json();
+
+      // Load the imported workflow
+      setParameters(data.workflow.inputs);
+      setName(data.workflow.name);
+      setDescription(`Workflow imported from ${jsonFile.name}`);
+      setSelectedWorkflowId(data.workflow.id);
+      setExecutionType(data.workflow.executionType);
+      setTemplateLoaded(true);
+
+      toast.success('Workflow JSON imported successfully!');
+    } catch (error) {
+      console.error('Failed to import workflow JSON:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to import workflow JSON');
+    } finally {
+      setIsImportingJson(false);
+      setJsonFile(null);
+    }
+  }, [jsonFile]);
 
   // Handle save
   const handleSave = useCallback(async () => {
@@ -270,8 +332,9 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       } : undefined,
       createdAt: workflow?.createdAt || Date.now(),
       updatedAt: Date.now(),
-      sourceWorkflowId: templateLoaded ? selectedWorkflowId : workflow?.sourceWorkflowId,
+      sourceWorkflowId: runninghubWorkflowId.trim() || undefined,
       sourceType: templateLoaded ? 'template' : workflow?.sourceType || 'custom',
+      executionType,
     };
 
     // Save to workspace folder
@@ -300,7 +363,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     }
 
     onSave(workflowData);
-  }, [name, description, parameters, outputType, outputDescription, workflow, templateLoaded, selectedWorkflowId, onSave]);
+  }, [name, description, runninghubWorkflowId, parameters, outputType, outputDescription, workflow, templateLoaded, onSave]);
 
   const isValid = name.trim() && parameters.length > 0;
 
@@ -339,6 +402,23 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
                 rows={2}
                 className="mt-1"
               />
+            </div>
+
+            <div>
+              <label htmlFor="runninghub-workflow-id" className="text-sm font-medium flex items-center gap-1">
+                <Key className="h-4 w-4" />
+                RunningHub Workflow ID
+              </label>
+              <Input
+                id="runninghub-workflow-id"
+                value={runninghubWorkflowId}
+                onChange={(e) => setRunninghubWorkflowId(e.target.value)}
+                placeholder="1980237776367083521"
+                className="mt-1 font-mono"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                The numeric workflow ID from RunningHub URL (e.g., from https://www.runninghub.cn/workflow/1980237776367083521)
+              </p>
             </div>
           </div>
 
@@ -418,6 +498,50 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
                   <p className="text-xs text-blue-600 mt-1">
                     Enter a workflow ID from your RunningHub account to load its structure
                   </p>
+                </div>
+
+                {/* Option 3: Import local workflow JSON */}
+                <div className="border-t border-blue-200 pt-3">
+                  <label className="text-xs font-medium text-blue-800 flex items-center gap-1">
+                    <Upload className="h-3 w-3" />
+                    Option 3: Import workflow JSON file
+                  </label>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setJsonFile(file);
+                          setSelectedWorkflowId('');
+                          setCustomWorkflowId('');
+                        }
+                      }}
+                      disabled={isImportingJson || isLoadingTemplate || isLoadingCustomId}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleImportJson}
+                      disabled={!jsonFile || isImportingJson || isLoadingTemplate || isLoadingCustomId}
+                      variant="outline"
+                      className="shrink-0"
+                    >
+                      {isImportingJson ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'Import'
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Import a workflow JSON file exported from your RunningHub workspace
+                  </p>
+                  {jsonFile && (
+                    <div className="text-xs text-green-700 mt-1">
+                      Selected: {jsonFile.name}
+                    </div>
+                  )}
                 </div>
 
                 {templateLoaded && (

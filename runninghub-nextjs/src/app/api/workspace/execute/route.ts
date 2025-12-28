@@ -117,6 +117,59 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * Upload local file to RunningHub
+ * Returns remote fileName (e.g., "api/xxx.jpg")
+ */
+async function uploadFileToRunningHub(
+  filePath: string,
+  taskId: string
+): Promise<string> {
+  try {
+    await writeLog(`Uploading file to RunningHub: ${filePath}`, 'info', taskId);
+
+    const fs = await import('fs');
+    const { default: FormData } = await import('form-data');
+    const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+
+    if (!apiKey) {
+      throw new Error('RUNNINGHUB_API_KEY not configured');
+    }
+
+    // Create form data
+    const form = new FormData();
+    form.append('file', fs.createReadStream(filePath));
+    form.append('apiKey', apiKey);
+    form.append('fileType', 'input');
+
+    // Upload to RunningHub
+    const response = await fetch('https://www.runninghub.cn/task/openapi/upload', {
+      method: 'POST',
+      body: form as any,
+      headers: {
+        'Host': 'www.runninghub.cn',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    if (data.code === 0 && data.data?.fileName) {
+      await writeLog(`Uploaded successfully: ${data.data.fileName}`, 'success', taskId);
+      return data.data.fileName;
+    } else {
+      throw new Error(data.msg || 'Upload failed');
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Upload failed';
+    await writeLog(`File upload error: ${errorMsg}`, 'error', taskId);
+    throw error;
+  }
+}
+
+/**
  * Helper to update job.json
  */
 async function updateJobFile(jobId: string, updates: Partial<Job>) {
@@ -235,6 +288,7 @@ async function processJobOutputs(
     await writeLog(`Found ${outputFiles.length} output file(s) in CLI response`, 'info', taskId);
     
     const processedOutputs: any[] = [];
+    const textOutputs: any[] = [];
 
     for (const output of outputFiles) {
       const fileUrl = output.fileUrl;
@@ -275,6 +329,23 @@ async function processJobOutputs(
             determinedFileType = 'text';
         }
 
+        if (determinedFileType === 'text') {
+            // Read text file content
+            const content = await fs.readFile(workspacePath, 'utf-8');
+
+            textOutputs.push({
+                fileName,
+                filePath: workspacePath,
+                content: {
+                    original: content,
+                    en: undefined,
+                    zh: undefined,
+                },
+                autoTranslated: false,
+                translationError: undefined,
+            });
+        }
+
         processedOutputs.push({
             type: determinedFileType === 'text' ? 'text' : 'file',
             path: workspacePath,
@@ -294,6 +365,7 @@ async function processJobOutputs(
     await updateJobFile(jobId, {
         results: {
             outputs: processedOutputs,
+            textOutputs: textOutputs,
         }
     });
 
@@ -406,36 +478,50 @@ async function processWorkflowInBackground(
     // Copy input files to job directory and get new paths
     const jobFileInputs = await copyInputFilesToJobDirectory(fileInputs, jobId, taskId);
 
+    // Before executing CLI, get workflow info
+    const workflow = await getWorkflowById(workflowId);
+    const executionType = workflow?.executionType || 'ai-app';  // Default to ai-app for backward compatibility
+    await writeLog(`Execution type: ${executionType}`, 'info', taskId);
+
+    // Upload files to RunningHub if workflow execution type is 'workflow'
+    // (workflow API requires remote file IDs, not local paths)
+    if (executionType === 'workflow') {
+      await writeLog('Workflow execution detected: uploading files to RunningHub...', 'info', taskId);
+
+      // Upload each file and update jobFileInputs with remote fileName
+      for (let i = 0; i < jobFileInputs.length; i++) {
+        try {
+          const remoteFileName = await uploadFileToRunningHub(jobFileInputs[i].filePath, taskId);
+
+          // Replace local path with remote fileName
+          jobFileInputs[i] = {
+            ...jobFileInputs[i],
+            filePath: remoteFileName,  // Use remote fileName for CLI
+          };
+        } catch (uploadError) {
+          await writeLog(`Failed to upload ${jobFileInputs[i].filePath}, using local path`, 'warning', taskId);
+          // Fall back to local path if upload fails
+        }
+      }
+    }
+
     let args: string[] = ["-m", "runninghub_cli.cli"];
 
-    // Helper to extract node ID from parameter ID (e.g., "param_203" -> "203")
-    const getNodeId = (paramId: string) => paramId.replace(/^param_/, '');
+    // Helper to extract node ID from parameter ID (e.g., "param_203" -> "203", "param_69_image" -> "69")
+    const getNodeId = (paramId: string) => {
+      // Remove param_ prefix
+      const noPrefix = paramId.replace(/^param_/, '');
+      // If it contains underscore, take the first part (assuming format ID_type)
+      if (noPrefix.includes('_')) {
+        return noPrefix.split('_')[0];
+      }
+      return noPrefix;
+    };
 
-    // DECISION: Use 'process' for single file, 'process-multiple' for multiple files
-    if (jobFileInputs.length === 1) {
-        // Single file mode -> use 'process' command
-        const input = jobFileInputs[0];
-        args.push("process");
-        args.push(input.filePath);
-        args.push("--node", getNodeId(input.parameterId));
-
-        // Add text inputs as params
-        for (const [paramId, value] of Object.entries(textInputs)) {
-            // Format: <node_id>:text:<value>
-            args.push("-p", `${getNodeId(paramId)}:text:${value}`);
-        }
-
-        // Handle cleanup flag
-        // CLI behavior: Default is to delete. --no-cleanup prevents deletion.
-        // We want to delete if deleteSourceFiles is TRUE.
-        // So if deleteSourceFiles is FALSE, we pass --no-cleanup.
-        if (!deleteSourceFiles) {
-            args.push("--no-cleanup");
-        }
-
-    } else {
-        // Multiple files (or 0 files with just params) -> use 'process-multiple' command
-        args.push("process-multiple");
+    // DECISION: Use execution type to determine CLI command
+    if (executionType === 'workflow') {
+        // Workflow execution -> use 'run-workflow' command
+        args.push("run-workflow");
 
         // Add file inputs
         for (const input of jobFileInputs) {
@@ -449,7 +535,48 @@ async function processWorkflowInBackground(
             args.push("-p", `${getNodeId(paramId)}:text:${value}`);
         }
 
-        // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required
+        // Note: run-workflow doesn't support --no-cleanup flag
+    } else {
+        // AI app execution -> use 'process' or 'process-multiple' command
+        if (jobFileInputs.length === 1) {
+            // Single file mode -> use 'process' command
+            const input = jobFileInputs[0];
+            args.push("process");
+            args.push(input.filePath);
+            args.push("--node", getNodeId(input.parameterId));
+
+            // Add text inputs as params
+            for (const [paramId, value] of Object.entries(textInputs)) {
+                // Format: <node_id>:text:<value>
+                args.push("-p", `${getNodeId(paramId)}:text:${value}`);
+            }
+
+            // Handle cleanup flag
+            // CLI behavior: Default is to delete. --no-cleanup prevents deletion.
+            // We want to delete if deleteSourceFiles is TRUE.
+            // So if deleteSourceFiles is FALSE, we pass --no-cleanup.
+            if (!deleteSourceFiles) {
+                args.push("--no-cleanup");
+            }
+
+        } else {
+            // Multiple files (or 0 files with just params) -> use 'process-multiple' command
+            args.push("process-multiple");
+
+            // Add file inputs
+            for (const input of jobFileInputs) {
+                // Format: <node_id>:<file_path>
+                args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
+            }
+
+            // Add text inputs
+            for (const [paramId, value] of Object.entries(textInputs)) {
+                // Format: <node_id>:text:<value>
+                args.push("-p", `${getNodeId(paramId)}:text:${value}`);
+            }
+
+            // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required
+        }
     }
 
     // Add workflow ID explicitly if provided

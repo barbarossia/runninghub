@@ -52,7 +52,7 @@ export interface JobDetailProps {
 }
 
 export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
-  const { getJobById, reRunJob, deleteJob, updateJob } = useWorkspaceStore();
+  const { getJobById, addJob, deleteJob, updateJob, setSelectedJob } = useWorkspaceStore();
   const [isReRunning, setIsReRunning] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -130,7 +130,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   }, [jobId, job?.status, updateJob, isLoadingResults]);
 
   useEffect(() => {
-    if (job && job.status === 'completed' && !job.results) {
+    if (job && job.status === 'completed' && (!job.results || !job.results.textOutputs)) {
       fetchResults();
     }
   }, [job, fetchResults]);
@@ -155,7 +155,66 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const handleReRun = async () => {
     setIsReRunning(true);
     try {
-      reRunJob(jobId);
+      // Get the workflow for this job
+      const workflow = useWorkspaceStore.getState().workflows.find(w => w.id === job.workflowId);
+      if (!workflow) {
+        toast.error('Workflow not found');
+        return;
+      }
+
+      // Execute the job via API
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_EXECUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workflowId: workflow.id,
+          sourceWorkflowId: workflow.sourceWorkflowId,
+          workflowName: workflow.name,
+          fileInputs: job.fileInputs,
+          textInputs: job.textInputs,
+          folderPath: job.folderPath,
+          deleteSourceFiles: job.deleteSourceFiles || false,
+        }),
+      });
+
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to execute job');
+      }
+
+      // Create job in store
+      const newJob: Job = {
+        id: data.jobId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        fileInputs: job.fileInputs,
+        textInputs: job.textInputs,
+        status: 'pending',
+        taskId: data.taskId,
+        createdAt: Date.now(),
+        folderPath: job.folderPath,
+        deleteSourceFiles: job.deleteSourceFiles || false,
+      };
+
+      addJob(newJob);
+
+      // Switch to the new job
+      if (onBack) {
+        onBack();
+      }
+      setSelectedJob(newJob.id);
+
+      toast.success('Job re-started');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to re-run job';
+      toast.error(errorMessage);
     } finally {
       setIsReRunning(false);
     }
@@ -436,7 +495,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         </div>
 
         <div className="flex gap-2">
-          {job.status === 'completed' && (
+          {(job.status === 'completed' || job.status === 'failed') && (
             <Button onClick={handleReRun} disabled={isReRunning} size="sm">
               <RefreshCw className={cn('h-4 w-4 mr-1', isReRunning && 'animate-spin')} />
               Re-run

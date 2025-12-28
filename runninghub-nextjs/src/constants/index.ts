@@ -85,10 +85,12 @@ export const API_ENDPOINTS = {
   WORKSPACE_DELETE: '/api/workspace/delete',
   WORKSPACE_DUCK_VALIDATE: '/api/workspace/duck-validate',
   WORKSPACE_DUCK_DECODE: '/api/workspace/duck-decode',
+  WORKSPACE_UPLOAD_TO_RUNNINGHUB: '/api/workspace/upload-to-runninghub',
 
   // Workflows
   WORKFLOW_SAVE: '/api/workflow/save',
   WORKFLOW_DELETE: '/api/workflow/delete',
+  WORKFLOW_IMPORT_JSON: '/api/workflow/import-json',
 } as const;
 
 export const ERROR_MESSAGES = {
