@@ -229,6 +229,11 @@ export interface MediaFile {
 
   // Status
   selected?: boolean;
+
+  // Duck encoding status
+  isDuckEncoded?: boolean; // True if image contains duck-encoded hidden data
+  duckRequiresPassword?: boolean; // True if duck-encoded image requires password
+  duckValidationPending?: boolean; // True while validation is in progress
 }
 
 /**
@@ -443,6 +448,44 @@ export interface FileDeleteResponse {
   success: boolean;
   deletedCount: number;
   errors?: Array<{ path: string; error: string }>;
+}
+
+/**
+ * Duck validation request
+ */
+export interface DuckValidateRequest {
+  imagePath: string;
+}
+
+/**
+ * Duck validation response
+ */
+export interface DuckValidateResponse {
+  isDuckEncoded: boolean;
+  requiresPassword: boolean;
+  error?: string;
+}
+
+/**
+ * Duck decode request
+ */
+export interface DuckDecodeRequest {
+  duckImagePath: string;
+  password?: string;
+  outputPath?: string;
+  jobId?: string;
+}
+
+/**
+ * Duck decode response
+ */
+export interface DuckDecodeResponse {
+  success: boolean;
+  decodedFilePath: string;
+  decodedFileType: string;
+  fileSize: number;
+  originalDuckImagePath: string;
+  error?: string;
 }
 
 /**

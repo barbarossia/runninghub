@@ -141,6 +141,8 @@ export default function YourPage() {
 
 ## 5. Recent Changes & Changelog (Dec 2025)
 
+*   **2025-12-28**:
+    *   **Context Menu Fix**: Resolved an issue where the "Decode" button in the Media Gallery context menu wasn't working for non-password protected duck images.
 *   **2025-12-27**:
     *   **Workflow Input**: Added "Swap Inputs" button for workflows with exactly two file inputs, facilitating easy image/video swapping.
     *   **File Operations**: Enhanced feedback for delete/rename operations by moving from toasts to persistent console logs.

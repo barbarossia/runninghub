@@ -7,6 +7,8 @@ import {
   Loader2,
   X,
   Play,
+  Eye,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,10 +25,13 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BaseSelectionToolbar } from '@/components/selection/BaseSelectionToolbar';
@@ -38,6 +43,7 @@ interface MediaSelectionToolbarProps {
   selectedFiles: MediaFile[];
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
   onDelete?: (files: MediaFile[]) => Promise<void>;
+  onDecode?: (file: MediaFile, password?: string) => Promise<void>;
   onRunWorkflow?: (workflowId?: string) => void;
   disabled?: boolean;
   className?: string;
@@ -47,6 +53,7 @@ export function MediaSelectionToolbar({
   selectedFiles,
   onRename,
   onDelete,
+  onDecode,
   onRunWorkflow,
   disabled = false,
   className = '',
@@ -56,10 +63,13 @@ export function MediaSelectionToolbar({
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showDecodeDialog, setShowDecodeDialog] = useState(false);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
+  const [decodePassword, setDecodePassword] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDecoding, setIsDecoding] = useState(false);
 
   // Get workflows from store
   const { workflows } = useWorkspaceStore();
@@ -103,6 +113,22 @@ export function MediaSelectionToolbar({
     }
   }, [onDelete, selectedFiles]);
 
+  // Handle decode
+  const handleDecode = useCallback(async () => {
+    if (!onDecode || !isSingleSelection) return;
+
+    setIsDecoding(true);
+    try {
+      await onDecode(selectedFiles[0], decodePassword);
+      setShowDecodeDialog(false);
+      setDecodePassword('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to decode image');
+    } finally {
+      setIsDecoding(false);
+    }
+  }, [onDecode, isSingleSelection, selectedFiles, decodePassword]);
+
   // Handle deselect all
   const handleDeselectAll = useCallback(() => {
     // This will be handled by the parent component
@@ -116,7 +142,7 @@ export function MediaSelectionToolbar({
     }
   }, [onRunWorkflow]);
 
-  const toolbarDisabled = disabled || isRenaming || isDeleting;
+  const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding;
 
   return (
     <>
@@ -167,6 +193,28 @@ export function MediaSelectionToolbar({
                   >
                     <Pencil className="h-4 w-4 mr-2" />
                     Rename
+                  </Button>
+                )}
+
+                {/* Decode - only for single duck-encoded images */}
+                {isSingleSelection && onDecode && selectedFiles[0]?.isDuckEncoded && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const file = selectedFiles[0];
+                      if (file.duckRequiresPassword) {
+                        setDecodePassword('');
+                        setShowDecodeDialog(true);
+                      } else {
+                        handleDecode();
+                      }
+                    }}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Decode
                   </Button>
                 )}
 
@@ -320,6 +368,65 @@ export function MediaSelectionToolbar({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      )}
+
+      {/* Decode Password Dialog */}
+      {onDecode && isSingleSelection && selectedFiles[0]?.isDuckEncoded && (
+        <Dialog open={showDecodeDialog} onOpenChange={setShowDecodeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Decode Duck Image</DialogTitle>
+              <DialogDescription>
+                This image contains hidden data. Enter password if required.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div>
+                <Label htmlFor="decode-password">Password (Optional)</Label>
+                <Input
+                  id="decode-password"
+                  type="password"
+                  placeholder="Leave empty if not password-protected"
+                  value={decodePassword}
+                  onChange={(e) => setDecodePassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleDecode()}
+                  autoFocus
+                />
+              </div>
+              {selectedFiles[0]?.duckRequiresPassword && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-sm">
+                    This image requires a password to decode.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowDecodeDialog(false)}
+                disabled={isDecoding}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleDecode}
+                disabled={isDecoding}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isDecoding ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Decoding...
+                  </>
+                ) : (
+                  'Decode'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Quick Run Workflow Dialog */}

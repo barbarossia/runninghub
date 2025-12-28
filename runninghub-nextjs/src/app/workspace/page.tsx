@@ -66,6 +66,7 @@ export default function WorkspacePage() {
     getSelectedMediaFiles,
     deselectAllMediaFiles,
     autoAssignSelectedFilesToWorkflow,
+    updateMediaFile,
   } = useWorkspaceStore();
 
   // Local state
@@ -216,6 +217,50 @@ export default function WorkspacePage() {
       );
     }
   }, [selectedFolder, loadFolderContents, processFolderContents]);
+
+  // Validate duck encoding for selected images (only when selected, not all images)
+  useEffect(() => {
+    const validateSelectedImages = async () => {
+      // Only validate single selections for duck decoding
+      if (selectedFiles.length !== 1) return;
+
+      const file = selectedFiles[0];
+
+      // Only validate images
+      if (file.type !== 'image') return;
+
+      // Skip if already validated or validation is in progress
+      if (file.isDuckEncoded || file.duckValidationPending) return;
+
+      console.log('[Workspace] Validating duck encoding for selected image:', file.name);
+
+      // Mark as pending to prevent duplicate validations
+      updateMediaFile(file.id, { duckValidationPending: true });
+
+      try {
+        const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagePath: file.path }),
+        });
+
+        const data = await response.json();
+
+        console.log('[Workspace] Validation result for', file.name, ':', data);
+
+        updateMediaFile(file.id, {
+          isDuckEncoded: data.isDuckEncoded,
+          duckRequiresPassword: data.requiresPassword,
+          duckValidationPending: false,
+        });
+      } catch (error) {
+        console.error(`[Workspace] Failed to validate ${file.name}:`, error);
+        updateMediaFile(file.id, { duckValidationPending: false });
+      }
+    };
+
+    validateSelectedImages();
+  }, [selectedFiles, updateMediaFile]);
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
@@ -422,6 +467,35 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleDecodeFile = async (file: MediaFile, password?: string) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_DECODE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          duckImagePath: file.path,
+          password: password || '',
+          jobId: selectedFolder?.session_id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to decode image');
+      }
+
+      toast.success(`Successfully decoded: ${file.name}`);
+
+      // Refresh gallery to show decoded file and hide original
+      await handleRefresh(true);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to decode image';
+      toast.error(errorMessage);
+      throw err;
+    }
+  };
+
   const handlePreviewFile = (file: MediaFile) => {
     // Preview is handled internally by MediaGallery component
     console.log('Preview file:', file);
@@ -551,6 +625,7 @@ export default function WorkspacePage() {
                     selectedFiles={selectedFiles}
                     onRename={handleRenameFile}
                     onDelete={handleDeleteFile}
+                    onDecode={handleDecodeFile}
                     onRunWorkflow={handleQuickRunWorkflow}
                   />
                 )}
@@ -559,6 +634,7 @@ export default function WorkspacePage() {
                 <MediaGallery
                   onRename={handleRenameFile}
                   onDelete={handleDeleteFile}
+                  onDecode={handleDecodeFile}
                   onPreview={handlePreviewFile}
                 />
               </TabsContent>

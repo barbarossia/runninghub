@@ -116,13 +116,47 @@ async function processJobOutputs(
     let cliResponse: any = null;
     try {
       // Extract JSON from stdout (might be mixed with log lines)
-      const jsonMatch = cliStdout.match(/\{[\s\S]*"code":[\s\S]*\}/);
-      if (jsonMatch) {
-        cliResponse = JSON.parse(jsonMatch[0]);
-        await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+      // CLI outputs formatted JSON at the end, so find the last complete JSON object
+      const lines = cliStdout.split('\n');
+      let jsonStartIndex = -1;
+      let braceCount = 0;
+      let inJson = false;
+
+      // Find the last well-formed JSON object
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+
+        // Look for the start of a JSON object
+        if (!inJson && trimmed.startsWith('{')) {
+          inJson = true;
+          jsonStartIndex = i;
+          braceCount = 0;
+        }
+
+        // Count braces to find the end of the JSON object
+        if (inJson) {
+          for (const char of lines[i]) {
+            if (char === '{') braceCount++;
+            if (char === '}') braceCount--;
+          }
+
+          // When braces balance, we've found a complete JSON object
+          if (braceCount === 0 && jsonStartIndex >= 0) {
+            const jsonStr = lines.slice(jsonStartIndex, i + 1).join('\n');
+            cliResponse = JSON.parse(jsonStr);
+            await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+            break;
+          }
+        }
+      }
+
+      if (!cliResponse) {
+        await writeLog('No valid JSON found in CLI output', 'warning', taskId);
+        await writeLog(`CLI stdout preview: ${cliStdout.slice(0, 200)}...`, 'info', taskId);
       }
     } catch (parseError) {
       await writeLog(`Failed to parse CLI JSON response: ${parseError}`, 'warning', taskId);
+      await writeLog(`CLI stdout: ${cliStdout.slice(0, 500)}`, 'info', taskId);
     }
 
     if (!cliResponse || cliResponse.code !== 0 || !cliResponse.data || cliResponse.data.length === 0) {
