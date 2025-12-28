@@ -165,8 +165,8 @@ export async function POST(request: NextRequest) {
       if (decodedFileType === 'video') {
         // For videos, use .mp4 extension
         finalExtension = '.mp4';
-        finalOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}.mp4`);
-        console.log(`[Duck Decode] Video detected, using .mp4 extension`);
+        finalOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}_decoded.mp4`);
+        console.log(`[Duck Decode] Video detected, using _decoded.mp4 extension`);
       } else if (decodedFileType === 'image') {
         // For images, keep the detected type (png, jpg, etc.)
         // Try to infer from the magic bytes
@@ -179,15 +179,19 @@ export async function POST(request: NextRequest) {
           finalExtension = '.jpg';
         } else if (firstBytes.startsWith('47494638')) {
           finalExtension = '.gif';
-        } else if (firstBytes.startsWith('52494646') && buffer.slice(8, 12).toString('hex').toLowerCase() === '57454250') {
-          finalExtension = '.webp';
+        } else if (firstBytes.startsWith('52494646') && buffer.slice(8, 12).toString('hex').toLowerCase() === '41564920') {
+          // Check for WEBP
+          if (buffer.slice(8, 12).toString('hex').toLowerCase() === '57454250') {
+             finalExtension = '.webp';
+          }
         }
 
-        finalOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}${finalExtension}`);
-        console.log(`[Duck Decode] Image detected, using ${finalExtension} extension`);
+        finalOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}_decoded${finalExtension}`);
+        console.log(`[Duck Decode] Image detected, using ${finalExtension} extension with _decoded suffix`);
       } else {
-        // Unknown type, keep original extension
-        console.log(`[Duck Decode] Unknown file type, keeping original extension`);
+        // Unknown type, keep original extension but add suffix
+        finalOutputPath = path.join(resultDir, `${originalFileNameWithoutExt}_decoded${originalFileExt}`);
+        console.log(`[Duck Decode] Unknown file type, keeping original extension with _decoded suffix`);
       }
 
       // If the final output path already exists, remove it first

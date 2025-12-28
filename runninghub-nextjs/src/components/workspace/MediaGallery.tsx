@@ -25,6 +25,7 @@ import {
   Copy,
   Loader2,
   AlertCircle,
+  PlayCircle,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Button } from '@/components/ui/button';
@@ -453,18 +454,23 @@ export function MediaGallery({
                         )}
                       >
                         {file.type === 'video' && file.blobUrl ? (
-                          <video
-                            src={file.blobUrl}
-                            className="w-full h-full object-contain"
-                            muted
-                            preload="metadata"
-                            playsInline
-                            onMouseOver={(e) => e.currentTarget.play()}
-                            onMouseOut={(e) => {
-                              e.currentTarget.pause();
-                              e.currentTarget.currentTime = 0;
-                            }}
-                          />
+                          <>
+                            <video
+                              src={file.blobUrl}
+                              className="w-full h-full object-contain"
+                              muted
+                              preload="metadata"
+                              playsInline
+                              onMouseOver={(e) => e.currentTarget.play()}
+                              onMouseOut={(e) => {
+                                e.currentTarget.pause();
+                                e.currentTarget.currentTime = 0;
+                              }}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                              <PlayCircle className="h-6 w-6 text-white/80 drop-shadow-md" />
+                            </div>
+                          </>
                         ) : file.thumbnail || file.blobUrl ? (
                           <Image
                             src={file.thumbnail || file.blobUrl || ''}
@@ -536,18 +542,25 @@ export function MediaGallery({
                   <div className="relative bg-gray-100 aspect-square">
                     {file.type === 'video' && file.blobUrl ? (
                       // Video with blobUrl - show video element
-                      <video
-                        src={file.blobUrl}
-                        className="w-full h-full object-contain p-1"
-                        muted
-                        preload="metadata"
-                        playsInline
-                        onMouseOver={(e) => e.currentTarget.play()}
-                        onMouseOut={(e) => {
-                          e.currentTarget.pause();
-                          e.currentTarget.currentTime = 0;
-                        }}
-                      />
+                      <>
+                        <video
+                          src={file.blobUrl}
+                          className="w-full h-full object-contain p-1"
+                          muted
+                          preload="metadata"
+                          playsInline
+                          onMouseOver={(e) => e.currentTarget.play()}
+                          onMouseOut={(e) => {
+                            e.currentTarget.pause();
+                            e.currentTarget.currentTime = 0;
+                          }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                          <div className="bg-black/30 rounded-full p-2 backdrop-blur-[2px] text-white/90 shadow-lg">
+                            <PlayCircle className="h-10 w-10" />
+                          </div>
+                        </div>
+                      </>
                     ) : file.type === 'video' && file.thumbnail ? (
                       // Video with thumbnail image
                       <Image

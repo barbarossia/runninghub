@@ -145,6 +145,9 @@ export default function YourPage() {
     *   **Duck Decode**:
         *   Fixed an issue where selecting a non-duck image repeatedly triggered validation API calls, causing refresh loops.
         *   Resolved an issue where decoded images (especially videos) wouldn't immediately update in the Job Detail view due to browser caching and incorrect rendering type. Decoded videos now render with a video player.
+        *   Improved decoding naming: Decoded files now use a `_decoded` suffix to avoid name conflicts with the original image and facilitate identification.
+    *   **Media Gallery**:
+        *   Added a play button overlay to video thumbnails in the Media Gallery (Workspace) to clearly distinguish videos from static images. The overlay fades out when hovering as the video preview starts playing.
     *   **Context Menu Fix**: Resolved an issue where the "Decode" button in the Media Gallery context menu wasn't working for non-password protected duck images.
     *   **Video Preview**: Enabled hover-to-play for video thumbnails in the Media Gallery (List and Grid views) to distinguish them from static images.
 *   **2025-12-27**:
