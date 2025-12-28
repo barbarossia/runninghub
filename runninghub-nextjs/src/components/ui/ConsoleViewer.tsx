@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
-import { Terminal, Trash2, RefreshCw, Minimize2, Maximize2, Loader2, CheckCircle2, XCircle, X } from 'lucide-react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { Terminal, Trash2, RefreshCw, Minimize2, Maximize2, Loader2, CheckCircle2, XCircle, X, Search } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,12 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 
 interface LogEntry {
   timestamp: string;
-  level: 'info' | 'error' | 'success' | 'warning';
+  level: 'info' | 'error' | 'success' | 'warning' | 'debug';
+  source: 'ui' | 'api' | 'cli';
   message: string;
   taskId?: string;
+  metadata?: Record<string, any>;
 }
 
 interface TaskState {
@@ -26,6 +30,8 @@ interface TaskState {
   currentImage?: string;
 }
 
+type DisplaySize = 'close' | 'min' | 'max';
+
 interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
   onTaskComplete?: (taskId: string, status: 'completed' | 'failed') => void;
@@ -35,14 +41,35 @@ interface ConsoleViewerProps {
   autoRefreshInterval?: number; // Optional auto-refresh interval
 }
 
+// Local storage key for console display size
+const CONSOLE_DISPLAY_SIZE_KEY = 'runninghub-console-display-size';
+
 export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskId, defaultVisible = false }: ConsoleViewerProps) {
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
-  const [isMinimized, setIsMinimized] = useState(!taskId); // Default to minimized, auto-expand if taskId exists
-  const [isVisible, setIsVisible] = useState(() => !!taskId || defaultVisible);
+
+  // Display size state - initialized from env var only (localStorage loaded after mount to prevent hydration errors)
+  const [displaySize, setDisplaySize] = useState<DisplaySize>(() => {
+    // Check environment variable for default (works on both server and client)
+    const envDefault = process.env.NEXT_PUBLIC_CONSOLE_DISPLAY_SIZE;
+    if (envDefault && (envDefault === 'close' || envDefault === 'min' || envDefault === 'max')) {
+      return envDefault as DisplaySize;
+    }
+
+    // Final fallback
+    return 'close';
+  });
+
+  // Derived states for backward compatibility
+  const isVisible = displaySize !== 'close';
+  const isMinimized = displaySize === 'min';
+
   const [isPaused, setIsPaused] = useState(false);
+  const [filterLevel, setFilterLevel] = useState<'all' | LogEntry['level']>('all');
+  const [filterSource, setFilterSource] = useState<'all' | LogEntry['source']>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastStatusRef = useRef<string | null>(null);
@@ -50,7 +77,22 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
   // Prevent hydration errors
   useEffect(() => {
     setMounted(true);
+
+    // Load display size from localStorage after mounting (prevents hydration mismatch)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(CONSOLE_DISPLAY_SIZE_KEY);
+      if (saved && (saved === 'close' || saved === 'min' || saved === 'max')) {
+        setDisplaySize(saved as DisplaySize);
+      }
+    }
   }, []);
+
+  // Save display size to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && mounted) {
+      localStorage.setItem(CONSOLE_DISPLAY_SIZE_KEY, displaySize);
+    }
+  }, [displaySize, mounted]);
 
   // Reset task status when taskId changes
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -86,10 +128,10 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
 
              if (data.status === 'completed' || data.status === 'failed') {
                onTaskComplete?.(taskId, data.status);
-               
+
                // Auto-minimize on completion
                if (data.status === 'completed') {
-                 setTimeout(() => setIsMinimized(true), 3000);
+                 setTimeout(() => setDisplaySize('min'), 3000);
                }
              }
              lastStatusRef.current = data.status;
@@ -165,6 +207,30 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
     }
   };
 
+  const getSourceBadge = (source: LogEntry['source']) => {
+    const badges = {
+      ui: { label: 'UI', color: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
+      api: { label: 'API', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
+      cli: { label: 'CLI', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
+    };
+    const badge = badges[source];
+
+    // Handle backward compatibility for old logs without source field
+    if (!badge) {
+      return (
+        <Badge variant="outline" className="text-[8px] h-3 px-1 border bg-gray-500/10 text-gray-400 border-gray-500/30">
+          LEGACY
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="outline" className={`text-[8px] h-3 px-1 border ${badge.color}`}>
+        {badge.label}
+      </Badge>
+    );
+  };
+
   // Theme-aware color classes
   const isDark = mounted && theme === 'dark';
   const consoleBg = isDark ? 'bg-gray-950' : 'bg-white';
@@ -191,11 +257,33 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
     return ((taskStatus.completedCount + taskStatus.failedCount) / taskStatus.totalImages) * 100;
   };
 
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      // Level filter
+      if (filterLevel !== 'all' && log.level !== filterLevel) return false;
+
+      // Source filter
+      if (filterSource !== 'all' && log.source !== filterSource) return false;
+
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          log.message.toLowerCase().includes(query) ||
+          log.taskId?.toLowerCase().includes(query) ||
+          JSON.stringify(log.metadata || {}).toLowerCase().includes(query)
+        );
+      }
+
+      return true;
+    });
+  }, [logs, filterLevel, filterSource, searchQuery]);
+
   if (!isVisible) {
     return (
       <Button
         className="fixed bottom-4 right-4 z-50 shadow-lg rounded-full w-10 h-10 p-0"
-        onClick={() => setIsVisible(true)}
+        onClick={() => setDisplaySize('min')}
         variant="secondary"
       >
         <Terminal className="w-5 h-5" />
@@ -220,7 +308,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
     const minBorder = isDark ? 'border-gray-800/60' : 'border-gray-300/60';
 
     return (
-      <Card className={`fixed bottom-4 right-4 z-50 w-[320px] shadow-lg ${consoleBg} ${minBorder} ${opacity} hover:opacity-100 transition-all`}>
+      <Card className={`fixed bottom-4 right-4 z-50 w-[450px] shadow-lg ${consoleBg} ${minBorder} ${opacity} hover:opacity-100 transition-all`}>
         <div className="overflow-hidden">
           {/* Header with icon and controls */}
           <div className={`flex items-center justify-between p-2 ${minHeaderBg} backdrop-blur-sm`}>
@@ -230,7 +318,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
                 variant="ghost"
                 size="icon"
                 className={`h-5 w-5 ${buttonHover} ${buttonText}`}
-                onClick={() => setIsMinimized(false)}
+                onClick={() => setDisplaySize('max')}
               >
                 <Maximize2 className="w-3 h-3" />
               </Button>
@@ -238,7 +326,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
                 variant="ghost"
                 size="icon"
                 className={`h-5 w-5 ${buttonHover} ${buttonText} hover:text-red-400`}
-                onClick={() => setIsVisible(false)}
+                onClick={() => setDisplaySize('close')}
               >
                 <X className="w-3 h-3" />
               </Button>
@@ -294,7 +382,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
   }
 
   return (
-    <Card className={`fixed bottom-4 right-4 z-50 w-[500px] h-[350px] shadow-2xl flex flex-col overflow-hidden ${consoleBorder} ${consoleBg} ${opacity} transition-all`}>
+    <Card className={`fixed bottom-4 right-4 z-50 w-[800px] h-[500px] shadow-2xl flex flex-col overflow-hidden ${consoleBorder} ${consoleBg} ${opacity} transition-all`}>
       {/* Header */}
       <div className={`flex items-center justify-between p-2 ${consoleHeaderBg} ${consoleHeaderText} shrink-0 border-b ${consoleBorder}`}>
         <div className="flex items-center gap-2">
@@ -323,7 +411,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
             variant="ghost"
             size="icon"
             className={`h-6 w-6 ${buttonHover} ${buttonText} ${buttonHoverText}`}
-            onClick={() => setIsMinimized(true)}
+            onClick={() => setDisplaySize('min')}
           >
             <Minimize2 className="w-3 h-3" />
           </Button>
@@ -331,12 +419,14 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
             variant="ghost"
             size="icon"
             className={`h-6 w-6 ${buttonHover} ${buttonText} hover:text-red-400`}
-            onClick={() => setIsVisible(false)}
+            onClick={() => setDisplaySize('close')}
           >
             <X className="w-3 h-3" />
           </Button>
         </div>
       </div>
+
+      {/* Filter Bar - Removed (moved to footer) */}
 
       {/* Task Progress Section */}
       {taskStatus && (
@@ -363,18 +453,26 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
         ref={scrollRef}
         className={`flex-1 ${logAreaBg} p-2 font-mono text-[10px] overflow-y-auto`}
       >
-        {logs.length === 0 ? (
-          <div className={`${emptyText} italic text-center mt-10`}></div>
+        {filteredLogs.length === 0 ? (
+          <div className={`${emptyText} italic text-center mt-10`}>
+            {logs.length === 0 ? '' : 'No logs match your filters'}
+          </div>
         ) : (
           <div className="space-y-0.5">
-            {[...logs].reverse().map((log, i) => (
-              <div key={i} className={`flex gap-2 ${consoleHover} p-0.5 rounded transition-colors border-l-2 border-transparent ${consoleHoverBorder}`}>
-                <span className={`${consoleTimestamp} shrink-0 tabular-nums`}>
+            {[...filteredLogs].reverse().map((log, i) => (
+              <div key={i} className={`flex gap-2 items-start ${consoleHover} p-1 rounded transition-colors border-l-2 ${consoleHoverBorder}`}>
+                <span className={`${consoleTimestamp} shrink-0 tabular-nums text-[9px]`}>
                   {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
                 </span>
-                <span className={`${getLevelColor(log.level)} break-all leading-tight`}>
+                {getSourceBadge(log.source)}
+                <span className={`${getLevelColor(log.level)} break-all leading-tight flex-1 text-[10px]`}>
                   {log.message}
                 </span>
+                {log.taskId && (
+                  <span className={`text-[8px] ${consoleTimestamp} shrink-0 tabular-nums`}>
+                    #{log.taskId.slice(-8)}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -382,31 +480,82 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
       </div>
 
       {/* Footer Status */}
-      <div className={`${footerBg} p-1 px-2 text-[9px] ${footerText} flex justify-between items-center shrink-0 border-t ${consoleBorder}`}>
-         <div className="flex items-center gap-4">
-           <span className="flex items-center gap-1 italic">
+      <div className={`${footerBg} p-1.5 px-2 text-[9px] ${footerText} flex justify-between items-center shrink-0 border-t ${consoleBorder}`}>
+         <div className="flex items-center gap-2">
+           {/* Monitoring Status */}
+           <span className="flex items-center gap-1 italic shrink-0">
              <div className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-yellow-500' : 'bg-green-500 animate-pulse'}`} />
-             {isPaused ? 'Monitoring paused' : 'Monitoring active (1s)'}
+             {isPaused ? 'Paused' : 'Live'}
            </span>
-           <div className="flex items-center gap-1.5">
-              <Checkbox 
-                id="console-auto-refresh" 
+
+           {/* Level Filter - Shrunk */}
+           <Select value={filterLevel} onValueChange={(v) => setFilterLevel(v as 'all' | LogEntry['level'])}>
+             <SelectTrigger className="h-3.5 text-[8px] w-12 px-1 border border-gray-600/50">
+               <SelectValue />
+             </SelectTrigger>
+             <SelectContent>
+               <SelectItem value="all">All</SelectItem>
+               <SelectItem value="info">Info</SelectItem>
+               <SelectItem value="success">Success</SelectItem>
+               <SelectItem value="warning">Warning</SelectItem>
+               <SelectItem value="error">Error</SelectItem>
+               <SelectItem value="debug">Debug</SelectItem>
+             </SelectContent>
+           </Select>
+
+           {/* Source Filter - Shrunk */}
+           <Select value={filterSource} onValueChange={(v) => setFilterSource(v as 'all' | LogEntry['source'])}>
+             <SelectTrigger className="h-3.5 text-[8px] w-12 px-1 border border-gray-600/50">
+               <SelectValue />
+             </SelectTrigger>
+             <SelectContent>
+               <SelectItem value="all">All</SelectItem>
+               <SelectItem value="ui">UI</SelectItem>
+               <SelectItem value="api">API</SelectItem>
+               <SelectItem value="cli">CLI</SelectItem>
+             </SelectContent>
+           </Select>
+
+           {/* Search Input - Compact */}
+           <div className="relative w-28">
+             <Input
+               type="text"
+               placeholder="Search..."
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               className="h-3.5 text-[8px] pl-5 py-0"
+             />
+             <Search className="absolute left-1 top-0.5 w-2.5 h-2.5 text-gray-400" />
+             {searchQuery && (
+               <button
+                 onClick={() => setSearchQuery('')}
+                 className="absolute right-1 top-0.5 text-gray-400 hover:text-gray-600"
+               >
+                 ×
+               </button>
+             )}
+           </div>
+
+           {/* Auto-refresh Checkbox */}
+           <div className="flex items-center gap-1 shrink-0">
+              <Checkbox
+                id="console-auto-refresh"
                 checked={!isPaused}
                 onCheckedChange={(checked) => setIsPaused(checked === false)}
-                className="w-3.5 h-3.5"
+                className="w-3 h-3"
               />
-              <Label htmlFor="console-auto-refresh" className="text-[9px] font-normal cursor-pointer">Auto-refresh</Label>
+              <Label htmlFor="console-auto-refresh" className="text-[8px] font-normal cursor-pointer leading-none">Auto</Label>
            </div>
          </div>
          {onRefresh && (
-           <div className="flex items-center gap-2">
+           <div className="flex items-center gap-2 shrink-0">
              <Button
                variant="ghost"
                size="sm"
-               className="h-4 p-0 text-[9px] hover:bg-transparent text-blue-400 hover:text-blue-300"
+               className="h-3.5 p-0 text-[8px] hover:bg-transparent text-blue-400 hover:text-blue-300"
                onClick={() => onRefresh(false)}
              >
-               <RefreshCw className="w-2.5 h-2.5 mr-1" /> REFRESH
+               <RefreshCw className="w-2 h-2 mr-0.5" /> REFRESH
              </Button>
            </div>
          )}

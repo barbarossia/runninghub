@@ -27,7 +27,7 @@ export default function Home() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:bg-[#0d1117] dark:from-[#0d1117] dark:to-[#161b22] p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header with Theme Toggle */}
         <div className="flex justify-end mb-4">

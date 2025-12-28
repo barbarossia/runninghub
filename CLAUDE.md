@@ -248,6 +248,136 @@ Fixes #456
 - [ ] No merge conflicts with main
 ```
 
+## Logging & Messaging Standards
+
+### Overview
+
+The RunningHub project uses a unified logging and messaging system to ensure consistency across the frontend (Next.js UI), API routes, and Python CLI. All logging follows standardized patterns for user feedback, debugging, and audit trails.
+
+### Unified Log Schema
+
+All logs follow this structure:
+```typescript
+interface LogEntry {
+  timestamp: string;
+  level: 'info' | 'success' | 'warning' | 'error' | 'debug';
+  source: 'ui' | 'api' | 'cli';
+  message: string;
+  taskId?: string; // Optional: links log to a specific job/task
+  metadata?: Record<string, any>;
+}
+```
+
+### Frontend (Next.js UI)
+
+**Library:** `sonner` (via `toast` utility)
+**Usage:** User-facing notifications for immediate feedback.
+
+| Level | Method | Purpose |
+| :--- | :--- | :--- |
+| Info | `toast.info(msg)` | Neutral information, tips, or status updates. |
+| Success | `toast.success(msg)` | Confirmation of successful operations (save, delete, etc.). |
+| Warning | `toast.warning(msg)` | Non-critical alerts or potential issues. |
+| Error | `toast.error(msg)` | Critical failures or validation errors. |
+
+**Standard Console:**
+- `console.log()`: Debugging and flow tracking.
+- `console.error()`: Logging caught exceptions before showing user feedback.
+- `console.warn()`: Deprecation or non-critical runtime issues.
+
+**When to use:**
+- Immediate user feedback (success/error toasts)
+- Status updates for quick actions (save, delete, rename)
+- Validation errors in forms
+
+**Key locations:**
+- `src/app/gallery/page.tsx`: Deletion success/error, folder selection errors.
+- `src/app/workspace/page.tsx`: Workflow save/delete, job start/completion, duck decoding status.
+- `src/app/videos/clip/page.tsx`: Clipping success/failure, renaming, deletion.
+- `src/app/videos/crop/page.tsx`: Crop configuration validation, success/failure.
+- `src/app/videos/page.tsx`: Conversion status, renaming, deletion.
+
+### API Routes (Next.js Backend)
+
+**Utility:** `writeLog(message, level, taskId)` in `src/lib/logger.ts`
+**Persistence:** Appends JSON objects to `.next/cache/runninghub-logs/process.log`.
+**Usage:** Background tasks, long-running processes, and audit trails shown in `ConsoleViewer`.
+
+| Level | Argument | Color in UI |
+| :--- | :--- | :--- |
+| Info | `'info'` | Blue |
+| Success | `'success'` | Green |
+| Warning | `'warning'` | Yellow |
+| Error | `'error'` | Red |
+
+**Task Tracking:**
+Always include `taskId` when logging within background processes (like video conversion or workflow execution) to allow filtering in the UI.
+
+**When to use:**
+- Long-running operations (video conversion, image processing)
+- Background task lifecycle (start, progress, completion)
+- External CLI execution and output
+- Detailed audit trails for debugging
+
+**Key locations:**
+- `src/app/api/images/delete/route.ts`: Audit of deleted images.
+- `src/app/api/images/process/route.ts`: Detailed steps of image processing batches.
+- `src/app/api/workspace/execute/route.ts`: Workflow execution lifecycle (upload, copy, CLI execution, output processing).
+- `src/app/api/videos/clip/route.ts`: Video clipping steps and ffmpeg results.
+- `src/app/api/videos/crop/route.ts`: Video cropping progress.
+- `src/app/api/videos/convert/route.ts`: Video conversion progress.
+
+### CLI (Python)
+
+**Utility:** `print_success`, `print_error`, `print_info`, `print_warning` in `runninghub_cli/utils.py`
+**Output:** Colorized terminal output using `colorama`.
+
+| Level | Method | Symbol | Color |
+| :--- | :--- | :--- | :--- |
+| Info | `print_info(msg)` | ℹ | Blue |
+| Success | `print_success(msg)` | ✓ | Green |
+| Warning | `print_warning(msg)` | ⚠ | Yellow |
+| Error | `print_error(msg)` | ✗ | Red |
+
+**When to use:**
+- CLI command execution feedback
+- Terminal output for direct CLI usage
+- Structured output when called via API (`--json` flag)
+
+**Key locations:**
+- `runninghub_cli/cli.py`: Main entry point for all commands (config, nodes, upload, process, etc.).
+- `runninghub_cli/video_utils.py`: FFmpeg-based operations (clip, crop, rename).
+- `runninghub_cli/duck_utils.py`: Duck decoding operations.
+
+### Consistency Guidelines
+
+**RULE 4**: Follow these patterns for consistent logging across all components:
+
+1. **Error Handling:**
+   - Always `console.error` the raw error in API routes.
+   - Use `writeLog` with level `'error'` for background task failures.
+   - Return a clean error message in the JSON response for the frontend to show via `toast.error`.
+
+2. **Success Feedback:**
+   - For instant actions (e.g., renaming a file), use `toast.success`.
+   - For batch actions (e.g., processing 10 images), use `writeLog` for each item and `toast.success` once the entire batch is submitted or completed.
+
+3. **Request/Response Logging:**
+   - API routes should log significant actions (starts, ends, external CLI calls) using `writeLog` if they belong to a task.
+   - CLI commands should use `--json` flag when called by the API to facilitate structured error parsing.
+
+4. **Source Attribution:**
+   - Frontend logs: `source: 'ui'`
+   - API logs: `source: 'api'` (default)
+   - CLI logs: `source: 'cli'` (parsed by API when capturing CLI output)
+
+### Logging Infrastructure
+
+- **API Logger:** `src/lib/logger.ts` - The `writeLog` implementation (Node.js)
+- **CLI Logger:** `runninghub_cli/utils.py` - The `print_...` implementations (Python)
+- **UI Component:** `src/components/ui/ConsoleViewer.tsx` - The UI component that consumes background logs
+- **API Endpoint:** `src/app/api/logs/route.ts` - API endpoint for fetching and clearing logs
+
 ## Project Structure
 
 ```
@@ -297,13 +427,17 @@ Before committing any changes, verify:
 - [ ] Commit message follows format guidelines
 - [ ] Tests pass (if applicable)
 - [ ] Documentation updated (if needed)
+- [ ] Logging follows RULE 4 standards (toast for UI, writeLog for background, correct levels)
 
 ---
 
 ## Related Documentation
 
 - **Backend/General Documentation**: See `docs/` folder for backend-related guides and general project documentation
-  - Example: `docs/video-conversion-guide.md` - Video format conversion with FFmpeg
+  - `docs/video-conversion-guide.md` - Video format conversion with FFmpeg
+  - `docs/logging-standards.md` - Logging and messaging patterns across Frontend, API, and CLI
+  - `docs/unified-logging-plan.md` - Unified logging architecture and implementation plan
+  - `docs/unified-logging-todos.md` - TODO list for unified logging implementation
 - **Frontend Documentation**: See `runninghub-nextjs/docs/` for Next.js-specific feature plans, implementation guides, and TODO lists
   - Example: `runninghub-nextjs/docs/workspace-redesign-plan.md` - Workspace feature redesign plan
   - Example: `runninghub-nextjs/docs/nextjs-migration-plan.md` - Next.js migration plan
@@ -312,5 +446,5 @@ Before committing any changes, verify:
 
 ---
 
-**Last Updated**: 2025-12-26
+**Last Updated**: 2025-12-28
 **Maintained By**: Development Team

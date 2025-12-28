@@ -25,6 +25,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { useFolderStore as useLegacyFolderStore, useImageStore as useLegacyImageStore, useSelectionStore as useLegacySelectionStore, useProcessStore } from '@/store';
 import { useFileSystem } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
@@ -143,10 +144,14 @@ export default function GalleryPage() {
       }
 
       deselectAll();
-      toast.success(`Deleted ${selectedPaths.length} image${selectedPaths.length !== 1 ? 's' : ''}`);
+      logger.success(`Deleted ${selectedPaths.length} image${selectedPaths.length !== 1 ? 's' : ''}`, {
+        metadata: { count: selectedPaths.length, paths: selectedPaths.slice(0, 3) }
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete images';
-      toast.error(errorMessage);
+      logger.error(errorMessage, {
+        metadata: { count: selectedPaths.length, error: errorMessage }
+      });
       throw err;
     }
   };
@@ -258,7 +263,7 @@ export default function GalleryPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:bg-[#0d1117] dark:from-[#0d1117] dark:to-[#161b22]">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <PageHeader

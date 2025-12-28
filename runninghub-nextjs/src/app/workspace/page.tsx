@@ -40,6 +40,7 @@ import {
   Play,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { API_ENDPOINTS } from '@/constants';
 import type { Workflow, Job, MediaFile } from '@/types/workspace';
 
@@ -164,14 +165,18 @@ export default function WorkspacePage() {
     if (job) {
       updateJob(job.id, { 
         status: status, 
-        completedAt: Date.now() 
+        completedAt: Date.now()
       });
-      
+
       if (status === 'completed') {
-        toast.success('Job completed successfully');
+        logger.success('Job completed successfully', {
+          metadata: { jobId: job.id, taskId, status }
+        });
         handleRefresh(true); // Refresh folder contents to show new files
       } else {
-        toast.error('Job failed');
+        logger.error('Job failed', {
+          metadata: { jobId: job.id, taskId, status }
+        });
       }
     }
   }, [jobs, updateJob, handleRefresh]);
@@ -277,10 +282,14 @@ export default function WorkspacePage() {
   const handleSaveWorkflow = (workflow: Workflow) => {
     if (editingWorkflow) {
       updateWorkflow(workflow.id, workflow);
-      toast.success('Workflow updated');
+      logger.success('Workflow updated', {
+        metadata: { workflowId: workflow.id, workflowName: workflow.name }
+      });
     } else {
       addWorkflow(workflow);
-      toast.success('Workflow created');
+      logger.success('Workflow created', {
+        metadata: { workflowId: workflow.id, workflowName: workflow.name }
+      });
     }
     setIsEditingWorkflow(false);
     setEditingWorkflow(undefined);
@@ -310,10 +319,15 @@ export default function WorkspacePage() {
         }
 
         deleteWorkflow(id);
-        toast.success('Workflow deleted');
+        logger.success('Workflow deleted', {
+          metadata: { workflowId: id }
+        });
       } catch (error) {
         console.error('Delete workflow error:', error);
-        toast.error('Failed to delete workflow');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to delete workflow';
+        logger.error('Failed to delete workflow', {
+          metadata: { workflowId: id, error: errorMessage }
+        });
       }
     }
   };
@@ -400,10 +414,15 @@ export default function WorkspacePage() {
       // Clear job inputs and switch to jobs tab
       clearJobInputs();
       setActiveTab('jobs');
-      toast.success('Job started');
+      logger.success('Job started', {
+        taskId: data.taskId,
+        metadata: { workflowId: workflow.id, jobId: data.jobId, workflowName: workflow.name }
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to execute job';
-      toast.error(errorMessage);
+      logger.error(errorMessage, {
+        metadata: { workflowId: workflow.id, error: errorMessage }
+      });
     }
   };
 
@@ -550,7 +569,7 @@ export default function WorkspacePage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 dark:bg-[#0d1117] dark:from-[#0d1117] dark:to-[#161b22]">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <PageHeader

@@ -17,23 +17,33 @@ async function ensureLogDir() {
 
 export interface LogEntry {
   timestamp: string;
-  level: 'info' | 'error' | 'success' | 'warning';
+  level: 'info' | 'error' | 'success' | 'warning' | 'debug';
+  source: 'ui' | 'api' | 'cli';
   message: string;
   taskId?: string;
+  metadata?: Record<string, any>;
 }
 
-export async function writeLog(message: string, level: LogEntry['level'] = 'info', taskId?: string) {
+export async function writeLog(
+  message: string,
+  level: LogEntry['level'] = 'info',
+  taskId?: string,
+  source: LogEntry['source'] = 'api',
+  metadata?: Record<string, any>
+) {
   await ensureLogDir();
-  
+
   const entry: LogEntry = {
     timestamp: new Date().toISOString(),
     level,
+    source,
     message,
-    taskId
+    taskId,
+    metadata
   };
-  
+
   const line = JSON.stringify(entry) + '\n';
-  
+
   try {
     await fs.appendFile(LOG_FILE, line, 'utf8');
   } catch (error) {
