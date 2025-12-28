@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,8 +15,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Resolve the full path and ensure it's within allowed directories
-    const fullPath = path.resolve(imagePath);
+    // Expand tilde (~) if present
+    const expandedPath = imagePath.replace(/^~/, os.homedir());
+
+    // Resolve the full path
+    const fullPath = path.resolve(expandedPath);
 
     try {
       const stats = await fs.stat(fullPath);
