@@ -446,7 +446,8 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
 
   // Render text/number/boolean input
   const renderTextInput = (param: WorkflowInputParameter) => {
-    const value = jobInputs[param.id] || param.defaultValue?.toString() || '';
+    // Use jobInputs value if explicitly set (even if empty), otherwise use defaultValue
+    const value = param.id in jobInputs ? jobInputs[param.id] : (param.defaultValue?.toString() || '');
     const isValid = !param.required || value.trim() !== '';
 
     return (

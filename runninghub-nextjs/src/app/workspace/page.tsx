@@ -68,6 +68,7 @@ export default function WorkspacePage() {
     deselectAllMediaFiles,
     autoAssignSelectedFilesToWorkflow,
     updateMediaFile,
+    fetchJobs,
   } = useWorkspaceStore();
 
   // Local state
@@ -163,10 +164,13 @@ export default function WorkspacePage() {
     // Find job associated with this task
     const job = jobs.find(j => j.taskId === taskId);
     if (job) {
-      updateJob(job.id, { 
-        status: status, 
+      updateJob(job.id, {
+        status: status,
         completedAt: Date.now()
       });
+
+      // Fetch fresh job data from server to get error field
+      fetchJobs();
 
       if (status === 'completed') {
         logger.success('Job completed successfully', {
@@ -174,12 +178,13 @@ export default function WorkspacePage() {
         });
         handleRefresh(true); // Refresh folder contents to show new files
       } else {
-        logger.error('Job failed', {
+        // Note: Error message will be available after fetchJobs() completes
+        logger.error(`Job failed`, {
           metadata: { jobId: job.id, taskId, status }
         });
       }
     }
-  }, [jobs, updateJob, handleRefresh]);
+  }, [jobs, updateJob, handleRefresh, fetchJobs]);
 
   const handleStatusChange = useCallback((taskId: string, status: string) => {
     // Map task status to job status
@@ -336,6 +341,29 @@ export default function WorkspacePage() {
     setEditingWorkflow(undefined);
     setIsEditingWorkflow(true);
   };
+
+  // Initialize jobInputs with workflow default values when workflow is selected
+  useEffect(() => {
+    if (selectedWorkflowId) {
+      const workflow = workflows.find(w => w.id === selectedWorkflowId);
+      if (workflow) {
+        // Get current jobInputs state
+        const { jobInputs, setJobTextInput } = useWorkspaceStore.getState();
+
+        // Only populate defaults for parameters that don't already have values
+        // This preserves user input if they switch workflows and come back
+        workflow.inputs.forEach(param => {
+          // Skip file inputs
+          if (param.type === 'file') return;
+
+          // If parameter doesn't have a value yet, use default
+          if (!(param.id in jobInputs) && param.defaultValue !== undefined) {
+            setJobTextInput(param.id, String(param.defaultValue));
+          }
+        });
+      }
+    }
+  }, [selectedWorkflowId, workflows]);
 
   const handleRunJob = async () => {
     if (!selectedWorkflowId) {
