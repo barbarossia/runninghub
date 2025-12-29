@@ -327,7 +327,7 @@ export interface JobResult {
     metadata?: Record<string, any>;
     // Output file metadata
     fileName?: string;
-    fileType?: 'text' | 'image';
+    fileType?: 'text' | 'image' | 'video';
     fileSize?: number;
     workspacePath?: string; // Path in ~/Downloads/workspace/{jobId}/result/
   }>;

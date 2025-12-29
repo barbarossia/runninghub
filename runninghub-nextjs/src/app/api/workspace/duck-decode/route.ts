@@ -245,12 +245,12 @@ export async function POST(request: NextRequest) {
     // Determine if this is a job output and update job.json if so
     // Job outputs are in .../job_xxx/result/filename.png
     const resultDirBase = path.dirname(decodedFilePath);
-    const jobDir = path.dirname(resultDirBase);
-    const isJobOutput = path.basename(resultDirBase) === 'result' && path.basename(jobDir).startsWith('job_');
+    const parentOfResult = path.dirname(resultDirBase);
+    const isJobOutput = path.basename(resultDirBase) === 'result' && path.basename(parentOfResult).startsWith('job_');
 
     if (isJobOutput) {
       try {
-        const jobJsonPath = path.join(jobDir, 'job.json');
+        const jobJsonPath = path.join(parentOfResult, 'job.json');
         if (fs.existsSync(jobJsonPath)) {
           const jobData = JSON.parse(fs.readFileSync(jobJsonPath, 'utf-8'));
           
