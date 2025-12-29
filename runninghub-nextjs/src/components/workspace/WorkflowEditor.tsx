@@ -843,6 +843,53 @@ function ParameterEditor({ parameter, index, onUpdate, onRemove, canRemove, lock
               />
             </div>
           )}
+
+          {/* Default Value (for text, number, boolean types) */}
+          {parameter.type !== 'file' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600 font-medium">Default:</span>
+              {parameter.type === 'boolean' ? (
+                <Select
+                  value={parameter.defaultValue?.toString() || ''}
+                  onValueChange={(value) => onUpdate({ defaultValue: value === 'true' })}
+                >
+                  <SelectTrigger className="w-24 h-8">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">True</SelectItem>
+                    <SelectItem value="false">False</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : parameter.type === 'number' ? (
+                <Input
+                  type="number"
+                  value={typeof parameter.defaultValue === 'number' ? parameter.defaultValue : ''}
+                  onChange={(e) => onUpdate({ defaultValue: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="Default number"
+                  className="flex-1 h-8"
+                  step="any"
+                />
+              ) : (
+                <Input
+                  type="text"
+                  value={parameter.defaultValue?.toString() ?? ''}
+                  onChange={(e) => onUpdate({ defaultValue: e.target.value || undefined })}
+                  placeholder="Default text"
+                  className="flex-1 h-8"
+                />
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onUpdate({ defaultValue: undefined })}
+                title="Clear default value"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </Card>
