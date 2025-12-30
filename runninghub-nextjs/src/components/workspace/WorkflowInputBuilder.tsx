@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
@@ -32,12 +32,12 @@ import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { validateFileForParameter, filterValidFilesForParameter, formatFileSize } from '@/utils/workspace-validation';
-import type { Workflow, WorkflowInputParameter, MediaFile } from '@/types/workspace';
+import type { Workflow, WorkflowInputParameter, MediaFile, FileInputAssignment } from '@/types/workspace';
 import { toast } from 'sonner';
 
 export interface WorkflowInputBuilderProps {
   workflow: Workflow;
-  onRunJob?: () => void;
+  onRunJob?: (data?: { fileInputs: FileInputAssignment[]; textInputs: Record<string, string> }) => void;
   className?: string;
 }
 
@@ -45,20 +45,31 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
   const {
     mediaFiles,
     jobFiles,
-    jobInputs,
     assignFileToParameter,
     removeFileAssignment,
-    setJobTextInput,
-    validateJobInputs,
     addMediaFile,
     updateMediaFile,
   } = useWorkspaceStore();
+
+  // Local state for text inputs (isolated per workflow)
+  const [localInputs, setLocalInputs] = useState<Record<string, string>>({});
 
   const { selectedFolder } = useFolderStore();
 
   const [deleteSourceFiles, setDeleteSourceFiles] = useState(false);
   const [draggedOverParam, setDraggedOverParam] = useState<string | null>(null);
   const [uploadingParams, setUploadingParams] = useState<Record<string, boolean>>({});
+
+  // Initialize local inputs with workflow defaults when workflow changes
+  useEffect(() => {
+    const defaults: Record<string, string> = {};
+    workflow.inputs.forEach(param => {
+      if (param.type !== 'file' && param.defaultValue !== undefined) {
+        defaults[param.id] = String(param.defaultValue);
+      }
+    });
+    setLocalInputs(defaults);
+  }, [workflow.id]);
 
   // Group assigned files by parameter
   const assignedFilesByParam = useMemo(() => {
@@ -217,8 +228,27 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
 
   // Validation result
   const validationResult = useMemo(() => {
-    return validateJobInputs(workflow);
-  }, [workflow, jobFiles, jobInputs, validateJobInputs]);
+    const errors: string[] = [];
+
+    // Check required file parameters
+    for (const param of workflow.inputs) {
+      if (!param.required) continue;
+
+      if (param.type === 'file') {
+        const assigned = jobFiles.some((f) => f.parameterId === param.id);
+        if (!assigned) {
+          errors.push(`Required file parameter "${param.name}" is not assigned`);
+        }
+      } else {
+        const value = localInputs[param.id];
+        if (!value || value.trim() === '') {
+          errors.push(`Required parameter "${param.name}" is empty`);
+        }
+      }
+    }
+
+    return { valid: errors.length === 0, errors };
+  }, [workflow, jobFiles, localInputs]);
 
   // Get input icon based on type
   const getInputIcon = (type: WorkflowInputParameter['type']) => {
@@ -446,8 +476,8 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
 
   // Render text/number/boolean input
   const renderTextInput = (param: WorkflowInputParameter) => {
-    // Use jobInputs value if explicitly set (even if empty), otherwise use defaultValue
-    const value = param.id in jobInputs ? jobInputs[param.id] : (param.defaultValue?.toString() || '');
+    // Use localInputs value
+    const value = localInputs[param.id] || '';
     const isValid = !param.required || value.trim() !== '';
 
     return (
@@ -476,7 +506,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
             <Checkbox
               id={param.id}
               checked={value === 'true' || value === '1'}
-              onCheckedChange={(checked) => setJobTextInput(param.id, checked === true ? 'true' : 'false')}
+              onCheckedChange={(checked) => setLocalInputs(prev => ({ ...prev, [param.id]: checked === true ? 'true' : 'false' }))}
             />
             <label htmlFor={param.id} className="text-sm">
               {param.placeholder || 'Enable this option'}
@@ -486,7 +516,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
           <Input
             type="number"
             value={value}
-            onChange={(e) => setJobTextInput(param.id, e.target.value)}
+            onChange={(e) => setLocalInputs(prev => ({ ...prev, [param.id]: e.target.value }))}
             placeholder={param.placeholder || `Enter ${param.name.toLowerCase()}`}
             min={param.validation?.min}
             max={param.validation?.max}
@@ -495,7 +525,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
         ) : (
           <Textarea
             value={value}
-            onChange={(e) => setJobTextInput(param.id, e.target.value)}
+            onChange={(e) => setLocalInputs(prev => ({ ...prev, [param.id]: e.target.value }))}
             placeholder={param.placeholder || `Enter ${param.name.toLowerCase()}`}
             rows={3}
             maxLength={param.validation?.max}
@@ -526,10 +556,13 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
   // Handle run job
   const handleRunJob = useCallback(() => {
     if (validationResult.valid) {
-      // Store deleteSourceFiles preference
-      onRunJob?.();
+      // Pass inputs up to parent
+      onRunJob?.({
+        fileInputs: jobFiles,
+        textInputs: localInputs,
+      });
     }
-  }, [validationResult, deleteSourceFiles, onRunJob]);
+  }, [validationResult, jobFiles, localInputs, onRunJob]);
 
   // Check for swap capability
   const fileParams = useMemo(() => workflow.inputs.filter(p => p.type === 'file'), [workflow.inputs]);

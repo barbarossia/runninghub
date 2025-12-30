@@ -42,7 +42,7 @@ import {
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import { API_ENDPOINTS } from '@/constants';
-import type { Workflow, Job, MediaFile } from '@/types/workspace';
+import type { Workflow, Job, MediaFile, FileInputAssignment } from '@/types/workspace';
 
 export default function WorkspacePage() {
   // Folder store state - selectedFolder comes from here
@@ -211,9 +211,13 @@ export default function WorkspacePage() {
   // Auto-load last opened folder on mount
   useAutoLoadFolder({
     folderType: 'images',
-    onFolderLoaded: (folder) => {
+    onFolderLoaded: (folder, contents) => {
       // Folder is automatically set as selected by the hook
-      // The useEffect below will load contents when selectedFolder changes
+      // If contents were provided during validation, use them directly
+      if (contents) {
+        processFolderContents(contents);
+      }
+      // Otherwise, the useEffect below will load contents when selectedFolder changes
     },
   });
 
@@ -305,6 +309,91 @@ export default function WorkspacePage() {
     setIsEditingWorkflow(true);
   };
 
+  const handleRunJob = async (data?: { fileInputs: FileInputAssignment[]; textInputs: Record<string, string> }) => {
+    if (!selectedWorkflowId) {
+      toast.error('Please select a workflow');
+      return;
+    }
+
+    const workflow = workflows.find((w) => w.id === selectedWorkflowId);
+    if (!workflow) {
+      toast.error('Workflow not found');
+      return;
+    }
+
+    if (!data) {
+      toast.error('No job data provided');
+      return;
+    }
+
+    const { fileInputs, textInputs } = data;
+
+    try {
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_EXECUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workflowId: workflow.id,
+          sourceWorkflowId: workflow.sourceWorkflowId,
+          workflowName: workflow.name,
+          fileInputs: fileInputs,
+          textInputs: textInputs,
+          folderPath: selectedFolder?.folder_path,
+          deleteSourceFiles: false,
+        }),
+      });
+
+      const text = await response.text();
+      let resp;
+      try {
+        resp = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
+
+      if (!response.ok || !resp.success) {
+        throw new Error(resp.error || 'Failed to execute job');
+      }
+
+      // Create job in store
+      const newJob: Job = {
+        id: resp.jobId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        fileInputs: fileInputs,
+        textInputs: textInputs,
+        status: 'pending',
+        taskId: resp.taskId,
+        createdAt: Date.now(),
+        folderPath: selectedFolder?.folder_path,
+        deleteSourceFiles: false,
+      };
+
+      addJob(newJob);
+
+      // Select the newly created job
+      setSelectedJob(newJob.id);
+
+      // Start tracking progress
+      if (resp.taskId) {
+        setActiveConsoleTaskId(resp.taskId);
+      }
+
+      // Clear job inputs and switch to jobs tab
+      clearJobInputs();
+      setActiveTab('jobs');
+      logger.success('Job started', {
+        taskId: resp.taskId,
+        metadata: { workflowId: workflow.id, jobId: resp.jobId, workflowName: workflow.name }
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to execute job';
+      logger.error(errorMessage, {
+        metadata: { workflowId: workflow.id, error: errorMessage }
+      });
+    }
+  };
+
   const handleDeleteWorkflow = async (id: string) => {
     if (confirm('Delete this workflow? This action cannot be undone.')) {
       try {
@@ -342,117 +431,7 @@ export default function WorkspacePage() {
     setIsEditingWorkflow(true);
   };
 
-  // Initialize jobInputs with workflow default values when workflow is selected
-  useEffect(() => {
-    if (selectedWorkflowId) {
-      const workflow = workflows.find(w => w.id === selectedWorkflowId);
-      if (workflow) {
-        // Get current jobInputs state
-        const { jobInputs, setJobTextInput } = useWorkspaceStore.getState();
-
-        // Only populate defaults for parameters that don't already have values
-        // This preserves user input if they switch workflows and come back
-        workflow.inputs.forEach(param => {
-          // Skip file inputs
-          if (param.type === 'file') return;
-
-          // If parameter doesn't have a value yet, use default
-          if (!(param.id in jobInputs) && param.defaultValue !== undefined) {
-            setJobTextInput(param.id, String(param.defaultValue));
-          }
-        });
-      }
-    }
-  }, [selectedWorkflowId, workflows]);
-
-  const handleRunJob = async () => {
-    if (!selectedWorkflowId) {
-      toast.error('Please select a workflow');
-      return;
-    }
-
-    const workflow = workflows.find((w) => w.id === selectedWorkflowId);
-    if (!workflow) {
-      toast.error('Workflow not found');
-      return;
-    }
-
-    const { jobFiles, jobInputs, validateJobInputs } = useWorkspaceStore.getState();
-    const validationResult = validateJobInputs(workflow);
-
-    if (!validationResult.valid) {
-      toast.error('Please fix validation errors before running');
-      return;
-    }
-
-    // Auto-assign selected files if any
-    autoAssignSelectedFilesToWorkflow(workflow.id);
-
-    try {
-      const response = await fetch(API_ENDPOINTS.WORKSPACE_EXECUTE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workflowId: workflow.id,                        // Actual workflow ID
-          sourceWorkflowId: workflow.sourceWorkflowId,    // Template ID for CLI
-          workflowName: workflow.name,                    // Workflow Name
-          fileInputs: jobFiles,                           // Full file assignments
-          textInputs: jobInputs,
-          folderPath: selectedFolder?.folder_path,
-          deleteSourceFiles: false,
-        }),
-      });
-
-      const text = await response.text();
-      let data;
-      try {
-        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
-      } catch (e) {
-        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
-      }
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to execute job');
-      }
-
-      // Create job in store
-      const newJob: Job = {
-        id: data.jobId,
-        workflowId: workflow.id,
-        workflowName: workflow.name,
-        fileInputs: jobFiles,
-        textInputs: jobInputs,
-        status: 'pending',
-        taskId: data.taskId,
-        createdAt: Date.now(),
-        folderPath: selectedFolder?.folder_path,
-        deleteSourceFiles: false, // Will be set from checkbox in next phase
-      };
-
-      addJob(newJob);
-
-      // Select the newly created job
-      setSelectedJob(newJob.id);
-
-      // Start tracking progress
-      if (data.taskId) {
-        setActiveConsoleTaskId(data.taskId);
-      }
-
-      // Clear job inputs and switch to jobs tab
-      clearJobInputs();
-      setActiveTab('jobs');
-      logger.success('Job started', {
-        taskId: data.taskId,
-        metadata: { workflowId: workflow.id, jobId: data.jobId, workflowName: workflow.name }
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to execute job';
-      logger.error(errorMessage, {
-        metadata: { workflowId: workflow.id, error: errorMessage }
-      });
-    }
-  };
+  // NOTE: jobInputs initialization removed - now handled locally in WorkflowInputBuilder
 
   // Handler for quick run workflow from Media Gallery
   const handleQuickRunWorkflow = useCallback((workflowId?: string) => {

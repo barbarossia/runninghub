@@ -66,8 +66,6 @@ interface WorkspaceState {
   // ============================================================
   // Files assigned to workflow parameters
   jobFiles: FileInputAssignment[];
-  // Text/number inputs for workflow parameters
-  jobInputs: Record<string, string>;
 
   // ============================================================
   // NEW STATE - Job History
@@ -168,9 +166,7 @@ interface WorkspaceActions extends WorkspaceState {
   setJobFiles: (assignments: FileInputAssignment[]) => void;
   assignFileToParameter: (filePath: string, parameterId: string, mediaFile: MediaFile) => void;
   removeFileAssignment: (filePath: string) => void;
-  setJobTextInput: (parameterId: string, value: string) => void;
   clearJobInputs: () => void;
-  validateJobInputs: (workflow: Workflow) => { valid: boolean; errors: string[] };
   resetJobPreparation: () => void;
   autoAssignSelectedFilesToWorkflow: (workflowId: string) => void;
 
@@ -232,7 +228,6 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       // New state - Job Preparation
       jobFiles: [],
-      jobInputs: {},
 
       // New state - Job History
       jobs: [],
@@ -390,7 +385,6 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
           selectedFolder: null,
           mediaFiles: [],
           jobFiles: [],
-          jobInputs: {},
           selectedJobId: null,
         }),
 
@@ -543,50 +537,11 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
           jobFiles: state.jobFiles.filter((jf) => jf.filePath !== filePath),
         })),
 
-      setJobTextInput: (parameterId, value) =>
-        set((state) => ({
-          jobInputs: { ...state.jobInputs, [parameterId]: value },
-        })),
-
       clearJobInputs: () =>
-        set({ jobFiles: [], jobInputs: {} }),
-
-      validateJobInputs: (workflow) => {
-        const state = get();
-        const errors: string[] = [];
-
-        // Check required parameters
-        for (const param of workflow.inputs) {
-          if (!param.required) continue;
-
-          if (param.type === 'file') {
-            const assigned = state.jobFiles.some((f) => f.parameterId === param.id);
-            if (!assigned) {
-              errors.push(`Required file parameter "${param.name}" is not assigned`);
-            }
-          } else {
-            const value = state.jobInputs[param.id];
-            if (!value || value.trim() === '') {
-              errors.push(`Required parameter "${param.name}" is empty`);
-            }
-          }
-        }
-
-        // Validate assigned files
-        for (const assignment of state.jobFiles) {
-          if (!assignment.valid) {
-            errors.push(`File "${assignment.fileName}" is invalid: ${assignment.validationError}`);
-          }
-        }
-
-        return {
-          valid: errors.length === 0,
-          errors,
-        };
-      },
+        set({ jobFiles: [] }),
 
       resetJobPreparation: () =>
-        set({ jobFiles: [], jobInputs: {} }),
+        set({ jobFiles: [] }),
 
       autoAssignSelectedFilesToWorkflow: (workflowId) => {
         const state = get();

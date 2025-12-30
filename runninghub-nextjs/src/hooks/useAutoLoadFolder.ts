@@ -8,7 +8,7 @@ export type FolderType = 'images' | 'videos';
 
 interface UseAutoLoadFolderOptions {
   folderType: FolderType;
-  onFolderLoaded?: (folder: FolderSelectionResponse) => void;
+  onFolderLoaded?: (folder: FolderSelectionResponse, contents?: any) => void;
   enabled?: boolean;
 }
 
@@ -65,7 +65,7 @@ export function useAutoLoadFolder({
         if (data.success || data.images || data.videos) {
           // Folder exists, set it as selected
           setSelectedFolder(lastFolder);
-          onFolderLoaded?.(lastFolder);
+          onFolderLoaded?.(lastFolder, data);
         } else {
           // Folder no longer exists or is inaccessible
           console.warn(`Last ${folderType} folder is no longer accessible:`, lastFolder.folder_path);

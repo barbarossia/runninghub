@@ -62,6 +62,11 @@ export default function GalleryPage() {
     folderType: 'images',
   });
 
+  // Load nodes on mount
+  useEffect(() => {
+    loadNodes();
+  }, []);
+
   // Auto-load last opened folder on mount
   useAutoLoadFolder({
     folderType: 'images',
@@ -71,20 +76,23 @@ export default function GalleryPage() {
     },
   });
 
-  // Combine errors
-  const error = localError || imageError;
-
-  // Load nodes on mount
-  useEffect(() => {
-    loadNodes();
-  }, []);
-
   // Load folder contents when folder is selected
   useEffect(() => {
     if (selectedFolder) {
       loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id);
     }
   }, [selectedFolder, loadFolderContents]);
+
+  // Always reload files when page mounts or navigation occurs
+  useEffect(() => {
+    if (selectedFolder) {
+      // Silent refresh on page mount/navigation
+      loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id, true);
+    }
+  }, []); // Empty dependency array = runs once on mount
+
+  // Combine errors
+  const error = localError || imageError;
 
   const loadNodes = async () => {
     try {
