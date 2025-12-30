@@ -92,6 +92,14 @@ export default function VideosPage() {
     }
   }, [selectedFolder, loadFolderContents]);
 
+  // Always reload files when page mounts or navigation occurs
+  useEffect(() => {
+    if (selectedFolder && !selectedFolder.is_virtual) {
+      // Silent refresh on page mount/navigation
+      loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id, true);
+    }
+  }, []); // Empty dependency array = runs once on mount
+
   // Track modal state
   useEffect(() => {
     setIsModalOpen(isProgressModalOpen);

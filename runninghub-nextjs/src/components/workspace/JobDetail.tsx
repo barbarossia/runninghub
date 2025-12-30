@@ -54,6 +54,7 @@ export interface JobDetailProps {
 export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   const { getJobById, addJob, deleteJob, updateJob, setSelectedJob } = useWorkspaceStore();
   const [isReRunning, setIsReRunning] = useState(false);
+  const [isReQuerying, setIsReQuerying] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -217,6 +218,52 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       toast.error(errorMessage);
     } finally {
       setIsReRunning(false);
+    }
+  };
+
+  // Handle re-query task status (without submitting new job)
+  const handleReQueryStatus = async () => {
+    if (!job.runninghubTaskId) {
+      toast.error('No RunningHub task ID found for this job');
+      return;
+    }
+
+    setIsReQuerying(true);
+    try {
+      const response = await fetch('/api/workspace/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: job.id,
+          taskId: job.taskId,
+          runninghubTaskId: job.runninghubTaskId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to query task status');
+      }
+
+      // Update job in store
+      updateJob(jobId, {
+        status: data.status,
+        completedAt: data.job?.completedAt,
+        error: data.job?.error,
+      });
+
+      // If job completed, fetch results
+      if (data.status === 'completed') {
+        await fetchResults();
+      }
+
+      toast.success(`Status updated: ${data.status}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to query task status';
+      toast.error(errorMessage);
+    } finally {
+      setIsReQuerying(false);
     }
   };
 
@@ -495,6 +542,12 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         </div>
 
         <div className="flex gap-2">
+          {job.runninghubTaskId && (
+            <Button onClick={handleReQueryStatus} disabled={isReQuerying} variant="outline" size="sm">
+              <RefreshCw className={cn('h-4 w-4 mr-1', isReQuerying && 'animate-spin')} />
+              Re-query Status
+            </Button>
+          )}
           {(job.status === 'completed' || job.status === 'failed') && (
             <Button onClick={handleReRun} disabled={isReRunning} size="sm">
               <RefreshCw className={cn('h-4 w-4 mr-1', isReRunning && 'animate-spin')} />

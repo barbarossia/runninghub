@@ -362,7 +362,8 @@ export interface Job {
   fileInputs: FileInputAssignment[];
   textInputs: Record<string, string>;
   status: JobStatus;
-  taskId?: string;
+  taskId?: string; // Local task ID
+  runninghubTaskId?: string; // RunningHub task ID (numeric string)
   startedAt?: number;
   completedAt?: number;
   results?: JobResult;

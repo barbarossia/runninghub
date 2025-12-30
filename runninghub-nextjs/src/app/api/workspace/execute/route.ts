@@ -182,7 +182,7 @@ async function updateJobFile(jobId: string, updates: Partial<Job>) {
       jobId,
       'job.json'
     );
-    
+
     try {
         const content = await fs.readFile(jobFilePath, 'utf-8');
         const job = JSON.parse(content);
@@ -191,6 +191,27 @@ async function updateJobFile(jobId: string, updates: Partial<Job>) {
     } catch (e) {
         console.error(`Failed to update job file for ${jobId}:`, e);
     }
+}
+
+/**
+ * Helper to parse RunningHub task ID from CLI output
+ * Looks for patterns like "Task ID: 1234567890" or "Task submitted successfully! Task ID: 1234567890"
+ */
+function parseRunningHubTaskId(stdout: string): string | null {
+  // Try multiple patterns to find the task ID
+  const patterns = [
+    /Task ID:\s*(\d+)/i,           // "Task ID: 1234567890"
+    /task.*?id[:\s]+(\d+)/i,       // "task id: 1234567890" (case insensitive)
+  ];
+
+  for (const pattern of patterns) {
+    const match = stdout.match(pattern);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -518,6 +539,22 @@ async function processWorkflowInBackground(
       return noPrefix;
     };
 
+    // Helper to determine field type from parameter ID (e.g., "param_203_value" -> "value", "param_204_text" -> "text")
+    const getFieldType = (paramId: string) => {
+      // Remove param_ prefix
+      const noPrefix = paramId.replace(/^param_/, '');
+      // If it contains underscore, take the last part (assuming format ID_type)
+      if (noPrefix.includes('_')) {
+        const type = noPrefix.split('_').pop();
+        // Map parameter suffix to field type
+        if (type === 'value') return 'value';
+        if (type === 'text') return 'text';
+        if (type === 'image') return 'image';
+      }
+      // Default to 'text' for backward compatibility
+      return 'text';
+    };
+
     // DECISION: Use execution type to determine CLI command
     if (executionType === 'workflow') {
         // Workflow execution -> use 'run-workflow' command
@@ -531,8 +568,9 @@ async function processWorkflowInBackground(
 
         // Add text inputs
         for (const [paramId, value] of Object.entries(textInputs)) {
-            // Format: <node_id>:text:<value>
-            args.push("-p", `${getNodeId(paramId)}:text:${value}`);
+            // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
+            const fieldType = getFieldType(paramId);
+            args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
         }
 
         // Note: run-workflow doesn't support --no-cleanup flag
@@ -547,8 +585,9 @@ async function processWorkflowInBackground(
 
             // Add text inputs as params
             for (const [paramId, value] of Object.entries(textInputs)) {
-                // Format: <node_id>:text:<value>
-                args.push("-p", `${getNodeId(paramId)}:text:${value}`);
+                // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
+                const fieldType = getFieldType(paramId);
+                args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
             }
 
             // Handle cleanup flag
@@ -571,8 +610,9 @@ async function processWorkflowInBackground(
 
             // Add text inputs
             for (const [paramId, value] of Object.entries(textInputs)) {
-                // Format: <node_id>:text:<value>
-                args.push("-p", `${getNodeId(paramId)}:text:${value}`);
+                // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
+                const fieldType = getFieldType(paramId);
+                args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
             }
 
             // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required
@@ -596,11 +636,23 @@ async function processWorkflowInBackground(
 
     let stdout = "";
     let stderr = "";
+    let foundRunningHubTaskId = false; // Track if we've already saved the task ID
 
     childProcess.stdout?.on("data", (data: Buffer) => {
       const text = data.toString();
       stdout += text;
       writeLog(text.trim(), 'info', taskId);
+
+      // Try to parse RunningHub task ID from stdout (only once)
+      if (!foundRunningHubTaskId) {
+        const runningHubTaskId = parseRunningHubTaskId(stdout);
+        if (runningHubTaskId) {
+          foundRunningHubTaskId = true;
+          writeLog(`Found RunningHub task ID: ${runningHubTaskId}`, 'info', taskId);
+          // Save to job.json
+          updateJobFile(jobId, { runninghubTaskId: runningHubTaskId });
+        }
+      }
     });
 
     childProcess.stderr?.on("data", (data: Buffer) => {
