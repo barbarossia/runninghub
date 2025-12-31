@@ -236,8 +236,8 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       // New state - Folder & Media
       selectedFolder: null,
       mediaFiles: [],
-      mediaSortField: 'name',
-      mediaSortDirection: 'asc',
+      mediaSortField: 'date',
+      mediaSortDirection: 'desc',
 
       // New state - Workflows
       workflows: [],
@@ -413,34 +413,34 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
         set({ selectedFolder: folder, error: null }),
 
       setMediaFiles: (files) => {
-        const state = get();
+        set((state) => {
+          // Apply sorting
+          const sorted = [...files].sort((a, b) => {
+            let comparison = 0;
 
-        // Apply sorting
-        const sorted = [...files].sort((a, b) => {
-          let comparison = 0;
+            switch (state.mediaSortField) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = (a as any).modified_at || (a as any).created_at || 0;
+                const bDate = (b as any).modified_at || (b as any).created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
 
-          switch (state.mediaSortField) {
-            case 'name':
-              comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
-              break;
-            case 'date':
-              // Use modified_at if available, otherwise created_at, fallback to 0
-              const aDate = (a as any).modified_at || (a as any).created_at || 0;
-              const bDate = (b as any).modified_at || (b as any).created_at || 0;
-              comparison = aDate - bDate;
-              break;
-            case 'size':
-              comparison = a.size - b.size;
-              break;
-            case 'type':
-              comparison = a.type.localeCompare(b.type);
-              break;
-          }
+            return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          });
 
-          return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          return { mediaFiles: sorted, error: null };
         });
-
-        set({ mediaFiles: sorted, error: null });
       },
 
       addMediaFile: (file) =>
@@ -505,24 +505,96 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       // Media sort actions
       setMediaSortField: (field) => {
-        set({ mediaSortField: field });
-        // Re-sort existing media files
-        const state = get();
-        state.setMediaFiles([...state.mediaFiles]);
+        set((state) => {
+          // Re-sort existing media files with new field
+          const sorted = [...state.mediaFiles].sort((a, b) => {
+            let comparison = 0;
+
+            switch (field) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = a.modified_at || a.created_at || 0;
+                const bDate = b.modified_at || b.created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaSortField: field, mediaFiles: sorted };
+        });
       },
 
       setMediaSortDirection: (direction) => {
-        set({ mediaSortDirection: direction });
-        // Re-sort existing media files
-        const state = get();
-        state.setMediaFiles([...state.mediaFiles]);
+        set((state) => {
+          // Re-sort existing media files with new direction
+          const sorted = [...state.mediaFiles].sort((a, b) => {
+            let comparison = 0;
+
+            switch (state.mediaSortField) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = a.modified_at || a.created_at || 0;
+                const bDate = b.modified_at || b.created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return direction === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaSortDirection: direction, mediaFiles: sorted };
+        });
       },
 
       setMediaSorting: (field, direction) => {
-        set({ mediaSortField: field, mediaSortDirection: direction });
-        // Re-sort existing media files
-        const state = get();
-        state.setMediaFiles([...state.mediaFiles]);
+        set((state) => {
+          // Re-sort existing media files with new field and direction
+          const sorted = [...state.mediaFiles].sort((a, b) => {
+            let comparison = 0;
+
+            switch (field) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = a.modified_at || a.created_at || 0;
+                const bDate = b.modified_at || b.created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return direction === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaSortField: field, mediaSortDirection: direction, mediaFiles: sorted };
+        });
       },
 
       // ============================================================

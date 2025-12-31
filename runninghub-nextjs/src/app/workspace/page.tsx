@@ -100,7 +100,7 @@ export default function WorkspacePage() {
     // Convert images to MediaFile format with serve URLs
     const imageFiles = (result.images || []).map((file: any) => {
       // DEBUG: Log each file's dimensions
-      console.log(`[processFolderContents] Processing ${file.name}: width=${file.width}, height=${file.height}`);
+      // console.log(`[processFolderContents] Processing ${file.name}: width=${file.width}, height=${file.height}`);
 
       return {
         id: file.path,
@@ -111,6 +111,8 @@ export default function WorkspacePage() {
         size: file.size || 0,
         width: file.width,
         height: file.height,
+        created_at: file.created_at,
+        modified_at: file.modified_at,
         thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
         selected: false,
       };
@@ -127,6 +129,8 @@ export default function WorkspacePage() {
       width: file.width,
       height: file.height,
       fps: file.fps,
+      created_at: file.created_at,
+      modified_at: file.modified_at,
       thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
       blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
       selected: false,

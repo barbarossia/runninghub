@@ -242,6 +242,10 @@ export interface MediaFile {
   height?: number; // Image height in pixels
   format?: string; // Image format (JPEG, PNG, etc.)
 
+  // Timestamps
+  created_at?: number;
+  modified_at?: number;
+
   // Video-specific metadata
   duration?: number; // Video duration in seconds
   fps?: number; // Frames per second
