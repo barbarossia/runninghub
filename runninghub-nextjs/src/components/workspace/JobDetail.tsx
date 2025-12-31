@@ -23,6 +23,8 @@ import {
   Clock,
   Save,
   ChevronDown,
+  Edit,
+  X,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -39,6 +41,9 @@ import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
 import type { Job, JobResult } from '@/types/workspace';
 import { DuckDecodeButton } from './DuckDecodeButton';
+import { JobInputEditor } from './JobInputEditor';
+import { JobSeriesNav } from './JobSeriesNav';
+import type { FileInputAssignment } from '@/types/workspace';
 
 // Helper to get filename from path (client-side safe)
 const getBasename = (filePath: string) => {
@@ -52,25 +57,56 @@ export interface JobDetailProps {
 }
 
 export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
-  const { getJobById, addJob, deleteJob, updateJob, setSelectedJob } = useWorkspaceStore();
+  const {
+    getJobById,
+    addJob,
+    deleteJob,
+    updateJob,
+    setSelectedJob,
+    getJobsBySeriesId,
+  } = useWorkspaceStore();
   const [isReRunning, setIsReRunning] = useState(false);
   const [isReQuerying, setIsReQuerying] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // State for split view language selection
   const [leftLang, setLeftLang] = useState<'original' | 'en' | 'zh'>('en');
   const [rightLang, setRightLang] = useState<'original' | 'en' | 'zh'>('zh');
 
   // Local state for editable text outputs
-  const [editedText, setEditedText] = useState<Record<string, { original: string; en?: string; zh?: string }>>({});
-  const [translating, setTranslating] = useState<Record<string, 'left' | 'right' | null>>({});
-  const [debouncedTimers, setDebouncedTimers] = useState<Record<string, NodeJS.Timeout>>({});
+  const [editedText, setEditedText] = useState<
+    Record<string, { original: string; en?: string; zh?: string }>
+  >({});
+  const [translating, setTranslating] = useState<
+    Record<string, 'left' | 'right' | null>
+  >({});
+  const [debouncedTimers, setDebouncedTimers] = useState<
+    Record<string, NodeJS.Timeout>
+  >({});
 
   // State for tracking decoded files from duck images
-  const [decodedFiles, setDecodedFiles] = useState<Record<string, { decodedPath: string; fileType: string; decodedFileType: 'image' | 'video' }>>({});
+  const [decodedFiles, setDecodedFiles] = useState<
+    Record<
+      string,
+      { decodedPath: string; fileType: string; decodedFileType: 'image' | 'video' }
+    >
+  >({});
   // State for cache busting to force image reload after decode
-  const [imageVersion, setImageVersion] = useState<Record<string, number>>({});
+  const [imageVersion, setImageVersion] = useState<
+    Record<string, number>
+  >({});
+
+  // NEW: State for job recreate feature
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableInputs, setEditableInputs] = useState<{
+    textInputs: Record<string, string>;
+    fileInputs: FileInputAssignment[];
+  }>({
+    textInputs: {},
+    fileInputs: [],
+  });
+  const [relatedJobs, setRelatedJobs] = useState<Job[]>([]);
 
   // Auto-translate outputs (uses server-side API)
   const { isTranslating, translatedCount } = useOutputTranslation(jobId);
@@ -80,13 +116,38 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   // Initialize editedText when job results load
   useEffect(() => {
     if (job?.results?.textOutputs) {
-      const initial: Record<string, { original: string; en?: string; zh?: string }> = {};
-      job.results.textOutputs.forEach(output => {
+      const initial: Record<
+        string,
+        { original: string; en?: string; zh?: string }
+      > = {};
+      job.results.textOutputs.forEach((output) => {
         initial[output.filePath] = { ...output.content };
       });
       setEditedText(initial);
     }
   }, [job?.results?.textOutputs]);
+
+  // Initialize editable inputs when job changes
+  useEffect(() => {
+    if (job) {
+      setEditableInputs({
+        textInputs: job.textInputs,
+        fileInputs: job.fileInputs,
+      });
+    }
+  }, [job?.id]);
+
+  // Fetch related jobs (same seriesId)
+  useEffect(() => {
+    if (job?.seriesId) {
+      const jobsInSeries = getJobsBySeriesId(job.seriesId);
+      setRelatedJobs(
+        jobsInSeries.sort((a, b) => (a.runNumber || 0) - (b.runNumber || 0))
+      );
+    } else {
+      setRelatedJobs([]);
+    }
+  }, [job?.seriesId, getJobsBySeriesId]);
 
   // Cleanup debounced timers on unmount
   useEffect(() => {
@@ -175,6 +236,8 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
           textInputs: job.textInputs,
           folderPath: job.folderPath,
           deleteSourceFiles: job.deleteSourceFiles || false,
+          parentJobId: job.id,
+          seriesId: job.seriesId,
         }),
       });
 
@@ -202,6 +265,8 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         createdAt: Date.now(),
         folderPath: job.folderPath,
         deleteSourceFiles: job.deleteSourceFiles || false,
+        parentJobId: job.id,
+        seriesId: job.seriesId,
       };
 
       addJob(newJob);
@@ -215,6 +280,75 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       toast.success('Job re-started');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to re-run job';
+      toast.error(errorMessage);
+    } finally {
+      setIsReRunning(false);
+    }
+  };
+
+  // Handle run job from JobInputEditor (with modified inputs)
+  const handleRunJobFromEditor = async () => {
+    setIsReRunning(true);
+    try {
+      const workflow = useWorkspaceStore.getState().workflows.find(
+        (w) => w.id === job.workflowId
+      );
+      if (!workflow) {
+        toast.error('Workflow not found');
+        return;
+      }
+
+      const response = await fetch(API_ENDPOINTS.WORKSPACE_EXECUTE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workflowId: workflow.id,
+          sourceWorkflowId: workflow.sourceWorkflowId,
+          workflowName: workflow.name,
+          fileInputs: editableInputs.fileInputs,
+          textInputs: editableInputs.textInputs,
+          folderPath: job.folderPath,
+          deleteSourceFiles: job.deleteSourceFiles || false,
+          parentJobId: job.id,
+          seriesId: job.seriesId,
+        }),
+      });
+
+      const text = await response.text();
+      let data;
+      try {
+        data = text ? JSON.parse(text) : { success: false, error: 'Empty response' };
+      } catch (e) {
+        throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+      }
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to execute job');
+      }
+
+      // Create job in store with series metadata
+      const newJob: Job = {
+        id: data.jobId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        fileInputs: editableInputs.fileInputs,
+        textInputs: editableInputs.textInputs,
+        status: 'pending',
+        taskId: data.taskId,
+        createdAt: Date.now(),
+        folderPath: job.folderPath,
+        deleteSourceFiles: job.deleteSourceFiles || false,
+        parentJobId: job.id,
+        seriesId: job.seriesId,
+      };
+
+      addJob(newJob);
+
+      // Navigate to the new job (will refresh JobDetail with new job)
+      setSelectedJob(newJob.id);
+      toast.success('Job started. You can continue modifying inputs.');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to run job';
       toast.error(errorMessage);
     } finally {
       setIsReRunning(false);
@@ -513,7 +647,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   };
 
   return (
-    <div className={cn('space-y-6 h-full flex flex-col', className)}>
+    <div className={cn('space-y-4 h-full flex flex-col', className)}>
       {/* Header */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -528,6 +662,11 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
               <Badge className={cn('capitalize', getStatusColor(job.status))}>
                 {job.status}
               </Badge>
+              {job.runNumber && (
+                <Badge variant="outline" className="text-xs">
+                  Run #{job.runNumber}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
               <span>ID: {job.id.slice(0, 8)}</span>
@@ -543,11 +682,36 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
 
         <div className="flex gap-2">
           {job.runninghubTaskId && (
-            <Button onClick={handleReQueryStatus} disabled={isReQuerying} variant="outline" size="sm">
-              <RefreshCw className={cn('h-4 w-4 mr-1', isReQuerying && 'animate-spin')} />
-              Re-query Status
+            <Button
+              onClick={handleReQueryStatus}
+              disabled={isReQuerying}
+              variant="outline"
+              size="sm"
+            >
+              <RefreshCw
+                className={cn('h-4 w-4 mr-1', isReQuerying && 'animate-spin')}
+              />
+              Re-query
             </Button>
           )}
+          <Button
+            variant={isEditing ? 'default' : 'outline'}
+            onClick={() => setIsEditing(!isEditing)}
+            size="sm"
+            className={cn('transition-all duration-200', isEditing && 'ring-2 ring-blue-400')}
+          >
+            {isEditing ? (
+              <>
+                <X className="h-4 w-4 mr-1" />
+                Done
+              </>
+            ) : (
+              <>
+                <Edit className="h-4 w-4 mr-1" />
+                Edit & Run
+              </>
+            )}
+          </Button>
           {(job.status === 'completed' || job.status === 'failed') && (
             <Button onClick={handleReRun} disabled={isReRunning} size="sm">
               <RefreshCw className={cn('h-4 w-4 mr-1', isReRunning && 'animate-spin')} />
@@ -561,45 +725,97 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         </div>
       </div>
 
-      {/* Inputs */}
-      <div className="shrink-0 space-y-3">
-        <h3 className="text-sm font-medium text-gray-500">Inputs</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-           {job.fileInputs.map((input, index) => (
-             <div key={index} className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-               {input.fileType === 'image' ? (
-                 <img
-                   src={`/api/images/serve?path=${encodeURIComponent(input.filePath)}`}
-                   alt={input.fileName}
-                   className="object-contain w-full h-full"
-                 />
-               ) : (
-                 <div className="flex items-center justify-center w-full h-full text-gray-400">
-                   <Video className="h-8 w-8" />
-                 </div>
-               )}
-               <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-white text-xs truncate">
-                 <span title={input.fileName}>{input.fileName}</span>
-               </div>
-             </div>
-           ))}
+      {/* Split Layout: Input Editor (left) + Results (right) */}
+      <div className="flex-1 min-h-0 grid lg:grid-cols-3 gap-4 transition-all duration-300">
+        {/* Left: Input Editor (collapsible) */}
+        <div
+          className={cn(
+            'transition-all duration-300 ease-in-out overflow-hidden',
+            isEditing ? 'lg:col-span-1 opacity-100' : 'lg:col-span-0 opacity-0 w-0'
+          )}
+        >
+          {isEditing && (
+            <div className="h-full flex flex-col animate-in slide-in-from-left duration-300">
+              <JobInputEditor
+                workflowId={job.workflowId}
+                initialTextInputs={editableInputs.textInputs}
+                initialFileInputs={editableInputs.fileInputs}
+                onInputsChange={setEditableInputs}
+                onRunJob={handleRunJobFromEditor}
+                isRunning={isReRunning}
+                className="flex-1"
+              />
+            </div>
+          )}
         </div>
-        {/* Text inputs if any */}
-        {Object.keys(job.textInputs).length > 0 && (
-           <div className="flex flex-wrap gap-2 mt-2">
-             {Object.entries(job.textInputs).map(([key, value]) => (
-               <Badge key={key} variant="outline" className="py-1">
-                 <span className="font-semibold mr-1">{key}:</span> {value}
-               </Badge>
-             ))}
-           </div>
-        )}
-      </div>
-      
-      <Separator />
 
-      {/* Main Content Area */}
-      <div className="flex-1 min-h-0 flex flex-col gap-4">
+        {/* Right: Results Display */}
+        <div
+          className={cn(
+            'flex flex-col min-h-0 space-y-4 overflow-y-auto transition-all duration-300',
+            isEditing ? 'lg:col-span-2' : 'lg:col-span-3'
+          )}
+        >
+          {/* Series Navigation */}
+          {relatedJobs.length > 1 && (
+            <div className="animate-in fade-in duration-300">
+              <JobSeriesNav
+                jobs={relatedJobs}
+                currentJobId={job.id}
+                onSelectJob={(jobId) => setSelectedJob(jobId)}
+              />
+            </div>
+          )}
+
+          {/* Original Inputs Display (when not editing) */}
+          {!isEditing && (
+            <>
+              <div className="shrink-0 space-y-3">
+                <h3 className="text-sm font-medium text-gray-500">Inputs</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {job.fileInputs.map((input, index) => (
+                    <div
+                      key={index}
+                      className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200"
+                    >
+                      {input.fileType === 'image' ? (
+                        <img
+                          src={`/api/images/serve?path=${encodeURIComponent(
+                            input.filePath
+                          )}`}
+                          alt={input.fileName}
+                          className="object-contain w-full h-full"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full text-gray-400">
+                          <Video className="h-8 w-8" />
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-white text-xs truncate">
+                        <span title={input.fileName}>{input.fileName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Text inputs if any */}
+                {Object.keys(job.textInputs).length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {Object.entries(job.textInputs).map(([key, value]) => (
+                      <Badge key={key} variant="outline" className="py-1">
+                        <span className="font-semibold mr-1">{key}:</span>{' '}
+                        {value}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+            </>
+          )}
+
+          {/* Main Content Area */}
+          <div className="flex-1 min-h-0 flex flex-col gap-4">
         {job.status === 'failed' && job.error && (
           <Card className="p-4 border-red-200 bg-red-50 shrink-0">
             <h3 className="font-medium text-red-900 mb-1">Error</h3>
@@ -871,6 +1087,8 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
              </div>
           ) : null
         )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
         createdAt: Date.now(),
         folderPath: body.folderPath,
         deleteSourceFiles: body.deleteSourceFiles,
+        parentJobId: body.parentJobId,
+        seriesId: body.seriesId,
     };
 
     await fs.writeFile(

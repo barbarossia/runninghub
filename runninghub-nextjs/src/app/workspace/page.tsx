@@ -328,6 +328,26 @@ export default function WorkspacePage() {
 
     const { fileInputs, textInputs } = data;
 
+    // Check if this is a re-run from Job Detail page
+    const currentJob = selectedJobId ? jobs.find(j => j.id === selectedJobId) : null;
+    const isReRun = currentJob?.workflowId === workflow.id;
+
+    // Generate series metadata
+    let seriesId: string | undefined;
+    let runNumber = 1;
+    let parentJobId: string | undefined;
+
+    if (isReRun && currentJob?.seriesId) {
+      // Reuse seriesId from current job
+      seriesId = currentJob.seriesId;
+      runNumber = (currentJob.runNumber || 0) + 1;
+      parentJobId = currentJob.id;
+    } else {
+      // Create new series
+      seriesId = `${workflow.id}_${Date.now()}`;
+      runNumber = 1;
+    }
+
     try {
       const response = await fetch(API_ENDPOINTS.WORKSPACE_EXECUTE, {
         method: 'POST',
@@ -340,6 +360,8 @@ export default function WorkspacePage() {
           textInputs: textInputs,
           folderPath: selectedFolder?.folder_path,
           deleteSourceFiles: false,
+          parentJobId,
+          seriesId,
         }),
       });
 
@@ -355,7 +377,7 @@ export default function WorkspacePage() {
         throw new Error(resp.error || 'Failed to execute job');
       }
 
-      // Create job in store
+      // Create job in store with series metadata
       const newJob: Job = {
         id: resp.jobId,
         workflowId: workflow.id,
@@ -367,6 +389,9 @@ export default function WorkspacePage() {
         createdAt: Date.now(),
         folderPath: selectedFolder?.folder_path,
         deleteSourceFiles: false,
+        parentJobId,
+        seriesId,
+        runNumber,
       };
 
       addJob(newJob);
@@ -379,12 +404,20 @@ export default function WorkspacePage() {
         setActiveConsoleTaskId(resp.taskId);
       }
 
-      // Clear job inputs and switch to jobs tab
-      clearJobInputs();
+      // DON'T clear inputs - Job Detail page will manage its own inputs
+      // DO switch to jobs tab - go to Job Detail page to see results
       setActiveTab('jobs');
-      logger.success('Job started', {
+      toast.success(`Job #${runNumber} started. View results and run variations.`);
+      logger.success(`Job #${runNumber} started`, {
         taskId: resp.taskId,
-        metadata: { workflowId: workflow.id, jobId: resp.jobId, workflowName: workflow.name }
+        metadata: {
+          workflowId: workflow.id,
+          jobId: resp.jobId,
+          workflowName: workflow.name,
+          seriesId,
+          runNumber,
+          parentJobId
+        }
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to execute job';

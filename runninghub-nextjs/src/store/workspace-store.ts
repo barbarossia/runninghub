@@ -76,6 +76,8 @@ interface WorkspaceState {
   selectedJobId: string | null;
   // Loading state for jobs history
   isLoadingJobs: boolean;
+  // Active job series for tracking related jobs
+  activeSeriesId: string | null;
 
   // ============================================================
   // NEW STATE - UI State
@@ -185,6 +187,11 @@ interface WorkspaceActions extends WorkspaceState {
   getJobsByStatus: (status: JobStatus) => Job[];
   fetchJobs: () => Promise<void>;
 
+  // Job series management
+  getJobsBySeriesId: (seriesId: string) => Job[];
+  getRecentJobsForWorkflow: (workflowId: string, limit?: number) => Job[];
+  setActiveSeriesId: (seriesId: string | null) => void;
+
   // ============================================================
   // NEW ACTIONS - UI State
   // ============================================================
@@ -233,6 +240,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       jobs: [],
       selectedJobId: null,
       isLoadingJobs: false,
+      activeSeriesId: null,
 
       // New state - UI State
       viewMode: 'grid',
@@ -704,12 +712,29 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
           set({ jobs: data.jobs || [], isLoadingJobs: false });
         } catch (error) {
           console.error('Fetch jobs error:', error);
-          set({ 
-            isLoadingJobs: false, 
-            error: error instanceof Error ? error.message : 'Failed to fetch jobs' 
+          set({
+            isLoadingJobs: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch jobs'
           });
         }
       },
+
+      // ============================================================
+      // NEW ACTIONS - Job Series Management
+      // ============================================================
+      getJobsBySeriesId: (seriesId) => {
+        return get().jobs.filter((j) => j.seriesId === seriesId);
+      },
+
+      getRecentJobsForWorkflow: (workflowId, limit = 10) => {
+        const jobs = get().jobs
+          .filter((j) => j.workflowId === workflowId)
+          .sort((a, b) => b.createdAt - a.createdAt);
+        return jobs.slice(0, limit);
+      },
+
+      setActiveSeriesId: (seriesId) =>
+        set({ activeSeriesId: seriesId }),
 
       // ============================================================
       // NEW ACTIONS - UI State

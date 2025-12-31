@@ -374,6 +374,11 @@ export interface Job {
   // Post-processing cleanup
   deleteSourceFiles: boolean; // Whether to delete source files after completion
   deletedSourceFiles?: string[]; // List of deleted source file paths (after completion)
+
+  // Job series tracking (for job recreate feature)
+  parentJobId?: string; // ID of job this was recreated from
+  seriesId?: string; // Groups related jobs (auto-generated)
+  runNumber?: number; // Position in series (1, 2, 3, ...)
 }
 
 // ============================================================================
@@ -411,6 +416,8 @@ export interface ExecuteJobRequest {
   textInputs: Record<string, string>;
   folderPath?: string;
   deleteSourceFiles: boolean;
+  parentJobId?: string;         // ID of job this was recreated from
+  seriesId?: string;            // Groups related jobs
 }
 
 /**
