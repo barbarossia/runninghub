@@ -63,8 +63,8 @@ export const useImageStore = create<ImageState>((set, get) => ({
   error: null,
   searchQuery: '',
   selectedExtension: null,
-  sortField: 'name',
-  sortDirection: 'asc',
+  sortField: 'date',
+  sortDirection: 'desc',
   likedImages: new Set(),
 
   // Setters
@@ -92,17 +92,23 @@ export const useImageStore = create<ImageState>((set, get) => ({
   // Sort actions
   setSortField: (field) => {
     set({ sortField: field });
-    get().applyFilters();
+    // Re-apply filters with new sort field
+    const state = get();
+    state.applyFilters();
   },
 
   setSortDirection: (direction) => {
     set({ sortDirection: direction });
-    get().applyFilters();
+    // Re-apply filters with new sort direction
+    const state = get();
+    state.applyFilters();
   },
 
   setSorting: (field, direction) => {
     set({ sortField: field, sortDirection: direction });
-    get().applyFilters();
+    // Re-apply filters with new sort settings
+    const state = get();
+    state.applyFilters();
   },
 
   // Filter actions
