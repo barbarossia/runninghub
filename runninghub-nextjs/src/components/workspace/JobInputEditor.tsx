@@ -88,8 +88,18 @@ export function JobInputEditor({
     );
   }
 
+  // Get valid parameter IDs from the current workflow
+  const validParameterIds = new Set(
+    workflow.inputs.filter((p) => p.type === 'file').map((p) => p.id)
+  );
+
+  // Filter file inputs to only include parameters in the current workflow
+  const validFileInputs = initialFileInputs.filter((file) =>
+    validParameterIds.has(file.parameterId)
+  );
+
   // Group file inputs by parameter
-  const fileInputsByParam = initialFileInputs.reduce((acc, assignment) => {
+  const fileInputsByParam = validFileInputs.reduce((acc, assignment) => {
     if (!acc[assignment.parameterId]) {
       acc[assignment.parameterId] = [];
     }
@@ -106,7 +116,7 @@ export function JobInputEditor({
     setLocalInputs(newInputs);
     onInputsChange({
       textInputs: newInputs,
-      fileInputs: initialFileInputs,
+      fileInputs: validFileInputs,
     });
   };
 
