@@ -615,14 +615,14 @@ export function MediaGallery({
                     {/* Overlay with checkbox and more menu */}
                     <div
                       className={cn(
-                        'absolute inset-0 transition-all',
+                        'absolute inset-0 transition-all pointer-events-none',
                         isSelected ? 'bg-blue-500/10' : 'bg-black/0 group-hover:bg-black/5'
                       )}
                     >
                       {/* Checkbox */}
                       <div
                         className={cn(
-                          'absolute top-2 left-2 transition-opacity',
+                          'absolute top-2 left-2 transition-opacity pointer-events-auto',
                           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                         )}
                         onClick={(e) => e.stopPropagation()}
@@ -632,7 +632,7 @@ export function MediaGallery({
 
                       {/* Duck-encoded indicator */}
                       {file.isDuckEncoded && (
-                        <Badge className="absolute top-2 left-2 z-10 bg-green-600 text-xs">
+                        <Badge className="absolute top-2 left-2 z-10 bg-green-600 text-xs pointer-events-auto">
                           Duck
                         </Badge>
                       )}
@@ -640,7 +640,7 @@ export function MediaGallery({
                       {/* More menu */}
                       <div
                         className={cn(
-                          'absolute top-2 right-2 transition-opacity',
+                          'absolute top-2 right-2 transition-opacity pointer-events-auto',
                           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                         )}
                       >
