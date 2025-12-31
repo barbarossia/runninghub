@@ -232,6 +232,13 @@ export default function WorkspacePage() {
     }
   }, [selectedFolder, loadFolderContents, processFolderContents]);
 
+  // Clear job inputs when workflow changes to prevent contamination
+  useEffect(() => {
+    // Clear file assignments when user switches to a different workflow
+    // This prevents inputs from previous workflow from being included in new jobs
+    clearJobInputs();
+  }, [selectedWorkflowId, clearJobInputs]);
+
   // Validate duck encoding for selected images (only when selected, not all images)
   useEffect(() => {
     const validateSelectedImages = async () => {
