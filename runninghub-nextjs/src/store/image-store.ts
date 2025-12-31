@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { ImageFile, ViewMode } from '@/types';
 
+// Sort field types
+export type SortField = 'name' | 'date' | 'size' | 'type';
+export type SortDirection = 'asc' | 'desc';
+
 interface ImageState {
   // Image data
   images: ImageFile[];
@@ -19,6 +23,10 @@ interface ImageState {
   searchQuery: string;
   selectedExtension: string | null;
 
+  // Sort state
+  sortField: SortField;
+  sortDirection: SortDirection;
+
   // Actions
   setImages: (images: ImageFile[]) => void;
   setViewMode: (mode: ViewMode) => void;
@@ -26,6 +34,11 @@ interface ImageState {
   setError: (error: string | null) => void;
   setSearchQuery: (query: string) => void;
   setSelectedExtension: (extension: string | null) => void;
+
+  // Sort actions
+  setSortField: (field: SortField) => void;
+  setSortDirection: (direction: SortDirection) => void;
+  setSorting: (field: SortField, direction: SortDirection) => void;
 
   // Filter actions
   applyFilters: () => void;
@@ -50,6 +63,8 @@ export const useImageStore = create<ImageState>((set, get) => ({
   error: null,
   searchQuery: '',
   selectedExtension: null,
+  sortField: 'date',
+  sortDirection: 'desc',
   likedImages: new Set(),
 
   // Setters
@@ -74,6 +89,28 @@ export const useImageStore = create<ImageState>((set, get) => ({
     get().applyFilters();
   },
 
+  // Sort actions
+  setSortField: (field) => {
+    set({ sortField: field });
+    // Re-apply filters with new sort field
+    const state = get();
+    state.applyFilters();
+  },
+
+  setSortDirection: (direction) => {
+    set({ sortDirection: direction });
+    // Re-apply filters with new sort direction
+    const state = get();
+    state.applyFilters();
+  },
+
+  setSorting: (field, direction) => {
+    set({ sortField: field, sortDirection: direction });
+    // Re-apply filters with new sort settings
+    const state = get();
+    state.applyFilters();
+  },
+
   // Filter actions
   applyFilters: () => {
     const state = get();
@@ -95,6 +132,31 @@ export const useImageStore = create<ImageState>((set, get) => ({
         (img) => img.extension === state.selectedExtension
       );
     }
+
+    // Apply sorting
+    filtered = filtered.sort((a, b) => {
+      let comparison = 0;
+
+      switch (state.sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+          break;
+        case 'date':
+          // Use modified_at if available, otherwise created_at, fallback to 0
+          const aDate = a.modified_at || a.created_at || 0;
+          const bDate = b.modified_at || b.created_at || 0;
+          comparison = aDate - bDate;
+          break;
+        case 'size':
+          comparison = a.size - b.size;
+          break;
+        case 'type':
+          comparison = a.extension.localeCompare(b.extension);
+          break;
+      }
+
+      return state.sortDirection === 'asc' ? comparison : -comparison;
+    });
 
     set({ filteredImages: filtered });
   },

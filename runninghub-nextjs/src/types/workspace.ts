@@ -242,6 +242,10 @@ export interface MediaFile {
   height?: number; // Image height in pixels
   format?: string; // Image format (JPEG, PNG, etc.)
 
+  // Timestamps
+  created_at?: number;
+  modified_at?: number;
+
   // Video-specific metadata
   duration?: number; // Video duration in seconds
   fps?: number; // Frames per second
@@ -374,6 +378,11 @@ export interface Job {
   // Post-processing cleanup
   deleteSourceFiles: boolean; // Whether to delete source files after completion
   deletedSourceFiles?: string[]; // List of deleted source file paths (after completion)
+
+  // Job series tracking (for job recreate feature)
+  parentJobId?: string; // ID of job this was recreated from
+  seriesId?: string; // Groups related jobs (auto-generated)
+  runNumber?: number; // Position in series (1, 2, 3, ...)
 }
 
 // ============================================================================
@@ -411,6 +420,8 @@ export interface ExecuteJobRequest {
   textInputs: Record<string, string>;
   folderPath?: string;
   deleteSourceFiles: boolean;
+  parentJobId?: string;         // ID of job this was recreated from
+  seriesId?: string;            // Groups related jobs
 }
 
 /**

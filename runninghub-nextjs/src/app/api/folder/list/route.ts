@@ -43,6 +43,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         extension: string;
         width?: number;
         height?: number;
+        created_at?: number;
+        modified_at?: number;
       }>,
       videos: [] as Array<{
         name: string;
@@ -53,6 +55,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         width?: number;
         height?: number;
         fps?: number;
+        created_at?: number;
+        modified_at?: number;
       }>,
       current_path: folder,
       parent_path: path.dirname(folder) !== folder ? path.dirname(folder) : null,
@@ -88,6 +92,10 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
               // Extract image metadata
               const metadata = await getFileMetadata(itemPath, 'image');
 
+              // Extract file timestamps (convert to milliseconds)
+              const createdAt = itemStats.birthtime?.getTime();
+              const modifiedAt = itemStats.mtime?.getTime();
+
               contents.images.push({
                 name: item,
                 path: itemPath,
@@ -96,10 +104,16 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
                 extension,
                 width: metadata?.width,
                 height: metadata?.height,
+                created_at: createdAt,
+                modified_at: modifiedAt,
               });
             } else if (supportedVideoExtensions.includes(extension)) {
               // Extract video metadata
               const metadata = await getFileMetadata(itemPath, 'video') as any;
+
+              // Extract file timestamps (convert to milliseconds)
+              const createdAt = itemStats.birthtime?.getTime();
+              const modifiedAt = itemStats.mtime?.getTime();
 
               contents.videos.push({
                 name: item,
@@ -110,6 +124,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
                 width: metadata?.width,
                 height: metadata?.height,
                 fps: metadata?.fps,
+                created_at: createdAt,
+                modified_at: modifiedAt,
               });
             }
           }

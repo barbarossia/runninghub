@@ -82,6 +82,8 @@ export async function POST(request: NextRequest) {
         createdAt: Date.now(),
         folderPath: body.folderPath,
         deleteSourceFiles: body.deleteSourceFiles,
+        parentJobId: body.parentJobId,
+        seriesId: body.seriesId,
     };
 
     await fs.writeFile(
@@ -243,36 +245,55 @@ async function processJobOutputs(
     let cliResponse: any = null;
     try {
       // Extract JSON from stdout (might be mixed with log lines)
-      // CLI outputs formatted JSON at the end, so find the last complete JSON object
+      // Strategy: Find all JSON objects in stdout and try to parse the last valid one
+      // This handles cases where CLI outputs logs before/after the JSON response
+
+      // Method 1: Try to find JSON objects by looking for balanced braces
       const lines = cliStdout.split('\n');
-      let jsonStartIndex = -1;
-      let braceCount = 0;
-      let inJson = false;
 
-      // Find the last well-formed JSON object
-      for (let i = 0; i < lines.length; i++) {
-        const trimmed = lines[i].trim();
-
-        // Look for the start of a JSON object
-        if (!inJson && trimmed.startsWith('{')) {
-          inJson = true;
-          jsonStartIndex = i;
-          braceCount = 0;
+      for (let startIndex = 0; startIndex < lines.length; startIndex++) {
+        // Look for lines that contain '{' (potential JSON start)
+        if (!lines[startIndex].includes('{')) {
+          continue;
         }
 
-        // Count braces to find the end of the JSON object
-        if (inJson) {
-          for (const char of lines[i]) {
+        // Find the position of the first '{' in this line
+        const firstBracePos = lines[startIndex].indexOf('{');
+
+        // Start counting braces from this position
+        let braceCount = 0;
+        let endIndex = -1;
+
+        for (let i = startIndex; i < lines.length; i++) {
+          const line = i === startIndex ? lines[i].substring(firstBracePos) : lines[i];
+
+          for (const char of line) {
             if (char === '{') braceCount++;
             if (char === '}') braceCount--;
           }
 
           // When braces balance, we've found a complete JSON object
-          if (braceCount === 0 && jsonStartIndex >= 0) {
-            const jsonStr = lines.slice(jsonStartIndex, i + 1).join('\n');
-            cliResponse = JSON.parse(jsonStr);
-            await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+          if (braceCount === 0) {
+            endIndex = i;
             break;
+          }
+        }
+
+        // If we found a balanced JSON object, try to parse it
+        if (endIndex >= 0) {
+          try {
+            const jsonStr = lines.slice(startIndex, endIndex + 1).join('\n');
+            const jsonStart = firstBracePos > 0 ? jsonStr.indexOf('{') : 0;
+            const jsonOnly = jsonStr.substring(jsonStart);
+
+            cliResponse = JSON.parse(jsonOnly);
+            await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+            await writeLog(`Found JSON at lines ${startIndex}-${endIndex}`, 'info', taskId);
+            break; // Successfully parsed, stop searching
+          } catch (e) {
+            // This isn't valid JSON, continue searching
+            await writeLog(`Attempted JSON parse at lines ${startIndex}-${endIndex} failed: ${e}`, 'debug', taskId);
+            continue;
           }
         }
       }

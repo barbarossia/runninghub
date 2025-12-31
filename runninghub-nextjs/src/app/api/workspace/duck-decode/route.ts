@@ -223,7 +223,7 @@ export async function POST(request: NextRequest) {
       } else {
           console.log(`Decoded file is already at final path: ${finalOutputPath}`);
       }
-      
+
       console.log(`Decoded file saved as: ${finalOutputPath}`);
     } catch (error) {
       console.error('Failed to rename decoded file:', error);

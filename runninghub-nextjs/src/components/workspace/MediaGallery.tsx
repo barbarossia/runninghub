@@ -457,7 +457,7 @@ export function MediaGallery({
                           <>
                             <video
                               src={file.blobUrl}
-                              className="w-full h-full object-contain"
+                              className="absolute inset-0 w-full h-full object-contain"
                               muted
                               preload="metadata"
                               playsInline
@@ -467,8 +467,15 @@ export function MediaGallery({
                                 e.currentTarget.currentTime = 0;
                               }}
                             />
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
-                              <PlayCircle className="h-6 w-6 text-white/80 drop-shadow-md" />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <PlayCircle 
+                                className="h-6 w-6 text-white/80 drop-shadow-md pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewFile(file);
+                                  onPreview?.(file);
+                                }}
+                              />
                             </div>
                           </>
                         ) : file.thumbnail || file.blobUrl ? (
@@ -545,7 +552,7 @@ export function MediaGallery({
                       <>
                         <video
                           src={file.blobUrl}
-                          className="w-full h-full object-contain p-1"
+                          className="absolute inset-0 w-full h-full object-contain p-1"
                           muted
                           preload="metadata"
                           playsInline
@@ -555,8 +562,15 @@ export function MediaGallery({
                             e.currentTarget.currentTime = 0;
                           }}
                         />
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
-                          <div className="bg-black/30 rounded-full p-2 backdrop-blur-[2px] text-white/90 shadow-lg">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div 
+                            className="bg-black/30 rounded-full p-2 backdrop-blur-[2px] text-white/90 shadow-lg pointer-events-auto cursor-pointer hover:bg-black/50 transition-all hover:scale-110"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewFile(file);
+                              onPreview?.(file);
+                            }}
+                          >
                             <PlayCircle className="h-10 w-10" />
                           </div>
                         </div>
@@ -601,14 +615,14 @@ export function MediaGallery({
                     {/* Overlay with checkbox and more menu */}
                     <div
                       className={cn(
-                        'absolute inset-0 transition-all',
+                        'absolute inset-0 transition-all pointer-events-none',
                         isSelected ? 'bg-blue-500/10' : 'bg-black/0 group-hover:bg-black/5'
                       )}
                     >
                       {/* Checkbox */}
                       <div
                         className={cn(
-                          'absolute top-2 left-2 transition-opacity',
+                          'absolute top-2 left-2 transition-opacity pointer-events-auto',
                           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                         )}
                         onClick={(e) => e.stopPropagation()}
@@ -618,7 +632,7 @@ export function MediaGallery({
 
                       {/* Duck-encoded indicator */}
                       {file.isDuckEncoded && (
-                        <Badge className="absolute top-2 left-2 z-10 bg-green-600 text-xs">
+                        <Badge className="absolute top-2 left-2 z-10 bg-green-600 text-xs pointer-events-auto">
                           Duck
                         </Badge>
                       )}
@@ -626,7 +640,7 @@ export function MediaGallery({
                       {/* More menu */}
                       <div
                         className={cn(
-                          'absolute top-2 right-2 transition-opacity',
+                          'absolute top-2 right-2 transition-opacity pointer-events-auto',
                           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                         )}
                       >

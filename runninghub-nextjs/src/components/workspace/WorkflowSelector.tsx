@@ -27,7 +27,7 @@ export interface WorkflowSelectorProps {
 }
 
 export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSelectorProps) {
-  const { workflows, selectedWorkflowId, setSelectedWorkflow, setWorkflows } = useWorkspaceStore();
+  const { workflows, selectedWorkflowId, setSelectedWorkflow, setWorkflows, clearJobInputs } = useWorkspaceStore();
 
   // Loading and error states for workflow fetching
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
@@ -77,6 +77,7 @@ export function WorkflowSelector({ onAddWorkflow, className = '' }: WorkflowSele
     } else if (value === 'add_custom_id') {
       setShowCustomWorkflowDialog(true);
     } else {
+      clearJobInputs();
       setSelectedWorkflow(value);
     }
   };

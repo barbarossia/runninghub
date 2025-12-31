@@ -52,6 +52,9 @@ interface WorkspaceState {
   selectedFolder: FolderSelectionResponse | null;
   // Media files loaded from folder (images + videos)
   mediaFiles: MediaFile[];
+  // Media sort state
+  mediaSortField: 'name' | 'date' | 'size' | 'type';
+  mediaSortDirection: 'asc' | 'desc';
 
   // ============================================================
   // NEW STATE - Workflows
@@ -76,6 +79,8 @@ interface WorkspaceState {
   selectedJobId: string | null;
   // Loading state for jobs history
   isLoadingJobs: boolean;
+  // Active job series for tracking related jobs
+  activeSeriesId: string | null;
 
   // ============================================================
   // NEW STATE - UI State
@@ -149,6 +154,11 @@ interface WorkspaceActions extends WorkspaceState {
   deselectAllMediaFiles: () => void;
   getSelectedMediaFiles: () => MediaFile[];
 
+  // Media sort actions
+  setMediaSortField: (field: 'name' | 'date' | 'size' | 'type') => void;
+  setMediaSortDirection: (direction: 'asc' | 'desc') => void;
+  setMediaSorting: (field: 'name' | 'date' | 'size' | 'type', direction: 'asc' | 'desc') => void;
+
   // ============================================================
   // NEW ACTIONS - Workflow Management
   // ============================================================
@@ -184,6 +194,11 @@ interface WorkspaceActions extends WorkspaceState {
   getJobsByWorkflow: (workflowId: string) => Job[];
   getJobsByStatus: (status: JobStatus) => Job[];
   fetchJobs: () => Promise<void>;
+
+  // Job series management
+  getJobsBySeriesId: (seriesId: string) => Job[];
+  getRecentJobsForWorkflow: (workflowId: string, limit?: number) => Job[];
+  setActiveSeriesId: (seriesId: string | null) => void;
 
   // ============================================================
   // NEW ACTIONS - UI State
@@ -221,6 +236,8 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       // New state - Folder & Media
       selectedFolder: null,
       mediaFiles: [],
+      mediaSortField: 'date',
+      mediaSortDirection: 'desc',
 
       // New state - Workflows
       workflows: [],
@@ -233,6 +250,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       jobs: [],
       selectedJobId: null,
       isLoadingJobs: false,
+      activeSeriesId: null,
 
       // New state - UI State
       viewMode: 'grid',
@@ -394,8 +412,36 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       setSelectedFolder: (folder) =>
         set({ selectedFolder: folder, error: null }),
 
-      setMediaFiles: (files) =>
-        set({ mediaFiles: files, error: null }),
+      setMediaFiles: (files) => {
+        set((state) => {
+          // Apply sorting
+          const sorted = [...files].sort((a, b) => {
+            let comparison = 0;
+
+            switch (state.mediaSortField) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = (a as any).modified_at || (a as any).created_at || 0;
+                const bDate = (b as any).modified_at || (b as any).created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaFiles: sorted, error: null };
+        });
+      },
 
       addMediaFile: (file) =>
         set((state) => ({
@@ -455,6 +501,100 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       getSelectedMediaFiles: () => {
         return get().mediaFiles.filter((f) => f.selected);
+      },
+
+      // Media sort actions
+      setMediaSortField: (field) => {
+        set((state) => {
+          // Re-sort existing media files with new field
+          const sorted = [...state.mediaFiles].sort((a, b) => {
+            let comparison = 0;
+
+            switch (field) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = a.modified_at || a.created_at || 0;
+                const bDate = b.modified_at || b.created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaSortField: field, mediaFiles: sorted };
+        });
+      },
+
+      setMediaSortDirection: (direction) => {
+        set((state) => {
+          // Re-sort existing media files with new direction
+          const sorted = [...state.mediaFiles].sort((a, b) => {
+            let comparison = 0;
+
+            switch (state.mediaSortField) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = a.modified_at || a.created_at || 0;
+                const bDate = b.modified_at || b.created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return direction === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaSortDirection: direction, mediaFiles: sorted };
+        });
+      },
+
+      setMediaSorting: (field, direction) => {
+        set((state) => {
+          // Re-sort existing media files with new field and direction
+          const sorted = [...state.mediaFiles].sort((a, b) => {
+            let comparison = 0;
+
+            switch (field) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                // Use modified_at if available, otherwise created_at, fallback to 0
+                const aDate = a.modified_at || a.created_at || 0;
+                const bDate = b.modified_at || b.created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return direction === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaSortField: field, mediaSortDirection: direction, mediaFiles: sorted };
+        });
       },
 
       // ============================================================
@@ -704,12 +844,29 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
           set({ jobs: data.jobs || [], isLoadingJobs: false });
         } catch (error) {
           console.error('Fetch jobs error:', error);
-          set({ 
-            isLoadingJobs: false, 
-            error: error instanceof Error ? error.message : 'Failed to fetch jobs' 
+          set({
+            isLoadingJobs: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch jobs'
           });
         }
       },
+
+      // ============================================================
+      // NEW ACTIONS - Job Series Management
+      // ============================================================
+      getJobsBySeriesId: (seriesId) => {
+        return get().jobs.filter((j) => j.seriesId === seriesId);
+      },
+
+      getRecentJobsForWorkflow: (workflowId, limit = 10) => {
+        const jobs = get().jobs
+          .filter((j) => j.workflowId === workflowId)
+          .sort((a, b) => b.createdAt - a.createdAt);
+        return jobs.slice(0, limit);
+      },
+
+      setActiveSeriesId: (seriesId) =>
+        set({ activeSeriesId: seriesId }),
 
       // ============================================================
       // NEW ACTIONS - UI State

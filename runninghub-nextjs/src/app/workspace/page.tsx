@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaGallery } from '@/components/workspace/MediaGallery';
 import { MediaSelectionToolbar } from '@/components/workspace/MediaSelectionToolbar';
+import { MediaSortControls } from '@/components/images';
 import { QuickRunWorkflowDialog } from '@/components/workspace/QuickRunWorkflowDialog';
 import { WorkflowList } from '@/components/workspace/WorkflowList';
 import { WorkflowEditor } from '@/components/workspace/WorkflowEditor';
@@ -55,6 +56,8 @@ export default function WorkspacePage() {
     workflows,
     jobs,
     selectedJobId,
+    mediaSortField,
+    mediaSortDirection,
     setMediaFiles,
     setSelectedWorkflow,
     addWorkflow,
@@ -69,6 +72,7 @@ export default function WorkspacePage() {
     autoAssignSelectedFilesToWorkflow,
     updateMediaFile,
     fetchJobs,
+    setMediaSorting,
   } = useWorkspaceStore();
 
   // Local state
@@ -96,7 +100,7 @@ export default function WorkspacePage() {
     // Convert images to MediaFile format with serve URLs
     const imageFiles = (result.images || []).map((file: any) => {
       // DEBUG: Log each file's dimensions
-      console.log(`[processFolderContents] Processing ${file.name}: width=${file.width}, height=${file.height}`);
+      // console.log(`[processFolderContents] Processing ${file.name}: width=${file.width}, height=${file.height}`);
 
       return {
         id: file.path,
@@ -107,6 +111,8 @@ export default function WorkspacePage() {
         size: file.size || 0,
         width: file.width,
         height: file.height,
+        created_at: file.created_at,
+        modified_at: file.modified_at,
         thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
         selected: false,
       };
@@ -123,6 +129,8 @@ export default function WorkspacePage() {
       width: file.width,
       height: file.height,
       fps: file.fps,
+      created_at: file.created_at,
+      modified_at: file.modified_at,
       thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
       blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
       selected: false,
@@ -328,6 +336,26 @@ export default function WorkspacePage() {
 
     const { fileInputs, textInputs } = data;
 
+    // Check if this is a re-run from Job Detail page
+    const currentJob = selectedJobId ? jobs.find(j => j.id === selectedJobId) : null;
+    const isReRun = currentJob?.workflowId === workflow.id;
+
+    // Generate series metadata
+    let seriesId: string | undefined;
+    let runNumber = 1;
+    let parentJobId: string | undefined;
+
+    if (isReRun && currentJob?.seriesId) {
+      // Reuse seriesId from current job
+      seriesId = currentJob.seriesId;
+      runNumber = (currentJob.runNumber || 0) + 1;
+      parentJobId = currentJob.id;
+    } else {
+      // Create new series
+      seriesId = `${workflow.id}_${Date.now()}`;
+      runNumber = 1;
+    }
+
     try {
       const response = await fetch(API_ENDPOINTS.WORKSPACE_EXECUTE, {
         method: 'POST',
@@ -340,6 +368,8 @@ export default function WorkspacePage() {
           textInputs: textInputs,
           folderPath: selectedFolder?.folder_path,
           deleteSourceFiles: false,
+          parentJobId,
+          seriesId,
         }),
       });
 
@@ -355,7 +385,7 @@ export default function WorkspacePage() {
         throw new Error(resp.error || 'Failed to execute job');
       }
 
-      // Create job in store
+      // Create job in store with series metadata
       const newJob: Job = {
         id: resp.jobId,
         workflowId: workflow.id,
@@ -367,6 +397,9 @@ export default function WorkspacePage() {
         createdAt: Date.now(),
         folderPath: selectedFolder?.folder_path,
         deleteSourceFiles: false,
+        parentJobId,
+        seriesId,
+        runNumber,
       };
 
       addJob(newJob);
@@ -379,12 +412,20 @@ export default function WorkspacePage() {
         setActiveConsoleTaskId(resp.taskId);
       }
 
-      // Clear job inputs and switch to jobs tab
-      clearJobInputs();
+      // DON'T clear inputs - Job Detail page will manage its own inputs
+      // DO switch to jobs tab - go to Job Detail page to see results
       setActiveTab('jobs');
-      logger.success('Job started', {
+      toast.success(`Job #${runNumber} started. View results and run variations.`);
+      logger.success(`Job #${runNumber} started`, {
         taskId: resp.taskId,
-        metadata: { workflowId: workflow.id, jobId: resp.jobId, workflowName: workflow.name }
+        metadata: {
+          workflowId: workflow.id,
+          jobId: resp.jobId,
+          workflowName: workflow.name,
+          seriesId,
+          runNumber,
+          parentJobId
+        }
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to execute job';
@@ -528,6 +569,10 @@ export default function WorkspacePage() {
     console.log('Preview file:', file);
   };
 
+  const handleSortChange = useCallback((field: typeof mediaSortField, direction: typeof mediaSortDirection) => {
+    setMediaSorting(field, direction);
+  }, [setMediaSorting]);
+
   // Feature cards for workspace
   const featureCards = (
     <div className="grid md:grid-cols-2 gap-6 mt-12">
@@ -656,6 +701,17 @@ export default function WorkspacePage() {
                     onRunWorkflow={handleQuickRunWorkflow}
                   />
                 )}
+
+                {/* Sort Controls */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MediaSortControls
+                      sortField={mediaSortField}
+                      sortDirection={mediaSortDirection}
+                      onSortChange={handleSortChange}
+                    />
+                  </div>
+                </div>
 
                 {/* Media Gallery */}
                 <MediaGallery
