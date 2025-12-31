@@ -467,8 +467,15 @@ export function MediaGallery({
                                 e.currentTarget.currentTime = 0;
                               }}
                             />
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
-                              <PlayCircle className="h-6 w-6 text-white/80 drop-shadow-md" />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <PlayCircle 
+                                className="h-6 w-6 text-white/80 drop-shadow-md pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewFile(file);
+                                  onPreview?.(file);
+                                }}
+                              />
                             </div>
                           </>
                         ) : file.thumbnail || file.blobUrl ? (
@@ -555,8 +562,15 @@ export function MediaGallery({
                             e.currentTarget.currentTime = 0;
                           }}
                         />
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
-                          <div className="bg-black/30 rounded-full p-2 backdrop-blur-[2px] text-white/90 shadow-lg">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div 
+                            className="bg-black/30 rounded-full p-2 backdrop-blur-[2px] text-white/90 shadow-lg pointer-events-auto cursor-pointer hover:bg-black/50 transition-all hover:scale-110"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewFile(file);
+                              onPreview?.(file);
+                            }}
+                          >
                             <PlayCircle className="h-10 w-10" />
                           </div>
                         </div>
