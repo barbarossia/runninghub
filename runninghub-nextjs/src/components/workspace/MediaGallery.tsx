@@ -457,7 +457,7 @@ export function MediaGallery({
                           <>
                             <video
                               src={file.blobUrl}
-                              className="w-full h-full object-contain"
+                              className="absolute inset-0 w-full h-full object-contain"
                               muted
                               preload="metadata"
                               playsInline
@@ -545,7 +545,7 @@ export function MediaGallery({
                       <>
                         <video
                           src={file.blobUrl}
-                          className="w-full h-full object-contain p-1"
+                          className="absolute inset-0 w-full h-full object-contain p-1"
                           muted
                           preload="metadata"
                           playsInline
