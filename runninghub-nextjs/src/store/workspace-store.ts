@@ -52,6 +52,9 @@ interface WorkspaceState {
   selectedFolder: FolderSelectionResponse | null;
   // Media files loaded from folder (images + videos)
   mediaFiles: MediaFile[];
+  // Media sort state
+  mediaSortField: 'name' | 'date' | 'size' | 'type';
+  mediaSortDirection: 'asc' | 'desc';
 
   // ============================================================
   // NEW STATE - Workflows
@@ -151,6 +154,11 @@ interface WorkspaceActions extends WorkspaceState {
   deselectAllMediaFiles: () => void;
   getSelectedMediaFiles: () => MediaFile[];
 
+  // Media sort actions
+  setMediaSortField: (field: 'name' | 'date' | 'size' | 'type') => void;
+  setMediaSortDirection: (direction: 'asc' | 'desc') => void;
+  setMediaSorting: (field: 'name' | 'date' | 'size' | 'type', direction: 'asc' | 'desc') => void;
+
   // ============================================================
   // NEW ACTIONS - Workflow Management
   // ============================================================
@@ -228,6 +236,8 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       // New state - Folder & Media
       selectedFolder: null,
       mediaFiles: [],
+      mediaSortField: 'name',
+      mediaSortDirection: 'asc',
 
       // New state - Workflows
       workflows: [],
@@ -402,8 +412,36 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       setSelectedFolder: (folder) =>
         set({ selectedFolder: folder, error: null }),
 
-      setMediaFiles: (files) =>
-        set({ mediaFiles: files, error: null }),
+      setMediaFiles: (files) => {
+        const state = get();
+
+        // Apply sorting
+        const sorted = [...files].sort((a, b) => {
+          let comparison = 0;
+
+          switch (state.mediaSortField) {
+            case 'name':
+              comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+              break;
+            case 'date':
+              // Use modified_at if available, otherwise created_at, fallback to 0
+              const aDate = (a as any).modified_at || (a as any).created_at || 0;
+              const bDate = (b as any).modified_at || (b as any).created_at || 0;
+              comparison = aDate - bDate;
+              break;
+            case 'size':
+              comparison = a.size - b.size;
+              break;
+            case 'type':
+              comparison = a.type.localeCompare(b.type);
+              break;
+          }
+
+          return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        set({ mediaFiles: sorted, error: null });
+      },
 
       addMediaFile: (file) =>
         set((state) => ({
@@ -463,6 +501,28 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       getSelectedMediaFiles: () => {
         return get().mediaFiles.filter((f) => f.selected);
+      },
+
+      // Media sort actions
+      setMediaSortField: (field) => {
+        set({ mediaSortField: field });
+        // Re-sort existing media files
+        const state = get();
+        state.setMediaFiles([...state.mediaFiles]);
+      },
+
+      setMediaSortDirection: (direction) => {
+        set({ mediaSortDirection: direction });
+        // Re-sort existing media files
+        const state = get();
+        state.setMediaFiles([...state.mediaFiles]);
+      },
+
+      setMediaSorting: (field, direction) => {
+        set({ mediaSortField: field, mediaSortDirection: direction });
+        // Re-sort existing media files
+        const state = get();
+        state.setMediaFiles([...state.mediaFiles]);
       },
 
       // ============================================================

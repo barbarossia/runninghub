@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MediaGallery } from '@/components/workspace/MediaGallery';
 import { MediaSelectionToolbar } from '@/components/workspace/MediaSelectionToolbar';
+import { MediaSortControls } from '@/components/images';
 import { QuickRunWorkflowDialog } from '@/components/workspace/QuickRunWorkflowDialog';
 import { WorkflowList } from '@/components/workspace/WorkflowList';
 import { WorkflowEditor } from '@/components/workspace/WorkflowEditor';
@@ -55,6 +56,8 @@ export default function WorkspacePage() {
     workflows,
     jobs,
     selectedJobId,
+    mediaSortField,
+    mediaSortDirection,
     setMediaFiles,
     setSelectedWorkflow,
     addWorkflow,
@@ -69,6 +72,7 @@ export default function WorkspacePage() {
     autoAssignSelectedFilesToWorkflow,
     updateMediaFile,
     fetchJobs,
+    setMediaSorting,
   } = useWorkspaceStore();
 
   // Local state
@@ -568,6 +572,10 @@ export default function WorkspacePage() {
     console.log('Preview file:', file);
   };
 
+  const handleSortChange = useCallback((field: typeof mediaSortField, direction: typeof mediaSortDirection) => {
+    setMediaSorting(field, direction);
+  }, [setMediaSorting]);
+
   // Feature cards for workspace
   const featureCards = (
     <div className="grid md:grid-cols-2 gap-6 mt-12">
@@ -696,6 +704,17 @@ export default function WorkspacePage() {
                     onRunWorkflow={handleQuickRunWorkflow}
                   />
                 )}
+
+                {/* Sort Controls */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MediaSortControls
+                      sortField={mediaSortField}
+                      sortDirection={mediaSortDirection}
+                      onSortChange={handleSortChange}
+                    />
+                  </div>
+                </div>
 
                 {/* Media Gallery */}
                 <MediaGallery

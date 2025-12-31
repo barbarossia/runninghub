@@ -11,6 +11,7 @@ import { FolderSelectionLayout } from '@/components/folder/FolderSelectionLayout
 import { ImageGallery } from '@/components/images';
 import { ImageProcessConfig } from '@/components/images';
 import { ImageGallerySkeleton } from '@/components/images/ImageGallerySkeleton';
+import { MediaSortControls } from '@/components/images';
 import { SelectionToolbar } from '@/components/selection';
 import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
 import { PageHeader } from '@/components/navigation/PageHeader';
@@ -34,7 +35,7 @@ import type { ImageFile } from '@/types';
 export default function GalleryPage() {
   // Store state - use new modular stores
   const { selectedFolder, isLoadingFolder } = useFolderStore();
-  const { images, isLoadingImages, error: imageError } = useImageStore();
+  const { images, isLoadingImages, error: imageError, sortField, sortDirection } = useImageStore();
   const { deselectAll } = useSelectionStore();
 
   // Use legacy stores for process config (until migrated)
@@ -223,6 +224,10 @@ export default function GalleryPage() {
     console.log('Image double clicked:', image);
   }, []);
 
+  const handleSortChange = useCallback((field: typeof sortField, direction: typeof sortDirection) => {
+    useImageStore.getState().setSorting(field, direction);
+  }, []);
+
   // Feature cards for gallery
   const featureCards = (
     <div className="grid md:grid-cols-2 gap-6 mt-12">
@@ -326,6 +331,17 @@ export default function GalleryPage() {
               selectedNode={selectedNode}
               onNodeChange={setSelectedNode}
             />
+
+            {/* Sort Controls */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MediaSortControls
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSortChange={handleSortChange}
+                />
+              </div>
+            </div>
 
             {/* Process Config */}
             <ImageProcessConfig

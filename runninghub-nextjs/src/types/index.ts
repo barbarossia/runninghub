@@ -12,6 +12,8 @@ export interface ImageFile {
   is_virtual?: boolean;
   file_handle_info?: FileHandleInfo;
   blob_url?: string; // Blob URL for virtual files from File System Access API
+  created_at?: number; // File creation timestamp (Unix timestamp in ms)
+  modified_at?: number; // File modification timestamp (Unix timestamp in ms)
 }
 
 export interface VideoFile {
@@ -24,6 +26,8 @@ export interface VideoFile {
   is_virtual?: boolean;
   file_handle_info?: FileHandleInfo;
   blob_url?: string;
+  created_at?: number; // File creation timestamp (Unix timestamp in ms)
+  modified_at?: number; // File modification timestamp (Unix timestamp in ms)
 }
 
 export type MediaFile = ImageFile | VideoFile;
