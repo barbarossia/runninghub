@@ -144,11 +144,20 @@ export function YoutubeDownloader({
       return;
     }
 
-    // Validate folder_path and session_id exist
-    if (!selectedFolder.folder_path || !selectedFolder.session_id) {
+    // Validate folder_path exists (session_id is optional)
+    if (!selectedFolder.folder_path) {
+      console.error('Invalid folder selection:', selectedFolder);
       toast.error('Invalid folder selection. Please select a folder again.');
       return;
     }
+
+    // Log folder info for debugging
+    console.log('Folder selection:', {
+      folder_path: selectedFolder.folder_path,
+      session_id: selectedFolder.session_id,
+      folder_name: selectedFolder.folder_name,
+      is_virtual: selectedFolder.is_virtual,
+    });
 
     // Check cookie input based on mode
     if (cookieMode === 'paste' && !cookieContent.trim()) {
@@ -164,7 +173,7 @@ export function YoutubeDownloader({
       const requestBody = {
         url: url.trim(),
         folderPath: selectedFolder.folder_path,
-        sessionId: selectedFolder.session_id,
+        sessionId: selectedFolder.session_id, // Will be undefined if not set, that's ok
         cookieMode,
         cookieContent: cookieMode === 'paste' ? cookieContent : undefined,
         cookieFilePath: cookieMode === 'file' ? cookieFilePath : undefined,

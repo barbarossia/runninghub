@@ -8,7 +8,7 @@ import { initTask, updateTask } from "@/lib/task-store";
 interface DownloadRequest {
   url: string;
   folderPath: string;
-  sessionId: string;
+  sessionId?: string; // Optional - not all folders have session_id
   cookieMode: 'paste' | 'file';
   cookieContent?: string;
   cookieFilePath?: string;
@@ -34,11 +34,11 @@ export async function POST(request: NextRequest) {
     await writeLog(`Received YouTube download request: ${url}`, 'info', taskId);
     console.log('YouTube download request:', { url, folderPath, sessionId, cookieMode, hasCookieContent: !!cookieContent, hasCookieFilePath: !!cookieFilePath });
 
-    // Validate required fields
-    if (!url || !folderPath || !sessionId) {
-      await writeLog(`Missing required fields: url=${!!url}, folderPath=${!!folderPath}, sessionId=${!!sessionId}`, 'error', taskId);
+    // Validate required fields (sessionId is optional)
+    if (!url || !folderPath) {
+      await writeLog(`Missing required fields: url=${!!url}, folderPath=${!!folderPath}`, 'error', taskId);
       return NextResponse.json(
-        { error: "Missing required fields: url, folderPath, sessionId" },
+        { error: "Missing required fields: url, folderPath" },
         { status: 400 }
       );
     }
@@ -139,7 +139,7 @@ async function checkYtDlpAvailable(): Promise<boolean> {
 async function downloadVideoInBackground(
   url: string,
   folderPath: string,
-  sessionId: string,
+  sessionId: string | undefined,
   cookieMode: 'paste' | 'file',
   cookieContent: string | undefined,
   cookieFilePath: string | undefined,
