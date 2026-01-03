@@ -45,6 +45,7 @@ export function YoutubeDownloader({
   const [cookieMode, setCookieMode] = useState<'paste' | 'file'>('paste');
   const [cookieContent, setCookieContent] = useState('');
   const [cookieFilePath, setCookieFilePath] = useState('');
+  const [showCookies, setShowCookies] = useState(false); // Toggle for cookies visibility
 
   // Download state
   const [isDownloading, setIsDownloading] = useState(false);
@@ -275,9 +276,22 @@ export function YoutubeDownloader({
       {/* Cookie Input */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowCookies(!showCookies)}
+            className="h-8 px-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 justify-start"
+          >
+            {showCookies ? (
+              <AlertCircle className="w-4 h-4 mr-2" />
+            ) : (
+              <FolderOpen className="w-4 h-4 mr-2" />
+            )}
             Cookies (Optional)
-          </label>
+            <span className="ml-auto">
+              {showCookies ? '▲' : '▼'}
+            </span>
+          </Button>
           {hasCookies && (
             <Button
               variant="ghost"
@@ -286,48 +300,50 @@ export function YoutubeDownloader({
               className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <Trash2 className="w-3 h-3 mr-1" />
-              Clear Cookies
+              Clear
             </Button>
           )}
         </div>
 
-        <Tabs value={cookieMode} onValueChange={(v) => handleCookieModeChange(v as 'paste' | 'file')}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="paste" className="text-xs">
-              Paste Content
-            </TabsTrigger>
-            <TabsTrigger value="file" className="text-xs">
-              File Path
-            </TabsTrigger>
-          </TabsList>
+        {showCookies && (
+          <Tabs value={cookieMode} onValueChange={(v) => handleCookieModeChange(v as 'paste' | 'file')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="paste" className="text-xs">
+                Paste Content
+              </TabsTrigger>
+              <TabsTrigger value="file" className="text-xs">
+                File Path
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="paste" className="space-y-2 mt-3">
-            <Textarea
-              placeholder="Paste your cookies.txt content here...&#10;&#10;Required for private/unlisted videos"
-              value={cookieContent}
-              onChange={(e) => handleCookieContentChange(e.target.value)}
-              disabled={isDownloading}
-              className="font-mono text-xs min-h-[120px] resize-y"
-            />
-            <p className="text-[10px] text-gray-500">
-              Cookies are stored locally and reused for future downloads
-            </p>
-          </TabsContent>
+            <TabsContent value="paste" className="space-y-2 mt-3">
+              <Textarea
+                placeholder="Paste your cookies.txt content here...&#10;&#10;Required for private/unlisted videos"
+                value={cookieContent}
+                onChange={(e) => handleCookieContentChange(e.target.value)}
+                disabled={isDownloading}
+                className="font-mono text-xs min-h-[120px] resize-y"
+              />
+              <p className="text-[10px] text-gray-500">
+                Cookies are stored locally and reused for future downloads
+              </p>
+            </TabsContent>
 
-          <TabsContent value="file" className="space-y-2 mt-3">
-            <Input
-              type="text"
-              placeholder="/path/to/cookies.txt"
-              value={cookieFilePath}
-              onChange={(e) => handleCookieFilePathChange(e.target.value)}
-              disabled={isDownloading}
-              className="font-mono text-sm"
-            />
-            <p className="text-[10px] text-gray-500">
-              Path to cookies.txt file on your system
-            </p>
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="file" className="space-y-2 mt-3">
+              <Input
+                type="text"
+                placeholder="/path/to/cookies.txt"
+                value={cookieFilePath}
+                onChange={(e) => handleCookieFilePathChange(e.target.value)}
+                disabled={isDownloading}
+                className="font-mono text-sm"
+              />
+              <p className="text-[10px] text-gray-500">
+                Path to cookies.txt file on your system
+              </p>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
 
       {/* Download Button */}
