@@ -11,6 +11,7 @@ import { initTask, updateTask } from '@/lib/task-store';
 import type {
   ExecuteJobRequest,
   ExecuteJobResponse,
+  FileInputAssignment,
   Job,
   Workflow,
 } from '@/types/workspace';
@@ -443,13 +444,13 @@ async function getWorkflowById(workflowId: string): Promise<Workflow | undefined
 
 /**
  * Copy input files to job directory
- * Returns array of new file paths in job directory
+ * Returns array of new file paths in job directory with all original metadata preserved
  */
 async function copyInputFilesToJobDirectory(
-  fileInputs: Array<{ parameterId: string; filePath: string }>,
+  fileInputs: FileInputAssignment[],
   jobId: string,
   taskId: string
-): Promise<Array<{ parameterId: string; filePath: string }>> {
+): Promise<FileInputAssignment[]> {
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
@@ -465,7 +466,7 @@ async function copyInputFilesToJobDirectory(
 
     await writeLog(`Copying ${fileInputs.length} input file(s) to job directory`, 'info', taskId);
 
-    const copiedFiles: Array<{ parameterId: string; filePath: string }> = [];
+    const copiedFiles: FileInputAssignment[] = [];
 
     for (const input of fileInputs) {
       try {
@@ -478,10 +479,10 @@ async function copyInputFilesToJobDirectory(
 
         await writeLog(`Copied ${fileName} to job directory`, 'info', taskId);
 
-        // Use the copied file path for CLI
+        // Use the copied file path for CLI, but preserve all other metadata
         copiedFiles.push({
-          parameterId: input.parameterId,
-          filePath: jobFilePath,
+          ...input, // Preserve all properties (fileName, fileSize, fileType, valid, etc.)
+          filePath: jobFilePath, // Update only the path
         });
       } catch (copyError) {
         const errorMsg = copyError instanceof Error ? copyError.message : 'Unknown error';
@@ -504,7 +505,7 @@ async function processWorkflowInBackground(
   taskId: string,
   jobId: string,
   workflowId: string,
-  fileInputs: Array<{ parameterId: string; filePath: string }>,
+  fileInputs: FileInputAssignment[],
   textInputs: Record<string, string>,
   deleteSourceFiles: boolean,
   env: NodeJS.ProcessEnv
@@ -519,6 +520,10 @@ async function processWorkflowInBackground(
 
     // Copy input files to job directory and get new paths
     const jobFileInputs = await copyInputFilesToJobDirectory(fileInputs, jobId, taskId);
+
+    // Update job.json with the copied file paths (from job folder)
+    // This ensures job history references files from job folder, not original location
+    await updateJobFile(jobId, { fileInputs: jobFileInputs });
 
     // Before executing CLI, get workflow info
     const workflow = await getWorkflowById(workflowId);
@@ -650,7 +655,17 @@ async function processWorkflowInBackground(
 
     await writeLog(`Executing command: python ${args.join(' ')}`, 'info', taskId);
 
+    // Set working directory to job folder so CLI output files are saved there, not in Downloads
+    const path = await import('path');
+    const jobDir = path.join(
+      process.env.HOME || '~',
+      'Downloads',
+      'workspace',
+      jobId
+    );
+
     const childProcess = spawn("python", args, {
+      cwd: jobDir,  // Set working directory to job folder
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
