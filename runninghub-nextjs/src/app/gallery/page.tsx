@@ -365,7 +365,7 @@ export default function GalleryPage() {
         <ConsoleViewer
           onRefresh={handleRefresh}
           taskId={activeConsoleTaskId}
-          defaultVisible={true}
+          defaultVisible={false}
         />
       </div>
     </div>

@@ -30,6 +30,7 @@ import { WorkflowSelector } from '@/components/workspace/WorkflowSelector';
 import { WorkflowInputBuilder } from '@/components/workspace/WorkflowInputBuilder';
 import { JobList } from '@/components/workspace/JobList';
 import { JobDetail } from '@/components/workspace/JobDetail';
+import { YoutubeDownloader } from '@/components/workspace/YoutubeDownloader';
 import {
   Settings,
   FolderOpen,
@@ -39,6 +40,7 @@ import {
   Plus,
   Upload,
   Play,
+  Youtube,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -77,7 +79,7 @@ export default function WorkspacePage() {
 
   // Local state
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'media' | 'run-workflow' | 'workflows' | 'jobs'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'run-workflow' | 'workflows' | 'jobs'>('media');
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
@@ -670,10 +672,14 @@ export default function WorkspacePage() {
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="media" className="flex items-center gap-2">
                   <FolderOpen className="h-4 w-4" />
                   Media Gallery
+                </TabsTrigger>
+                <TabsTrigger value="youtube" className="flex items-center gap-2">
+                  <Youtube className="h-4 w-4" />
+                  YouTube
                 </TabsTrigger>
                 <TabsTrigger value="run-workflow" className="flex items-center gap-2">
                   <Play className="h-4 w-4" />
@@ -720,6 +726,30 @@ export default function WorkspacePage() {
                   onDecode={handleDecodeFile}
                   onPreview={handlePreviewFile}
                 />
+              </TabsContent>
+
+              {/* YouTube Download Tab */}
+              <TabsContent value="youtube" className="mt-6">
+                <div className="max-w-2xl mx-auto">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold">Download YouTube Videos</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Download videos from YouTube (including shorts) directly to your workspace folder
+                    </p>
+                  </div>
+                  <YoutubeDownloader
+                    onDownloadStart={(taskId) => {
+                      setActiveConsoleTaskId(taskId);
+                    }}
+                    onDownloadComplete={(success) => {
+                      if (success) {
+                        // Refresh media gallery to show downloaded video
+                        handleRefresh(false);
+                      }
+                      setActiveConsoleTaskId(null);
+                    }}
+                  />
+                </div>
               </TabsContent>
 
               {/* Run Workflow Tab */}
@@ -778,7 +808,7 @@ export default function WorkspacePage() {
           onTaskComplete={handleTaskComplete}
           onStatusChange={handleStatusChange}
           taskId={activeConsoleTaskId}
-          defaultVisible={true}
+          defaultVisible={false}
         />
 
         {/* Workflow Editor Dialog */}

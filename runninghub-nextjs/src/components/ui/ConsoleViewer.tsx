@@ -1,24 +1,19 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Terminal, Trash2, RefreshCw, Minimize2, Maximize2, Loader2, CheckCircle2, XCircle, X, Search } from 'lucide-react';
-import { useTheme } from 'next-themes';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { Trash2, RefreshCw, Minus, Plus, ChevronDown, Loader2, CheckCircle2, AlertCircle, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 interface LogEntry {
   timestamp: string;
-  level: 'info' | 'error' | 'success' | 'warning' | 'debug';
+  level: 'info' | 'error' | 'success' | 'warning';
   source: 'ui' | 'api' | 'cli';
   message: string;
   taskId?: string;
-  metadata?: Record<string, any>;
 }
 
 interface TaskState {
@@ -30,77 +25,90 @@ interface TaskState {
   currentImage?: string;
 }
 
-type DisplaySize = 'close' | 'min' | 'max';
-
 interface ConsoleViewerProps {
   onRefresh?: (silent?: boolean) => void;
   onTaskComplete?: (taskId: string, status: 'completed' | 'failed') => void;
   onStatusChange?: (taskId: string, status: TaskState['status']) => void;
   taskId?: string | null;
-  defaultVisible?: boolean; // Force console to be visible by default
-  autoRefreshInterval?: number; // Optional auto-refresh interval
+  defaultVisible?: boolean;
 }
 
-// Local storage key for console display size
-const CONSOLE_DISPLAY_SIZE_KEY = 'runninghub-console-display-size';
+const CONSOLE_VISIBLE_KEY = 'runninghub-console-visible';
 
-export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskId, defaultVisible = false }: ConsoleViewerProps) {
-  const { theme } = useTheme();
+type PanelState = 'closed' | 'expanded';
+
+export function ConsoleViewer({
+  onRefresh,
+  onTaskComplete,
+  onStatusChange,
+  taskId,
+  defaultVisible = false
+}: ConsoleViewerProps) {
   const [mounted, setMounted] = useState(false);
+  const [panelState, setPanelState] = useState<PanelState>('closed');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [taskStatus, setTaskStatus] = useState<TaskState | null>(null);
-
-  // Display size state - initialized from env var only (localStorage loaded after mount to prevent hydration errors)
-  const [displaySize, setDisplaySize] = useState<DisplaySize>(() => {
-    // Check environment variable for default (works on both server and client)
-    const envDefault = process.env.NEXT_PUBLIC_CONSOLE_DISPLAY_SIZE;
-    if (envDefault && (envDefault === 'close' || envDefault === 'min' || envDefault === 'max')) {
-      return envDefault as DisplaySize;
-    }
-
-    // Final fallback
-    return 'close';
-  });
-
-  // Derived states for backward compatibility
-  const isVisible = displaySize !== 'close';
-  const isMinimized = displaySize === 'min';
-
   const [isPaused, setIsPaused] = useState(false);
   const [filterLevel, setFilterLevel] = useState<'all' | LogEntry['level']>('all');
   const [filterSource, setFilterSource] = useState<'all' | LogEntry['source']>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastStatusRef = useRef<string | null>(null);
 
-  // Prevent hydration errors
-  useEffect(() => {
-    setMounted(true);
+  // Handle wheel event to prevent page scroll when scrolling logs
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const container = scrollRef.current;
+    if (!container) return;
 
-    // Load display size from localStorage after mounting (prevents hydration mismatch)
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(CONSOLE_DISPLAY_SIZE_KEY);
-      if (saved && (saved === 'close' || saved === 'min' || saved === 'max')) {
-        setDisplaySize(saved as DisplaySize);
-      }
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isAtTop = scrollTop === 0;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight;
+    const isScrollingDown = e.deltaY > 0;
+    const isScrollingUp = e.deltaY < 0;
+
+    // Prevent page scroll if:
+    // - Scrolling down and not at bottom
+    // - Scrolling up and not at top
+    if ((isScrollingDown && !isAtBottom) || (isScrollingUp && !isAtTop)) {
+      e.preventDefault();
     }
   }, []);
 
-  // Save display size to localStorage when it changes
+  // Initialize from localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined' && mounted) {
-      localStorage.setItem(CONSOLE_DISPLAY_SIZE_KEY, displaySize);
+    setMounted(true);
+    const saved = localStorage.getItem(CONSOLE_VISIBLE_KEY);
+    if (saved === 'true' || defaultVisible) {
+      setPanelState('expanded');
     }
-  }, [displaySize, mounted]);
+  }, [defaultVisible]);
+
+  // Save to localStorage
+  useEffect(() => {
+    if (mounted && typeof window !== 'undefined') {
+      localStorage.setItem(CONSOLE_VISIBLE_KEY, String(panelState !== 'closed'));
+    }
+  }, [panelState, mounted]);
+
+  // Keyboard shortcut to toggle
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        setPanelState(prev => prev === 'closed' ? 'expanded' : 'closed');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Reset task status when taskId changes
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setTaskStatus(null);
     lastStatusRef.current = null;
   }, [taskId]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Poll task status
   useEffect(() => {
@@ -114,27 +122,22 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
           let data;
           try {
             data = text ? JSON.parse(text) : null;
-          } catch(e) {
+          } catch (e) {
             return;
           }
-          
+
           if (!data) return;
 
           setTaskStatus(data);
 
           // Check for status change
           if (data.status !== lastStatusRef.current) {
-             onStatusChange?.(taskId, data.status);
+            onStatusChange?.(taskId, data.status);
 
-             if (data.status === 'completed' || data.status === 'failed') {
-               onTaskComplete?.(taskId, data.status);
-
-               // Auto-minimize on completion
-               if (data.status === 'completed') {
-                 setTimeout(() => setDisplaySize('min'), 3000);
-               }
-             }
-             lastStatusRef.current = data.status;
+            if (data.status === 'completed' || data.status === 'failed') {
+              onTaskComplete?.(taskId, data.status);
+            }
+            lastStatusRef.current = data.status;
           }
         }
       } catch (error) {
@@ -143,14 +146,14 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
     };
 
     fetchTask();
-    
+
     if (!isPaused) {
       const interval = setInterval(fetchTask, 1000);
       return () => clearInterval(interval);
     }
-  }, [taskId, onTaskComplete, isPaused]); // Removed taskStatus dependency to avoid infinite loops if it was used
+  }, [taskId, onTaskComplete, onStatusChange, isPaused]);
 
-  // Polling logs
+  // Poll logs
   useEffect(() => {
     const fetchLogs = async () => {
       try {
@@ -160,7 +163,7 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
           let data;
           try {
             data = text ? JSON.parse(text) : null;
-          } catch(e) {
+          } catch (e) {
             return;
           }
 
@@ -173,393 +176,283 @@ export function ConsoleViewer({ onRefresh, onTaskComplete, onStatusChange, taskI
       }
     };
 
-    fetchLogs(); // Initial fetch
-    
+    fetchLogs();
+
     if (!isPaused) {
-      const interval = setInterval(fetchLogs, 1000); // Poll every 1s for logs
+      const interval = setInterval(fetchLogs, 1000);
       return () => clearInterval(interval);
     }
   }, [isPaused]);
 
   // Auto-scroll to bottom
   useEffect(() => {
-    if (scrollRef.current && !isMinimized && isVisible && !isPaused) {
+    if (scrollRef.current && panelState === 'expanded' && !isPaused) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [logs, isMinimized, isVisible, isPaused]);
+  }, [logs, panelState, isPaused]);
 
   const clearLogs = async () => {
     try {
       await fetch('/api/logs', { method: 'DELETE' });
       setLogs([]);
     } catch (error) {
-      console.error('Failed to clear logs');
+      console.error('Failed to clear logs:', error);
     }
   };
 
-  const getLevelColor = (level: string) => {
-    const isDark = mounted && theme === 'dark';
+  const togglePanel = useCallback(() => {
+    setPanelState(prev => prev === 'closed' ? 'expanded' : 'closed');
+  }, []);
+
+  if (!mounted || panelState === 'closed') {
+    return (
+      <div className="fixed bottom-4 right-4 z-50">
+        <Button
+          onClick={togglePanel}
+          size="sm"
+          className="h-10 w-10 p-0 bg-white hover:bg-blue-50 text-blue-600 dark:text-blue-400 rounded-lg shadow-md border border-blue-200 hover:border-blue-300 transition-all font-mono text-sm dark:bg-gray-900 dark:border-blue-800 dark:hover:bg-blue-950"
+          title="Open Console (⌘⇧C)"
+        >
+          &gt;_
+        </Button>
+      </div>
+    );
+  }
+
+  const getLevelIcon = (level: LogEntry['level']) => {
     switch (level) {
-      case 'error': return 'text-red-500';
-      case 'success': return 'text-green-500';
-      case 'warning': return 'text-yellow-500';
-      default: return isDark ? 'text-gray-300' : 'text-gray-600';
+      case 'success':
+        return <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />;
+      case 'error':
+        return <span className="text-red-500 flex-shrink-0 font-bold">✕</span>;
+      case 'warning':
+        return <AlertCircle className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />;
+      default:
+        return <div className="w-3.5 h-3.5 rounded-full bg-blue-500 flex-shrink-0" />;
     }
   };
 
-  const getSourceBadge = (source: LogEntry['source']) => {
-    const badges = {
-      ui: { label: 'UI', color: 'bg-purple-500/10 text-purple-400 border-purple-500/30' },
-      api: { label: 'API', color: 'bg-blue-500/10 text-blue-400 border-blue-500/30' },
-      cli: { label: 'CLI', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
-    };
-    const badge = badges[source];
-
-    // Handle backward compatibility for old logs without source field
-    if (!badge) {
-      return (
-        <Badge variant="outline" className="text-[8px] h-3 px-1 border bg-gray-500/10 text-gray-400 border-gray-500/30">
-          LEGACY
-        </Badge>
-      );
+  const getLevelColor = (level: LogEntry['level']) => {
+    switch (level) {
+      case 'success':
+        return 'text-green-600 dark:text-green-400';
+      case 'error':
+        return 'text-red-600 dark:text-red-400';
+      case 'warning':
+        return 'text-yellow-600 dark:text-yellow-400';
+      default:
+        return 'text-blue-600 dark:text-blue-400';
     }
-
-    return (
-      <Badge variant="outline" className={`text-[8px] h-3 px-1 border ${badge.color}`}>
-        {badge.label}
-      </Badge>
-    );
   };
 
-  // Theme-aware color classes
-  const isDark = mounted && theme === 'dark';
-  const consoleBg = isDark ? 'bg-gray-950' : 'bg-white';
-  const consoleBorder = isDark ? 'border-gray-700' : 'border-gray-200';
-  const consoleHeaderBg = isDark ? 'bg-gray-900' : 'bg-gray-100';
-  const consoleHeaderText = isDark ? 'text-white' : 'text-gray-900';
-  const consoleTimestamp = isDark ? 'text-gray-600' : 'text-gray-400';
-  const consoleHover = isDark ? 'hover:bg-white/5' : 'hover:bg-gray-100';
-  const consoleHoverBorder = isDark ? 'hover:border-blue-500' : 'hover:border-blue-600';
-  const buttonHover = isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-200';
-  const buttonText = isDark ? 'text-gray-400' : 'text-gray-600';
-  const buttonHoverText = isDark ? 'hover:text-white' : 'hover:text-gray-900';
-  const badgeBorder = isDark ? 'border-gray-700' : 'border-gray-300';
-  const badgeText = isDark ? 'text-gray-400' : 'text-gray-600';
-  const progressBg = isDark ? 'bg-gray-800' : 'bg-gray-300';
-  const footerBg = isDark ? 'bg-gray-900/50' : 'bg-gray-100/80';
-  const footerText = isDark ? 'text-gray-500' : 'text-gray-600';
-  const logAreaBg = isDark ? 'bg-black' : 'bg-gray-50';
-  const emptyText = isDark ? 'text-gray-600' : 'text-gray-400';
-  const opacity = isDark ? 'opacity-95' : 'opacity-100';
-
-  const getProgress = () => {
-    if (!taskStatus || taskStatus.totalImages === 0) return 0;
-    return ((taskStatus.completedCount + taskStatus.failedCount) / taskStatus.totalImages) * 100;
-  };
-
-  const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
-      // Level filter
-      if (filterLevel !== 'all' && log.level !== filterLevel) return false;
-
-      // Source filter
-      if (filterSource !== 'all' && log.source !== filterSource) return false;
-
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return (
-          log.message.toLowerCase().includes(query) ||
-          log.taskId?.toLowerCase().includes(query) ||
-          JSON.stringify(log.metadata || {}).toLowerCase().includes(query)
-        );
-      }
-
-      return true;
-    });
-  }, [logs, filterLevel, filterSource, searchQuery]);
-
-  if (!isVisible) {
-    return (
-      <Button
-        className="fixed bottom-4 right-4 z-50 shadow-lg rounded-full w-10 h-10 p-0"
-        onClick={() => setDisplaySize('min')}
-        variant="secondary"
-      >
-        <Terminal className="w-5 h-5" />
-      </Button>
-    );
-  }
-
-  if (isMinimized) {
-    // Get the most recent 1-3 logs for display in minimized state
-    const recentLogs = [...logs].slice(0, 3);
-
-    // Softer contrast colors for minimized state
-    const minHeaderBg = isDark ? 'bg-gray-900/80' : 'bg-gray-200/80';
-    const minBodyBg = isDark ? 'bg-gray-950/60' : 'bg-gray-50/60';
-    const minIconColor = 'text-blue-500';
-    const minLogTimestamp = isDark ? 'text-gray-500' : 'text-gray-400';
-    const minLogText = isDark ? 'text-gray-400' : 'text-gray-500';
-    const minLogHover = isDark ? 'hover:bg-gray-800/50' : 'hover:bg-gray-200/50';
-    const minLogBorder = isDark ? 'border-gray-700/50' : 'border-gray-200/50';
-    const minStatusText = isDark ? 'text-gray-400' : 'text-gray-500';
-    const minProgressBg = isDark ? 'bg-gray-800/50' : 'bg-gray-300/50';
-    const minBorder = isDark ? 'border-gray-800/60' : 'border-gray-300/60';
-
-    return (
-      <Card className={`fixed bottom-4 right-4 z-50 w-[450px] shadow-lg ${consoleBg} ${minBorder} ${opacity} hover:opacity-100 transition-all`}>
-        <div className="overflow-hidden">
-          {/* Header with icon and controls */}
-          <div className={`flex items-center justify-between p-2 ${minHeaderBg} backdrop-blur-sm`}>
-            <span className={`text-xs font-mono font-semibold ${minIconColor}`}>{'>_'}</span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-5 w-5 ${buttonHover} ${buttonText}`}
-                onClick={() => setDisplaySize('max')}
-              >
-                <Maximize2 className="w-3 h-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-5 w-5 ${buttonHover} ${buttonText} hover:text-red-400`}
-                onClick={() => setDisplaySize('close')}
-              >
-                <X className="w-3 h-3" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Body with softer contrast */}
-          <div className={`p-2 ${minBodyBg} backdrop-blur-sm`}>
-            {/* Progress bar if task is running */}
-            {taskStatus && (
-              <Progress value={getProgress()} className={`h-0.5 mb-2 ${minProgressBg}`} />
-            )}
-
-            {/* Recent logs preview */}
-            {recentLogs.length > 0 && (
-              <div className="space-y-0.5 mb-2">
-                {recentLogs.map((log, i) => (
-                  <div
-                    key={i}
-                    className={`flex gap-2 ${minLogHover} p-1 rounded transition-colors border-l-2 ${minLogBorder} text-[9px] font-mono`}
-                  >
-                    <span className={`${minLogTimestamp} shrink-0 tabular-nums`}>
-                      {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
-                    </span>
-                    <span className={`${minLogText} break-all leading-tight line-clamp-1`}>
-                      {log.message}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Task status summary */}
-            {taskStatus && (
-              <div className={`flex items-center justify-between pt-1.5 border-t ${minLogBorder} text-[9px] ${minStatusText}`}>
-                <span className="flex items-center gap-1">
-                  {taskStatus.status === 'processing' && <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-400" />}
-                  {taskStatus.status === 'completed' && <CheckCircle2 className="w-2.5 h-2.5 text-green-400" />}
-                  {taskStatus.status === 'failed' && <XCircle className="w-2.5 h-2.5 text-red-400" />}
-                  <span className="font-medium truncate max-w-[200px]">
-                    {taskStatus.currentImage ? taskStatus.currentImage.split('/').pop() : 'Initializing...'}
-                  </span>
-                </span>
-                <span className="font-mono">
-                  {taskStatus.completedCount + taskStatus.failedCount}/{taskStatus.totalImages}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </Card>
-    );
-  }
+  // Filter logs based on level and source
+  const filteredLogs = logs.filter(log => {
+    if (filterLevel !== 'all' && log.level !== filterLevel) return false;
+    if (filterSource !== 'all' && log.source !== filterSource) return false;
+    return true;
+  }).sort((a, b) => {
+    // Sort by timestamp descending (newest first)
+    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+  });
 
   return (
-    <Card className={`fixed bottom-4 right-4 z-50 w-[800px] h-[500px] shadow-2xl flex flex-col overflow-hidden ${consoleBorder} ${consoleBg} ${opacity} transition-all`}>
-      {/* Header */}
-      <div className={`flex items-center justify-between p-2 ${consoleHeaderBg} ${consoleHeaderText} shrink-0 border-b ${consoleBorder}`}>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-mono font-bold text-blue-400">{'>_'}</span>
-          <span className="text-xs font-mono font-bold tracking-tight">LOGS CONSOLE</span>
-          <Badge variant="outline" className={`text-[9px] h-4 px-1 ${badgeBorder} ${badgeText}`}>
-            {logs.length}
-          </Badge>
-          {taskStatus?.status === 'processing' && (
-             <Badge variant="default" className="text-[9px] h-4 px-1 bg-blue-600 text-white animate-pulse">
-               RUNNING
-             </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`h-6 w-6 ${buttonHover} ${buttonText} ${buttonHoverText}`}
-            onClick={clearLogs}
-            title="Clear logs"
-          >
-            <Trash2 className="w-3 h-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`h-6 w-6 ${buttonHover} ${buttonText} ${buttonHoverText}`}
-            onClick={() => setDisplaySize('min')}
-          >
-            <Minimize2 className="w-3 h-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`h-6 w-6 ${buttonHover} ${buttonText} hover:text-red-400`}
-            onClick={() => setDisplaySize('close')}
-          >
-            <X className="w-3 h-3" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Filter Bar - Removed (moved to footer) */}
-
-      {/* Task Progress Section */}
-      {taskStatus && (
-        <div className={`${consoleHeaderBg}/50 p-3 border-b ${consoleBorder} space-y-2`}>
-          <div className={`flex justify-between items-center text-xs ${consoleHeaderText}`}>
-             <div className="flex items-center gap-2">
-               {taskStatus.status === 'processing' && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
-               {taskStatus.status === 'completed' && <CheckCircle2 className="w-3 h-3 text-green-400" />}
-               {taskStatus.status === 'failed' && <XCircle className="w-3 h-3 text-red-400" />}
-               <span className="font-medium truncate max-w-[250px]">
-                 {taskStatus.currentImage ? taskStatus.currentImage.split('/').pop() : 'Initializing...'}
-               </span>
-             </div>
-             <span className="font-mono">
-               {taskStatus.completedCount + taskStatus.failedCount} / {taskStatus.totalImages}
-             </span>
+    <>
+      {/* Settings Panel - Dropdown */}
+      {showSettings && panelState === 'expanded' && (
+        <div className="fixed bottom-16 left-4 z-[60]">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-blue-200 dark:border-blue-800 p-3 space-y-3 min-w-[200px]">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-blue-900 dark:text-blue-100">Log Level</label>
+              <Select value={filterLevel} onValueChange={(v) => setFilterLevel(v as typeof filterLevel)}>
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Levels</SelectItem>
+                  <SelectItem value="info">Info</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="warning">Warning</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-blue-900 dark:text-blue-100">Source</label>
+              <Select value={filterSource} onValueChange={(v) => setFilterSource(v as typeof filterSource)}>
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  <SelectItem value="ui">UI</SelectItem>
+                  <SelectItem value="api">API</SelectItem>
+                  <SelectItem value="cli">CLI</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <Progress value={getProgress()} className={`h-1.5 ${progressBg}`} />
         </div>
       )}
 
-      {/* Logs Area */}
-      <div
-        ref={scrollRef}
-        className={`flex-1 ${logAreaBg} p-2 font-mono text-[10px] overflow-y-auto`}
-      >
-        {filteredLogs.length === 0 ? (
-          <div className={`${emptyText} italic text-center mt-10`}>
-            {logs.length === 0 ? '' : 'No logs match your filters'}
+      {/* Main Panel */}
+      <div className="fixed bottom-0 left-0 right-0 z-50">
+        <div
+          className={cn(
+            "border-t shadow-2xl transition-all duration-200 ease-in-out h-[calc(100vh/3)]",
+            "bg-white dark:bg-gray-900",
+            "border-blue-200 dark:border-blue-800"
+          )}
+        >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-2 border-b border-blue-100 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/50 backdrop-blur-sm">
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-blue-600 dark:text-blue-400 font-mono text-sm">&gt;_</span>
+            <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Console</span>
+            <Badge variant="secondary" className="ml-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs">
+              {logs.length} logs
+            </Badge>
+            {taskStatus && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-xs",
+                  taskStatus.status === 'processing' && "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
+                  taskStatus.status === 'completed' && "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300",
+                  taskStatus.status === 'failed' && "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                )}
+              >
+                {taskStatus.status === 'processing' && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                {taskStatus.status}
+              </Badge>
+            )}
           </div>
-        ) : (
-          <div className="space-y-0.5">
-            {[...filteredLogs].reverse().map((log, i) => (
-              <div key={i} className={`flex gap-2 items-start ${consoleHover} p-1 rounded transition-colors border-l-2 ${consoleHoverBorder}`}>
-                <span className={`${consoleTimestamp} shrink-0 tabular-nums text-[9px]`}>
-                  {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
-                </span>
-                {getSourceBadge(log.source)}
-                <span className={`${getLevelColor(log.level)} break-all leading-tight flex-1 text-[10px]`}>
-                  {log.message}
-                </span>
-                {log.taskId && (
-                  <span className={`text-[8px] ${consoleTimestamp} shrink-0 tabular-nums`}>
-                    #{log.taskId.slice(-8)}
-                  </span>
+
+          <div className="flex items-center gap-1">
+            <Button
+              onClick={() => setPanelState('closed')}
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Content */}
+        {panelState === 'expanded' && (
+          <div className="h-[calc(100vh/3-48px)]">
+            {/* Toolbar */}
+            <div className="flex items-center gap-2 px-4 py-2 border-b border-blue-100 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-950/30">
+              <Button
+                onClick={() => onRefresh?.()}
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Refresh
+              </Button>
+
+              <Button
+                onClick={() => setIsPaused(!isPaused)}
+                size="sm"
+                variant="ghost"
+                className={cn(
+                  "h-7 px-2 text-xs hover:bg-blue-100 dark:hover:bg-blue-900",
+                  isPaused ? "text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300" : "text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200"
+                )}
+              >
+                {isPaused ? (
+                  <>
+                    <Plus className="w-3 h-3 mr-1" />
+                    Resume
+                  </>
+                ) : (
+                  <>
+                    <Minus className="w-3 h-3 mr-1" />
+                    Pause
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={clearLogs}
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs text-blue-700 dark:text-blue-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-blue-100 dark:hover:bg-blue-900"
+              >
+                <Trash2 className="w-3 h-3 mr-1" />
+                Clear
+              </Button>
+
+              <Button
+                onClick={() => setShowSettings(!showSettings)}
+                size="sm"
+                variant={showSettings ? "secondary" : "ghost"}
+                className={cn(
+                  "h-7 w-7 p-0",
+                  showSettings ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300" : "text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
+                )}
+                title="Filter Settings"
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </Button>
+
+              <div className="ml-auto flex items-center gap-2">
+                {(filterLevel !== 'all' || filterSource !== 'all') && (
+                  <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                    {filteredLogs.length} / {logs.length}
+                  </Badge>
+                )}
+
+                {taskStatus && (
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-xs",
+                      taskStatus.status === 'processing' && "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300",
+                      taskStatus.status === 'completed' && "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300",
+                      taskStatus.status === 'failed' && "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    )}
+                  >
+                    {taskStatus.status === 'processing' && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                    {taskStatus.status}: {taskStatus.completedCount}/{taskStatus.totalImages}
+                  </Badge>
                 )}
               </div>
-            ))}
+            </div>
+
+            {/* Logs */}
+            <div
+              ref={scrollRef}
+              onWheel={handleWheel}
+              className="console-logs-scroll console-logs-container overflow-y-auto px-4 py-3 space-y-1 font-mono text-xs bg-white dark:bg-gray-950"
+            >
+              {filteredLogs.length === 0 ? (
+                <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+                  {logs.length === 0 ? 'No logs yet' : 'No logs match current filters'}
+                </div>
+              ) : (
+                filteredLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    className={cn(
+                      "flex items-start gap-2 py-1 px-2 rounded hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors",
+                      getLevelColor(log.level)
+                    )}
+                  >
+                    <span className="flex-shrink-0 mt-0.5">{getLevelIcon(log.level)}</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 flex-shrink-0 font-mono">{log.timestamp}</span>
+                    <span className="flex-1 break-all">{log.message}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Footer Status */}
-      <div className={`${footerBg} p-1.5 px-2 text-[9px] ${footerText} flex justify-between items-center shrink-0 border-t ${consoleBorder}`}>
-         <div className="flex items-center gap-2">
-           {/* Monitoring Status */}
-           <span className="flex items-center gap-1 italic shrink-0">
-             <div className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-yellow-500' : 'bg-green-500 animate-pulse'}`} />
-             {isPaused ? 'Paused' : 'Live'}
-           </span>
-
-           {/* Level Filter - Shrunk */}
-           <Select value={filterLevel} onValueChange={(v) => setFilterLevel(v as 'all' | LogEntry['level'])}>
-             <SelectTrigger className="h-3.5 text-[8px] w-12 px-1 border border-gray-600/50">
-               <SelectValue />
-             </SelectTrigger>
-             <SelectContent>
-               <SelectItem value="all">All</SelectItem>
-               <SelectItem value="info">Info</SelectItem>
-               <SelectItem value="success">Success</SelectItem>
-               <SelectItem value="warning">Warning</SelectItem>
-               <SelectItem value="error">Error</SelectItem>
-               <SelectItem value="debug">Debug</SelectItem>
-             </SelectContent>
-           </Select>
-
-           {/* Source Filter - Shrunk */}
-           <Select value={filterSource} onValueChange={(v) => setFilterSource(v as 'all' | LogEntry['source'])}>
-             <SelectTrigger className="h-3.5 text-[8px] w-12 px-1 border border-gray-600/50">
-               <SelectValue />
-             </SelectTrigger>
-             <SelectContent>
-               <SelectItem value="all">All</SelectItem>
-               <SelectItem value="ui">UI</SelectItem>
-               <SelectItem value="api">API</SelectItem>
-               <SelectItem value="cli">CLI</SelectItem>
-             </SelectContent>
-           </Select>
-
-           {/* Search Input - Compact */}
-           <div className="relative w-28">
-             <Input
-               type="text"
-               placeholder="Search..."
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-               className="h-3.5 text-[8px] pl-5 py-0"
-             />
-             <Search className="absolute left-1 top-0.5 w-2.5 h-2.5 text-gray-400" />
-             {searchQuery && (
-               <button
-                 onClick={() => setSearchQuery('')}
-                 className="absolute right-1 top-0.5 text-gray-400 hover:text-gray-600"
-               >
-                 ×
-               </button>
-             )}
-           </div>
-
-           {/* Auto-refresh Checkbox */}
-           <div className="flex items-center gap-1 shrink-0">
-              <Checkbox
-                id="console-auto-refresh"
-                checked={!isPaused}
-                onCheckedChange={(checked) => setIsPaused(checked === false)}
-                className="w-3 h-3"
-              />
-              <Label htmlFor="console-auto-refresh" className="text-[8px] font-normal cursor-pointer leading-none">Auto</Label>
-           </div>
-         </div>
-         {onRefresh && (
-           <div className="flex items-center gap-2 shrink-0">
-             <Button
-               variant="ghost"
-               size="sm"
-               className="h-3.5 p-0 text-[8px] hover:bg-transparent text-blue-400 hover:text-blue-300"
-               onClick={() => onRefresh(false)}
-             >
-               <RefreshCw className="w-2 h-2 mr-0.5" /> REFRESH
-             </Button>
-           </div>
-         )}
-      </div>
-    </Card>
+    </div>
+    </>
   );
 }

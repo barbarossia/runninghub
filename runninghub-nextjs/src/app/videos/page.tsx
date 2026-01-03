@@ -270,7 +270,7 @@ export default function VideosPage() {
         <ConsoleViewer
           taskId={currentTaskId}
           onRefresh={handleRefresh}
-          defaultVisible={true}
+          defaultVisible={false}
         />
       </div>
     </div>
