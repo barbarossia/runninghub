@@ -16,6 +16,8 @@ interface DownloadRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const taskId = `youtube_download_${Date.now()}`;
+
   try {
     const data: DownloadRequest = await request.json();
     const {
@@ -28,19 +30,34 @@ export async function POST(request: NextRequest) {
       persistCookies = true,
     } = data;
 
+    // Log received data for debugging
+    await writeLog(`Received YouTube download request: ${url}`, 'info', taskId);
+    console.log('YouTube download request:', { url, folderPath, sessionId, cookieMode, hasCookieContent: !!cookieContent, hasCookieFilePath: !!cookieFilePath });
+
     // Validate required fields
     if (!url || !folderPath || !sessionId) {
+      await writeLog(`Missing required fields: url=${!!url}, folderPath=${!!folderPath}, sessionId=${!!sessionId}`, 'error', taskId);
       return NextResponse.json(
         { error: "Missing required fields: url, folderPath, sessionId" },
         { status: 400 }
       );
     }
 
-    // Log received data for debugging
-    console.log('YouTube download request:', { url, folderPath, sessionId, cookieMode, hasCookieContent: !!cookieContent, hasCookieFilePath: !!cookieFilePath });
+    // Check if folder exists
+    try {
+      await fs.access(folderPath);
+      await writeLog(`Download folder exists: ${folderPath}`, 'success', taskId);
+    } catch (err) {
+      await writeLog(`Download folder does not exist or is not accessible: ${folderPath}`, 'error', taskId);
+      return NextResponse.json(
+        { error: "Invalid download folder. Please select a valid folder." },
+        { status: 400 }
+      );
+    }
 
     // Validate cookie input based on mode (cookies are optional for paste mode)
     if (cookieMode === 'file' && !cookieFilePath) {
+      await writeLog(`Cookie file path required when mode is 'file'`, 'error', taskId);
       return NextResponse.json(
         { error: "Cookie file path is required when cookieMode is 'file'" },
         { status: 400 }
@@ -48,16 +65,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if yt-dlp is available
+    await writeLog(`Checking yt-dlp availability...`, 'info', taskId);
     const ytDlpAvailable = await checkYtDlpAvailable();
     if (!ytDlpAvailable) {
+      await writeLog(`yt-dlp is not installed or not accessible`, 'error', taskId);
       return NextResponse.json(
         { error: "yt-dlp is not installed or not accessible. Please install yt-dlp to use YouTube download features." },
         { status: 500 }
       );
     }
 
-    // Create a background task for download
-    const taskId = `youtube_download_${Date.now()}`;
+    await writeLog(`yt-dlp is available`, 'success', taskId);
 
     // Initialize task in store
     await initTask(taskId, 1);
@@ -82,6 +100,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error("Error starting YouTube download:", error);
+    await writeLog(`Error starting YouTube download: ${error}`, 'error', taskId);
     return NextResponse.json(
       { error: "Failed to start YouTube download" },
       { status: 500 }
