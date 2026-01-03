@@ -36,14 +36,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate cookie input based on mode
-    if (cookieMode === 'paste' && !cookieContent) {
-      return NextResponse.json(
-        { error: "Cookie content is required when cookieMode is 'paste'" },
-        { status: 400 }
-      );
-    }
+    // Log received data for debugging
+    console.log('YouTube download request:', { url, folderPath, sessionId, cookieMode, hasCookieContent: !!cookieContent, hasCookieFilePath: !!cookieFilePath });
 
+    // Validate cookie input based on mode (cookies are optional for paste mode)
     if (cookieMode === 'file' && !cookieFilePath) {
       return NextResponse.json(
         { error: "Cookie file path is required when cookieMode is 'file'" },

@@ -144,9 +144,15 @@ export function YoutubeDownloader({
       return;
     }
 
+    // Validate folder_path and session_id exist
+    if (!selectedFolder.folder_path || !selectedFolder.session_id) {
+      toast.error('Invalid folder selection. Please select a folder again.');
+      return;
+    }
+
     // Check cookie input based on mode
     if (cookieMode === 'paste' && !cookieContent.trim()) {
-      toast.warning('No cookies provided. Click Download to try without cookies (public videos only).');
+      toast.warning('No cookies provided. Download will proceed without cookies (public videos only).');
     } else if (cookieMode === 'file' && !cookieFilePath.trim()) {
       toast.error('Please enter cookies file path');
       return;
@@ -155,20 +161,24 @@ export function YoutubeDownloader({
     setIsDownloading(true);
 
     try {
+      const requestBody = {
+        url: url.trim(),
+        folderPath: selectedFolder.folder_path,
+        sessionId: selectedFolder.session_id,
+        cookieMode,
+        cookieContent: cookieMode === 'paste' ? cookieContent : undefined,
+        cookieFilePath: cookieMode === 'file' ? cookieFilePath : undefined,
+        persistCookies: true,
+      };
+
+      console.log('Sending YouTube download request:', requestBody);
+
       const response = await fetch('/api/youtube/download', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          url: url.trim(),
-          folderPath: selectedFolder.folder_path,
-          sessionId: selectedFolder.session_id,
-          cookieMode,
-          cookieContent: cookieMode === 'paste' ? cookieContent : undefined,
-          cookieFilePath: cookieMode === 'file' ? cookieFilePath : undefined,
-          persistCookies: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
