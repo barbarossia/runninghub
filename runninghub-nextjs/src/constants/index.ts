@@ -67,6 +67,10 @@ export const API_ENDPOINTS = {
   VIDEOS_CROP: '/api/videos/crop',
   VIDEOS_CLIP: '/api/videos/clip',
 
+  // YouTube
+  YOUTUBE_DOWNLOAD: '/api/youtube/download',
+  YOUTUBE_CLEAR_COOKIES: '/api/youtube/clear-cookies',
+
   // Tasks
   NODES: '/api/nodes',
   SESSION_CLEAR: '/api/session/clear',

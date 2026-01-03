@@ -268,7 +268,7 @@ export default function VideoClipPage() {
         <ConsoleViewer
           taskId={currentTaskId}
           onRefresh={handleRefresh}
-          defaultVisible={true}
+          defaultVisible={false}
         />
       </div>
     </div>
