@@ -602,7 +602,7 @@ export default function WorkspacePage() {
   };
 
   const handleClipVideos = async (selectedPaths: string[]) => {
-    const clipConfig = useVideoClipStore.getState();
+    const { clipConfig } = useVideoClipStore.getState();
 
     try {
       const response = await fetch(API_ENDPOINTS.VIDEOS_CLIP, {
@@ -827,6 +827,7 @@ export default function WorkspacePage() {
                 {/* Media Selection Toolbar */}
                 {selectedFiles.length > 0 && (
                 <MediaSelectionToolbar
+                  selectedFiles={selectedFiles}
                   onRename={handleRenameFile}
                   onDelete={handleDeleteFile}
                   onDecode={handleDecodeFile}
@@ -1003,9 +1004,12 @@ export default function WorkspacePage() {
             path: previewVideo.path,
             name: previewVideo.name,
             size: previewVideo.size,
-            type: 'video',
+            type: 'video' as const,
             extension: previewVideo.extension || '',
-            blobUrl: previewVideo.blobUrl
+            blob_url: previewVideo.blobUrl,
+            duration: previewVideo.duration,
+            created_at: previewVideo.created_at || 0,
+            modified_at: previewVideo.modified_at || 0
           } : null}
           isOpen={!!previewVideo}
           onClose={() => setPreviewVideo(null)}
