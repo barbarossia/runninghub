@@ -15,6 +15,7 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  Eye,
 } from 'lucide-react';
 import { useVideoStore } from '@/store';
 import { useVideoSelection } from '@/hooks/useVideoSelection';
@@ -428,6 +429,10 @@ function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay, onRen
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handlePlayClick}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Preview
+                </DropdownMenuItem>
                 {onRename && (
                   <DropdownMenuItem onClick={handleRenameClick}>
                     <Pencil className="h-4 w-4 mr-2" />
