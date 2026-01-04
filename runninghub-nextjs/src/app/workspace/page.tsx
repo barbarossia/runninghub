@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore } from '@/store/folder-store';
+import { useVideoClipStore } from '@/store/video-clip-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { useFileSystem } from '@/hooks';
@@ -31,6 +32,10 @@ import { WorkflowInputBuilder } from '@/components/workspace/WorkflowInputBuilde
 import { JobList } from '@/components/workspace/JobList';
 import { JobDetail } from '@/components/workspace/JobDetail';
 import { YoutubeDownloader } from '@/components/workspace/YoutubeDownloader';
+import { VideoClipConfiguration } from '@/components/videos/VideoClipConfiguration';
+import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectionToolbar';
+import { VideoGallery } from '@/components/videos/VideoGallery';
+import { VideoPlayerModal } from '@/components/videos/VideoPlayerModal';
 import {
   Settings,
   FolderOpen,
@@ -41,6 +46,7 @@ import {
   Upload,
   Play,
   Youtube,
+  Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -79,7 +85,7 @@ export default function WorkspacePage() {
 
   // Local state
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'run-workflow' | 'workflows' | 'jobs'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'run-workflow' | 'workflows' | 'jobs'>('media');
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
@@ -87,6 +93,34 @@ export default function WorkspacePage() {
 
   // Get selected files from store
   const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
+
+  // Filter videos for Clip tab
+  const filteredVideos = useMemo(() => {
+    return mediaFiles.filter(file => file.type === 'video');
+  }, [mediaFiles]);
+
+  // Get selected video count for Clip tab
+  const selectedVideoCount = useMemo(() => {
+    return mediaFiles.filter(f => f.type === 'video' && f.selected).length;
+  }, [mediaFiles]);
+
+  // Type adapter: MediaFile to VideoFile
+  const adaptedVideos = useMemo(() => {
+    return filteredVideos.map(file => ({
+      path: file.path,
+      name: file.name,
+      size: file.size,
+      type: 'video' as const,
+      extension: file.name.split('.').pop() || '',
+      width: file.width,
+      height: file.height,
+      fps: file.fps,
+      duration: file.duration,
+      created_at: file.created_at,
+      modified_at: file.modified_at,
+      thumbnail: file.thumbnail,
+    }));
+  }, [filteredVideos]);
 
   // Custom hooks
   const { loadFolderContents } = useFileSystem();
@@ -566,6 +600,91 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleClipVideos = async (selectedPaths: string[]) => {
+    const clipConfig = useVideoClipStore.getState();
+
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_CLIP, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: selectedPaths,
+          clip_config: clipConfig,
+          timeout: 3600,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setActiveConsoleTaskId(data.task_id);
+        toast.success(`Started clipping ${selectedPaths.length} video${selectedPaths.length > 1 ? 's' : ''}`);
+      } else {
+        toast.error(data.error || 'Failed to start clipping');
+      }
+    } catch (error) {
+      console.error('Error clipping videos:', error);
+      toast.error('Failed to start clipping');
+    }
+  };
+
+  const handleClipSingleVideo = useCallback((video: MediaFile) => {
+    handleClipVideos([video.path]);
+  }, []);
+
+  const handleVideoSelectionChange = useCallback((videoPath: string, selected: boolean) => {
+    updateMediaFile(videoPath, { selected });
+  }, [updateMediaFile]);
+
+  const handleRenameVideo = async (video: any, newName: string) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_RENAME, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_path: video.path,
+          new_name: newName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Renamed to ${data.new_name}`);
+        await handleRefresh(true);
+      } else {
+        toast.error(data.error || 'Failed to rename video');
+      }
+    } catch (error) {
+      console.error('Error renaming video:', error);
+      toast.error('Failed to rename video');
+    }
+  };
+
+  const handleDeleteVideo = async (video: any) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_DELETE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: [video.path],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success('Video deleted');
+        await handleRefresh(true);
+      } else {
+        toast.error(data.error || 'Failed to delete video');
+      }
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      toast.error('Failed to delete video');
+    }
+  };
+
   const handlePreviewFile = (file: MediaFile) => {
     // Preview is handled internally by MediaGallery component
     console.log('Preview file:', file);
@@ -672,7 +791,7 @@ export default function WorkspacePage() {
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="media" className="flex items-center gap-2">
                   <FolderOpen className="h-4 w-4" />
                   Media Gallery
@@ -680,6 +799,10 @@ export default function WorkspacePage() {
                 <TabsTrigger value="youtube" className="flex items-center gap-2">
                   <Youtube className="h-4 w-4" />
                   YouTube
+                </TabsTrigger>
+                <TabsTrigger value="clip" className="flex items-center gap-2">
+                  <Scissors className="h-4 w-4" />
+                  Clip
                 </TabsTrigger>
                 <TabsTrigger value="run-workflow" className="flex items-center gap-2">
                   <Play className="h-4 w-4" />
@@ -699,13 +822,17 @@ export default function WorkspacePage() {
               <TabsContent value="media" className="space-y-6 mt-6">
                 {/* Media Selection Toolbar */}
                 {selectedFiles.length > 0 && (
-                  <MediaSelectionToolbar
-                    selectedFiles={selectedFiles}
-                    onRename={handleRenameFile}
-                    onDelete={handleDeleteFile}
-                    onDecode={handleDecodeFile}
-                    onRunWorkflow={handleQuickRunWorkflow}
-                  />
+                <MediaSelectionToolbar
+                  onRename={handleRenameFile}
+                  onDelete={handleDeleteFile}
+                  onDecode={handleDecodeFile}
+                  onRunWorkflow={handleQuickRunWorkflow}
+                  onClip={async (files) => {
+                    const videoPaths = files.map(f => f.path);
+                    await handleClipVideos(videoPaths);
+                  }}
+                  onPreview={handlePreviewFile}
+                />
                 )}
 
                 {/* Sort Controls */}
@@ -724,6 +851,7 @@ export default function WorkspacePage() {
                   onRename={handleRenameFile}
                   onDelete={handleDeleteFile}
                   onDecode={handleDecodeFile}
+                  onClipVideo={handleClipSingleVideo}
                   onPreview={handlePreviewFile}
                 />
               </TabsContent>
@@ -750,6 +878,37 @@ export default function WorkspacePage() {
                     }}
                   />
                 </div>
+              </TabsContent>
+
+              {/* Clip Tab */}
+              <TabsContent value="clip" className="space-y-6 mt-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold">Video Clipping</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Extract images from videos using FFmpeg. Videos are automatically filtered from your workspace folder.
+                  </p>
+                </div>
+
+                {/* Clip Configuration */}
+                <VideoClipConfiguration />
+
+                {/* Selection Toolbar */}
+                <VideoClipSelectionToolbar
+                  selectedCount={selectedVideoCount}
+                  onClip={(selectedPaths) => handleClipVideos(selectedPaths)}
+                  onRefresh={() => handleRefresh(true)}
+                  onRename={handleRenameVideo}
+                  disabled={false}
+                />
+
+                {/* Video Gallery - filtered to videos only */}
+                <VideoGallery
+                  videos={adaptedVideos}
+                  isLoading={false}
+                  onRefresh={() => handleRefresh(true)}
+                  onRename={handleRenameVideo}
+                  onDelete={handleDeleteVideo}
+                />
               </TabsContent>
 
               {/* Run Workflow Tab */}

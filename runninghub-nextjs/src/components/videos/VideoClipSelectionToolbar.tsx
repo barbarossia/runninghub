@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Video, RefreshCw, Pencil, Scissors, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useVideoSelectionStore, useVideoStore } from '@/store';
+// For backward compatibility, we still import stores but use props when provided
 import { toast } from 'sonner';
 import { API_ENDPOINTS } from '@/constants';
 import { RenameVideoDialog } from './RenameVideoDialog';
@@ -11,52 +12,30 @@ import { VideoFile } from '@/types';
 import { BaseSelectionToolbar } from '@/components/selection/BaseSelectionToolbar';
 
 interface VideoClipSelectionToolbarProps {
+  selectedCount: number;
   onClip?: (selectedPaths: string[]) => void;
   onRefresh?: () => void;
+  onRename?: (video: VideoFile, newName: string) => Promise<void>;
+  onDeselectAll?: () => void;
   disabled?: boolean;
   className?: string;
 }
 
 export function VideoClipSelectionToolbar({
+  selectedCount,
   onClip,
   onRefresh,
+  onRename,
+  onDeselectAll,
   disabled = false,
   className = '',
 }: VideoClipSelectionToolbarProps) {
+  // For backward compatibility with standalone clip page
   const store = useVideoSelectionStore();
   const videoStore = useVideoStore();
-  const selectedCount = store.selectedVideos.size;
 
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
-
-  // Get selected paths
-  const selectedPaths = useMemo(() => {
-    return Array.from(store.selectedVideos.keys());
-  }, [store.selectedVideos]);
-
-  // Get the single selected video for rename
-  const selectedVideo = useMemo(() => {
-    if (selectedCount !== 1) return null;
-    return store.selectedVideos.values().next().value || null;
-  }, [selectedCount, store.selectedVideos]);
-
-  // Handle clip
-  const handleClip = useCallback(async () => {
-    if (!onClip) return;
-
-    setIsProcessing(true);
-    try {
-      await onClip(selectedPaths);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [onClip, selectedPaths]);
-
-  // Handle rename
-  const handleRename = async (video: VideoFile, newName: string) => {
+  // Default rename handler for backward compatibility
+  const defaultRenameHandler = async (video: VideoFile, newName: string) => {
     try {
       const response = await fetch(API_ENDPOINTS.VIDEOS_RENAME, {
         method: 'POST',
@@ -86,15 +65,57 @@ export function VideoClipSelectionToolbar({
     }
   };
 
+  // Use prop or fallback to default handler
+  const handleRenameCallback = onRename || defaultRenameHandler;
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+
+  // Get selected paths (only used in standalone clip page)
+  const selectedPaths = useMemo(() => {
+    return Array.from(store.selectedVideos.keys());
+  }, [store.selectedVideos]);
+
+  // Get the single selected video for rename (from store)
+  const selectedVideo = useMemo(() => {
+    if (selectedCount !== 1) return null;
+    return store.selectedVideos.values().next().value || null;
+  }, [selectedCount, store.selectedVideos]);
+
+  // Handle clip
+  const handleClip = useCallback(async () => {
+    if (!onClip) return;
+
+    setIsProcessing(true);
+    try {
+      await onClip(selectedPaths);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [onClip, selectedPaths]);
+
+  // Handle rename (now uses callback)
+  const handleRename = async (video: VideoFile, newName: string) => {
+    await handleRenameCallback(video, newName);
+    setIsRenameDialogOpen(false);
+  };
+
   // Handle refresh
   const handleRefresh = useCallback(() => {
     onRefresh?.();
   }, [onRefresh]);
 
   // Handle deselect all
-  const handleDeselectAll = useCallback(() => {
-    store.deselectAll();
-  }, [store]);
+  const handleDeselectAllCallback = useCallback(() => {
+    if (onDeselectAll) {
+      onDeselectAll();
+    } else {
+      // Fallback to store method
+      store.deselectAll();
+    }
+  }, [onDeselectAll, store]);
 
   const toolbarDisabled = disabled || isProcessing;
 
@@ -103,7 +124,7 @@ export function VideoClipSelectionToolbar({
       <BaseSelectionToolbar
         selectedCount={selectedCount}
         className={className}
-        onDeselectAll={handleDeselectAll}
+        onDeselectAll={handleDeselectAllCallback}
       >
         {(mode) => {
           if (mode === 'expanded') {

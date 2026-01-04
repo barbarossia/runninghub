@@ -25,7 +25,7 @@ import { Scissors } from 'lucide-react';
 export default function VideoClipPage() {
   const { selectedFolder, clearFolder } = useFolderStore();
   const { videos, setVideos, filteredVideos } = useVideoStore();
-  const { deselectAll, deselectVideo } = useVideoSelectionStore();
+  const { selectedVideos, deselectAll, deselectVideo } = useVideoSelectionStore();
   const { isProgressModalOpen } = useProgressStore();
   const { clipConfig } = useVideoClipStore();
 
@@ -240,6 +240,7 @@ export default function VideoClipPage() {
 
             {/* Selection Toolbar */}
             <VideoClipSelectionToolbar
+              selectedCount={selectedVideos.size}
               onClip={handleClipVideos}
               onRefresh={() => handleRefresh(true)}
               disabled={isLoadingFolder}

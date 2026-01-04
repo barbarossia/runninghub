@@ -26,6 +26,7 @@ import {
   Loader2,
   AlertCircle,
   PlayCircle,
+  Scissors,
 } from 'lucide-react';
 import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -106,6 +107,7 @@ export interface MediaGalleryProps {
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
   onDelete?: (files: MediaFile[]) => Promise<void>;
   onDecode?: (file: MediaFile, password?: string) => Promise<void>;
+  onClipVideo?: (file: MediaFile) => void;
   onPreview?: (file: MediaFile) => void;
   className?: string;
 }
@@ -116,6 +118,7 @@ export function MediaGallery({
   onRename,
   onDelete,
   onDecode,
+  onClipVideo,
   onPreview,
   className = '',
 }: MediaGalleryProps) {
@@ -667,6 +670,12 @@ export function MediaGallery({
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameDialogOpen(file); }}>
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Rename
+                              </DropdownMenuItem>
+                            )}
+                            {file.type === 'video' && onClipVideo && (
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onClipVideo(file); }} className="text-purple-600 focus:text-purple-700 focus:bg-purple-50">
+                                <Scissors className="h-4 w-4 mr-2" />
+                                Clip Video
                               </DropdownMenuItem>
                             )}
                             {onDelete && (

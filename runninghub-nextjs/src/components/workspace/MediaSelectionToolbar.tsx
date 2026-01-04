@@ -9,6 +9,7 @@ import {
   Play,
   Eye,
   AlertCircle,
+  Scissors,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +46,8 @@ interface MediaSelectionToolbarProps {
   onDelete?: (files: MediaFile[]) => Promise<void>;
   onDecode?: (file: MediaFile, password?: string) => Promise<void>;
   onRunWorkflow?: (workflowId?: string) => void;
+  onClip?: (files: MediaFile[]) => Promise<void>;
+  onPreview?: (file: MediaFile) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -55,6 +58,8 @@ export function MediaSelectionToolbar({
   onDelete,
   onDecode,
   onRunWorkflow,
+  onClip,
+  onPreview,
   disabled = false,
   className = '',
 }: MediaSelectionToolbarProps) {
@@ -70,6 +75,7 @@ export function MediaSelectionToolbar({
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDecoding, setIsDecoding] = useState(false);
+  const [isClipping, setIsClipping] = useState(false);
 
   // Get workflows from store
   const { workflows } = useWorkspaceStore();
@@ -142,7 +148,36 @@ export function MediaSelectionToolbar({
     }
   }, [onRunWorkflow]);
 
-  const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding;
+  // Handle clip
+  const handleClip = useCallback(async () => {
+    if (!onClip) return;
+
+    setIsClipping(true);
+    try {
+      const videoFiles = selectedFiles.filter(f => f.type === 'video');
+      await onClip(videoFiles);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
+    } finally {
+      setIsClipping(false);
+    }
+  }, [onClip, selectedFiles]);
+
+  // Handle preview
+  const handlePreview = useCallback(() => {
+    if (!onPreview) return;
+
+    const videoFiles = selectedFiles.filter(f => f.type === 'video');
+    if (videoFiles.length === 0) {
+      toast.error('No video files selected');
+      return;
+    }
+
+    // Preview the first selected video
+    onPreview(videoFiles[0]);
+  }, [onPreview, selectedFiles]);
+
+  const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping;
 
   return (
     <>
@@ -179,6 +214,34 @@ export function MediaSelectionToolbar({
                   >
                     <Play className="h-4 w-4 mr-2" />
                     Run Workflow
+                  </Button>
+                )}
+
+                {/* Preview - only when videos are selected */}
+                {onPreview && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreview}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Preview
+                  </Button>
+                )}
+
+                {/* Clip - only when videos are selected */}
+                {onClip && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleClip}
+                    disabled={toolbarDisabled}
+                    className="h-9 bg-purple-600 hover:bg-purple-700"
+                  >
+                    {isClipping ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scissors className="h-4 w-4 mr-2" />}
+                    {isClipping ? 'Processing...' : 'Clip Videos'}
                   </Button>
                 )}
 
@@ -250,6 +313,36 @@ export function MediaSelectionToolbar({
                   >
                     <Play className="h-3.5 w-3.5 mr-2 text-blue-400" />
                     <span className="text-xs">Run Workflow</span>
+                  </Button>
+                )}
+
+                {/* Preview - floating mode */}
+                {onPreview && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handlePreview}
+                    disabled={toolbarDisabled}
+                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+                    title="Preview Video"
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
+                    <span className="text-xs">Preview</span>
+                  </Button>
+                )}
+
+                {/* Clip - floating mode */}
+                {onClip && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClip}
+                    disabled={toolbarDisabled}
+                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+                    title="Clip Videos"
+                  >
+                    {isClipping ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-2 text-purple-400" />}
+                    <span className="text-xs">{isClipping ? '...' : 'Clip'}</span>
                   </Button>
                 )}
 
