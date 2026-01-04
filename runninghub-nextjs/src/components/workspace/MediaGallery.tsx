@@ -27,6 +27,7 @@ import {
   AlertCircle,
   PlayCircle,
 } from 'lucide-react';
+import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -455,17 +456,9 @@ export function MediaGallery({
                       >
                         {file.type === 'video' && file.blobUrl ? (
                           <>
-                            <video
+                            <VideoPreview
                               src={file.blobUrl}
-                              className="absolute inset-0 w-full h-full object-contain"
-                              muted
-                              preload="metadata"
-                              playsInline
-                              onMouseOver={(e) => e.currentTarget.play()}
-                              onMouseOut={(e) => {
-                                e.currentTarget.pause();
-                                e.currentTarget.currentTime = 0;
-                              }}
+                              className="absolute inset-0 w-full h-full"
                             />
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                               <PlayCircle 
@@ -550,17 +543,9 @@ export function MediaGallery({
                     {file.type === 'video' && file.blobUrl ? (
                       // Video with blobUrl - show video element
                       <>
-                        <video
+                        <VideoPreview
                           src={file.blobUrl}
-                          className="absolute inset-0 w-full h-full object-contain p-1"
-                          muted
-                          preload="metadata"
-                          playsInline
-                          onMouseOver={(e) => e.currentTarget.play()}
-                          onMouseOut={(e) => {
-                            e.currentTarget.pause();
-                            e.currentTarget.currentTime = 0;
-                          }}
+                          className="absolute inset-0 w-full h-full p-1"
                         />
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div 
