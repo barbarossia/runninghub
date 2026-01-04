@@ -460,9 +460,9 @@ export function MediaGallery({
                               src={file.blobUrl}
                               className="absolute inset-0 w-full h-full"
                             />
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="absolute top-1 left-1 pointer-events-none">
                               <PlayCircle 
-                                className="h-6 w-6 text-white/80 drop-shadow-md pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
+                                className="h-4 w-4 text-white/90 drop-shadow-md pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setPreviewFile(file);
@@ -547,16 +547,16 @@ export function MediaGallery({
                           src={file.blobUrl}
                           className="absolute inset-0 w-full h-full p-1"
                         />
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="absolute top-2 left-2 z-20 pointer-events-none">
                           <div 
-                            className="bg-black/30 rounded-full p-2 backdrop-blur-[2px] text-white/90 shadow-lg pointer-events-auto cursor-pointer hover:bg-black/50 transition-all hover:scale-110"
+                            className="bg-black/50 rounded-full p-1.5 backdrop-blur-sm text-white/90 shadow-md pointer-events-auto cursor-pointer hover:bg-black/70 transition-all hover:scale-110"
                             onClick={(e) => {
                               e.stopPropagation();
                               setPreviewFile(file);
                               onPreview?.(file);
                             }}
                           >
-                            <PlayCircle className="h-10 w-10" />
+                            <PlayCircle className="h-5 w-5" />
                           </div>
                         </div>
                       </>
@@ -607,7 +607,8 @@ export function MediaGallery({
                       {/* Checkbox */}
                       <div
                         className={cn(
-                          'absolute top-2 left-2 transition-opacity pointer-events-auto',
+                          'absolute transition-opacity pointer-events-auto',
+                          file.type === 'video' ? 'top-10 left-2' : 'top-2 left-2',
                           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                         )}
                         onClick={(e) => e.stopPropagation()}
@@ -617,7 +618,12 @@ export function MediaGallery({
 
                       {/* Duck-encoded indicator */}
                       {file.isDuckEncoded && (
-                        <Badge className="absolute top-2 left-2 z-10 bg-green-600 text-xs pointer-events-auto">
+                        <Badge 
+                          className={cn(
+                            'absolute z-10 bg-green-600 text-xs pointer-events-auto',
+                            file.type === 'video' ? 'top-2 left-10' : 'top-2 left-2'
+                          )}
+                        >
                           Duck
                         </Badge>
                       )}
