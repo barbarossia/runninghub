@@ -996,6 +996,20 @@ export default function WorkspacePage() {
           workflows={workflows}
           onConfirm={handleQuickRunWorkflow}
         />
+
+        {/* Video Player Modal */}
+        <VideoPlayerModal
+          video={previewVideo ? {
+            path: previewVideo.path,
+            name: previewVideo.name,
+            size: previewVideo.size,
+            type: 'video',
+            extension: previewVideo.extension || '',
+            blobUrl: previewVideo.blobUrl
+          } : null}
+          isOpen={!!previewVideo}
+          onClose={() => setPreviewVideo(null)}
+        />
       </div>
     </div>
   );
