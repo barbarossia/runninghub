@@ -90,6 +90,7 @@ export default function WorkspacePage() {
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
+  const [previewVideo, setPreviewVideo] = useState<MediaFile | null>(null);
 
   // Get selected files from store
   const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
@@ -685,10 +686,13 @@ export default function WorkspacePage() {
     }
   };
 
-  const handlePreviewFile = (file: MediaFile) => {
-    // Preview is handled internally by MediaGallery component
-    console.log('Preview file:', file);
-  };
+  const handlePreviewFile = useCallback((file: MediaFile) => {
+    if (file.type === 'video') {
+      setPreviewVideo(file);
+    } else {
+      toast.error('Preview is only available for video files');
+    }
+  }, []);
 
   const handleSortChange = useCallback((field: typeof mediaSortField, direction: typeof mediaSortDirection) => {
     setMediaSorting(field, direction);
