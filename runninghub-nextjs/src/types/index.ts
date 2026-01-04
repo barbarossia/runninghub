@@ -9,6 +9,9 @@ export interface ImageFile {
   size: number;
   type: 'image';
   extension: string;
+  width?: number; // Image width in pixels
+  height?: number; // Image height in pixels
+  thumbnail?: string; // Thumbnail path or URL
   is_virtual?: boolean;
   file_handle_info?: FileHandleInfo;
   blob_url?: string; // Blob URL for virtual files from File System Access API
@@ -22,6 +25,10 @@ export interface VideoFile {
   size: number;
   type: 'video';
   extension: string;
+  width?: number; // Video width in pixels
+  height?: number; // Video height in pixels
+  fps?: number; // Frames per second
+  thumbnail?: string; // Thumbnail path or URL
   duration?: number; // Video duration in seconds
   is_virtual?: boolean;
   file_handle_info?: FileHandleInfo;
