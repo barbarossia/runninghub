@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore } from '@/store/folder-store';
 import { useVideoClipStore } from '@/store/video-clip-store';
+import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
 import { useFileSystem } from '@/hooks';
@@ -100,12 +101,13 @@ export default function WorkspacePage() {
     return mediaFiles.filter(file => file.type === 'video');
   }, [mediaFiles]);
 
-  // Get selected video count for Clip tab
-  const selectedVideoCount = useMemo(() => {
-    return mediaFiles.filter(f => f.type === 'video' && f.selected).length;
-  }, [mediaFiles]);
+  // Get selected videos from videoSelectionStore for Clip tab
+  const { selectedVideos: clipSelectedVideos } = useVideoSelectionStore();
 
-  // Type adapter: MediaFile to VideoFile
+  // Get selected video count for Clip tab
+  const selectedVideoCount = clipSelectedVideos.size;
+
+  // Type adapter: MediaFile to VideoFile for Clip tab
   const adaptedVideos = useMemo(() => {
     return filteredVideos.map(file => ({
       path: file.path,
@@ -113,13 +115,10 @@ export default function WorkspacePage() {
       size: file.size,
       type: 'video' as const,
       extension: file.name.split('.').pop() || '',
-      width: file.width,
-      height: file.height,
-      fps: file.fps,
       duration: file.duration,
+      thumbnail: file.thumbnail,
       created_at: file.created_at,
       modified_at: file.modified_at,
-      thumbnail: file.thumbnail,
     }));
   }, [filteredVideos]);
 
@@ -166,6 +165,7 @@ export default function WorkspacePage() {
       width: file.width,
       height: file.height,
       fps: file.fps,
+      duration: file.duration,
       created_at: file.created_at,
       modified_at: file.modified_at,
       thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
@@ -903,6 +903,14 @@ export default function WorkspacePage() {
                   onClip={(selectedPaths) => handleClipVideos(selectedPaths)}
                   onRefresh={() => handleRefresh(true)}
                   onRename={handleRenameVideo}
+                  onPreview={(selectedPaths) => {
+                    if (selectedPaths.length > 0) {
+                      const video = filteredVideos.find(v => v.path === selectedPaths[0]);
+                      if (video) {
+                        handlePreviewFile(video);
+                      }
+                    }
+                  }}
                   disabled={false}
                 />
 

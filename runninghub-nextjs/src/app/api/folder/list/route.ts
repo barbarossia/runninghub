@@ -110,6 +110,7 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
             } else if (supportedVideoExtensions.includes(extension)) {
               // Extract video metadata
               const metadata = await getFileMetadata(itemPath, 'video') as any;
+              console.log(`[API] Video metadata for ${item}:`, metadata);
 
               // Extract file timestamps (convert to milliseconds)
               const createdAt = itemStats.birthtime?.getTime();
@@ -124,6 +125,7 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
                 width: metadata?.width,
                 height: metadata?.height,
                 fps: metadata?.fps,
+                duration: metadata?.duration,
                 created_at: createdAt,
                 modified_at: modifiedAt,
               });
