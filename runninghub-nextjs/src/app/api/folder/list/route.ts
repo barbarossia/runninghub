@@ -55,6 +55,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         width?: number;
         height?: number;
         fps?: number;
+        duration?: number;
+        thumbnail?: string;
         created_at?: number;
         modified_at?: number;
       }>,
