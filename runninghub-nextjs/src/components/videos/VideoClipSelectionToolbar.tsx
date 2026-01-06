@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Video, RefreshCw, Pencil, Scissors, Loader2 } from 'lucide-react';
+import { Video, RefreshCw, Pencil, Scissors, Loader2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useVideoSelectionStore, useVideoStore } from '@/store';
 // For backward compatibility, we still import stores but use props when provided
@@ -16,6 +16,7 @@ interface VideoClipSelectionToolbarProps {
   onClip?: (selectedPaths: string[]) => void;
   onRefresh?: () => void;
   onRename?: (video: VideoFile, newName: string) => Promise<void>;
+  onPreview?: (selectedPaths: string[]) => void;
   onDeselectAll?: () => void;
   disabled?: boolean;
   className?: string;
@@ -26,6 +27,7 @@ export function VideoClipSelectionToolbar({
   onClip,
   onRefresh,
   onRename,
+  onPreview,
   onDeselectAll,
   disabled = false,
   className = '',
@@ -96,6 +98,19 @@ export function VideoClipSelectionToolbar({
     }
   }, [onClip, selectedPaths]);
 
+  // Handle preview
+  const handlePreview = useCallback(() => {
+    if (!onPreview) return;
+
+    if (selectedPaths.length === 0) {
+      toast.error('No videos selected');
+      return;
+    }
+
+    // Preview the first selected video
+    onPreview([selectedPaths[0]]);
+  }, [onPreview, selectedPaths]);
+
   // Handle rename (now uses callback)
   const handleRename = async (video: VideoFile, newName: string) => {
     await handleRenameCallback(video, newName);
@@ -152,6 +167,20 @@ export function VideoClipSelectionToolbar({
                   </Button>
                 )}
 
+                {onPreview && selectedCount > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreview}
+                    disabled={toolbarDisabled}
+                    className="h-9 px-3 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
+                    title="Preview video"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Preview
+                  </Button>
+                )}
+
                 {onClip && (
                   <Button
                     variant="default"
@@ -194,6 +223,19 @@ export function VideoClipSelectionToolbar({
                     title="Rename"
                   >
                     <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+
+                {onPreview && selectedCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handlePreview}
+                    disabled={toolbarDisabled}
+                    className="h-8 w-8 text-gray-400 hover:text-green-400 hover:bg-gray-800 rounded-full"
+                    title="Preview video"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
                   </Button>
                 )}
 
