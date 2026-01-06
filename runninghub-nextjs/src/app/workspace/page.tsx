@@ -280,6 +280,13 @@ export default function WorkspacePage() {
     }
   }, [selectedFolder, loadFolderContents, processFolderContents]);
 
+  // Refresh folder when switching to Media Gallery tab
+  useEffect(() => {
+    if (activeTab === 'media' && selectedFolder) {
+      handleRefresh(true); // Silent refresh when switching to media tab
+    }
+  }, [activeTab, selectedFolder, handleRefresh]);
+
   // Validate duck encoding for selected images (only when selected, not all images)
   useEffect(() => {
     const validateSelectedImages = async () => {
