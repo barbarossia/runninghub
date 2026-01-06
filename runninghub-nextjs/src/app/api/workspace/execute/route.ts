@@ -583,23 +583,41 @@ async function processWorkflowInBackground(
 
     // DECISION: Use execution type to determine CLI command
     if (executionType === 'workflow') {
-        // Workflow execution -> use 'run-workflow' command
-        args.push("run-workflow");
+        // Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
+        if (jobFileInputs.length > 0) {
+            // Has file inputs -> use 'run-workflow' command
+            args.push("run-workflow");
 
-        // Add file inputs
-        for (const input of jobFileInputs) {
-            // Format: <node_id>:<file_path>
-            args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
+            // Add file inputs
+            for (const input of jobFileInputs) {
+                // Format: <node_id>:<file_path>
+                args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
+            }
+
+            // Add text inputs
+            for (const [paramId, value] of Object.entries(textInputs)) {
+                // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
+                const fieldType = getFieldType(paramId);
+                args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
+            }
+
+            // Note: run-workflow doesn't support --no-cleanup flag
+        } else {
+            // No file inputs -> use 'run-text-workflow' command (text-only workflow)
+            args.push("run-text-workflow");
+
+            // Add text inputs
+            // Note: run-text-workflow auto-detects type from parameter ID suffix
+            // Format: <node_id_with_type>:<value> (e.g., 187_text:hello)
+            // We keep the type suffix for auto-detection, but remove the 'param_' prefix
+            for (const [paramId, value] of Object.entries(textInputs)) {
+                // Remove 'param_' prefix but keep the '_type' suffix for CLI auto-detection
+                const noPrefix = paramId.replace(/^param_/, '');
+                args.push("-p", `${noPrefix}:${value}`);
+            }
+
+            // Note: run-text-workflow doesn't support --no-cleanup flag
         }
-
-        // Add text inputs
-        for (const [paramId, value] of Object.entries(textInputs)) {
-            // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-            const fieldType = getFieldType(paramId);
-            args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
-        }
-
-        // Note: run-workflow doesn't support --no-cleanup flag
     } else {
         // AI app execution -> use 'process' or 'process-multiple' command
         if (jobFileInputs.length === 1) {
