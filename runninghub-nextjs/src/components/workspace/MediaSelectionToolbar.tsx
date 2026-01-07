@@ -167,14 +167,13 @@ export function MediaSelectionToolbar({
   const handlePreview = useCallback(() => {
     if (!onPreview) return;
 
-    const videoFiles = selectedFiles.filter(f => f.type === 'video');
-    if (videoFiles.length === 0) {
-      toast.error('No video files selected');
+    // Preview the first selected file (image or video)
+    if (selectedFiles.length === 0) {
+      toast.error('No files selected');
       return;
     }
 
-    // Preview the first selected video
-    onPreview(videoFiles[0]);
+    onPreview(selectedFiles[0]);
   }, [onPreview, selectedFiles]);
 
   const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping;
@@ -217,8 +216,8 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
-                {/* Preview - only when videos are selected */}
-                {onPreview && selectedFiles.some(f => f.type === 'video') && (
+                {/* Preview - when image or video files are selected */}
+                {onPreview && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -317,14 +316,14 @@ export function MediaSelectionToolbar({
                 )}
 
                 {/* Preview - floating mode */}
-                {onPreview && selectedFiles.some(f => f.type === 'video') && (
+                {onPreview && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handlePreview}
                     disabled={toolbarDisabled}
                     className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-                    title="Preview Video"
+                    title="Preview File"
                   >
                     <Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
                     <span className="text-xs">Preview</span>

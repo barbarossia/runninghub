@@ -37,6 +37,7 @@ import { VideoClipConfiguration } from '@/components/videos/VideoClipConfigurati
 import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectionToolbar';
 import { VideoGallery } from '@/components/videos/VideoGallery';
 import { VideoPlayerModal } from '@/components/videos/VideoPlayerModal';
+import { ImagePreviewModal } from '@/components/workspace/ImagePreviewModal';
 import {
   Settings,
   FolderOpen,
@@ -92,6 +93,7 @@ export default function WorkspacePage() {
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<MediaFile | null>(null);
+  const [previewImage, setPreviewImage] = useState<MediaFile | null>(null);
 
   // Get selected files from store
   const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
@@ -699,8 +701,10 @@ export default function WorkspacePage() {
   const handlePreviewFile = useCallback((file: MediaFile) => {
     if (file.type === 'video') {
       setPreviewVideo(file);
+    } else if (file.type === 'image') {
+      setPreviewImage(file);
     } else {
-      toast.error('Preview is only available for video files');
+      toast.error('Preview is only available for image and video files');
     }
   }, []);
 
@@ -1031,6 +1035,13 @@ export default function WorkspacePage() {
           } : null}
           isOpen={!!previewVideo}
           onClose={() => setPreviewVideo(null)}
+        />
+
+        {/* Image Preview Modal */}
+        <ImagePreviewModal
+          file={previewImage}
+          isOpen={!!previewImage}
+          onClose={() => setPreviewImage(null)}
         />
       </div>
     </div>
