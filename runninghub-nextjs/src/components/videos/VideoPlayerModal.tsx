@@ -93,12 +93,12 @@ export function VideoPlayerModal({ video, isOpen, onClose }: VideoPlayerModalPro
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Preview (2/3 width on large screens) */}
             <div className="lg:col-span-2">
-              <div className="relative bg-black rounded-lg overflow-hidden flex items-center justify-center aspect-video">
+              <div className="relative bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-[300px]">
                 <video
                   src={videoSrc}
                   controls
                   autoPlay
-                  className="w-full h-full object-contain"
+                  className="max-w-full max-h-[70vh] w-auto h-auto object-contain"
                   playsInline
                 />
               </div>

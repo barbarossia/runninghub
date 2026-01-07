@@ -525,6 +525,35 @@ async function processWorkflowInBackground(
     // This ensures job history references files from job folder, not original location
     await updateJobFile(jobId, { fileInputs: jobFileInputs });
 
+    // Clean up temporary uploads immediately after ensuring they are in the job folder
+    // This prevents accumulation of files in ~/Downloads/workspace/uploads
+    try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        // Check for uploads folder in path (platform agnostic)
+        const uploadsDirMarker = path.join('workspace', 'uploads');
+
+        for (let i = 0; i < fileInputs.length; i++) {
+            const originalPath = fileInputs[i].filePath;
+            const newPath = jobFileInputs[i].filePath;
+
+            // Only delete if:
+            // 1. File was successfully copied (path changed)
+            // 2. Original file is in the uploads directory
+            if (originalPath !== newPath && originalPath.includes(uploadsDirMarker)) {
+                try {
+                    await fs.unlink(originalPath);
+                    await writeLog(`Cleaned up temporary upload: ${path.basename(originalPath)}`, 'info', taskId);
+                } catch (cleanupError) {
+                    // Log but don't fail the job
+                    console.warn(`Failed to cleanup temporary file ${originalPath}:`, cleanupError);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error during temporary file cleanup:', e);
+    }
+
     // Before executing CLI, get workflow info
     const workflow = await getWorkflowById(workflowId);
     const executionType = workflow?.executionType || 'ai-app';  // Default to ai-app for backward compatibility
@@ -565,9 +594,20 @@ async function processWorkflowInBackground(
       return noPrefix;
     };
 
-    // Helper to determine field type from parameter ID (e.g., "param_203_value" -> "value", "param_204_text" -> "text")
-    const getFieldType = (paramId: string) => {
-      // Remove param_ prefix
+    // Helper to determine field type from parameter ID and Workflow definition
+    const getParamType = (paramId: string, wf: Workflow | undefined) => {
+      // First try to find in workflow definition
+      if (wf) {
+        const param = wf.inputs.find(p => p.id === paramId);
+        if (param) {
+          if (param.type === 'number' || param.type === 'boolean') return 'value';
+          if (param.type === 'text') return 'text';
+          // File types shouldn't be here in text inputs map, but if so:
+          if (param.type === 'file') return 'image';
+        }
+      }
+
+      // Fallback: Remove param_ prefix
       const noPrefix = paramId.replace(/^param_/, '');
       // If it contains underscore, take the last part (assuming format ID_type)
       if (noPrefix.includes('_')) {
@@ -597,7 +637,7 @@ async function processWorkflowInBackground(
             // Add text inputs
             for (const [paramId, value] of Object.entries(textInputs)) {
                 // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-                const fieldType = getFieldType(paramId);
+                const fieldType = getParamType(paramId, workflow);
                 args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
             }
 
@@ -611,9 +651,11 @@ async function processWorkflowInBackground(
             // Format: <node_id_with_type>:<value> (e.g., 187_text:hello)
             // We keep the type suffix for auto-detection, but remove the 'param_' prefix
             for (const [paramId, value] of Object.entries(textInputs)) {
-                // Remove 'param_' prefix but keep the '_type' suffix for CLI auto-detection
-                const noPrefix = paramId.replace(/^param_/, '');
-                args.push("-p", `${noPrefix}:${value}`);
+                const nodeId = getNodeId(paramId);
+                const fieldType = getParamType(paramId, workflow);
+                // Construct format that CLI recognizes: nodeId_type:value
+                // This ensures CLI parses it correctly as nodeId with explicit type
+                args.push("-p", `${nodeId}_${fieldType}:${value}`);
             }
 
             // Note: run-text-workflow doesn't support --no-cleanup flag
@@ -630,7 +672,7 @@ async function processWorkflowInBackground(
             // Add text inputs as params
             for (const [paramId, value] of Object.entries(textInputs)) {
                 // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-                const fieldType = getFieldType(paramId);
+                const fieldType = getParamType(paramId, workflow);
                 args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
             }
 
@@ -655,7 +697,7 @@ async function processWorkflowInBackground(
             // Add text inputs
             for (const [paramId, value] of Object.entries(textInputs)) {
                 // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-                const fieldType = getFieldType(paramId);
+                const fieldType = getParamType(paramId, workflow);
                 args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
             }
 

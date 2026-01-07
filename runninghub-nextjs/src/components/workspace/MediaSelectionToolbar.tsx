@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Pencil,
   Trash2,
@@ -44,7 +45,7 @@ interface MediaSelectionToolbarProps {
   selectedFiles: MediaFile[];
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
   onDelete?: (files: MediaFile[]) => Promise<void>;
-  onDecode?: (file: MediaFile, password?: string) => Promise<void>;
+  onDecode?: (file: MediaFile, password?: string, progress?: { current: number; total: number }) => Promise<void>;
   onRunWorkflow?: (workflowId?: string) => void;
   onClip?: (files: MediaFile[]) => Promise<void>;
   onPreview?: (file: MediaFile) => void;
@@ -66,6 +67,16 @@ export function MediaSelectionToolbar({
   const selectedCount = selectedFiles.length;
   const isSingleSelection = selectedCount === 1;
 
+  // Count duck-encoded images in selection
+  const duckEncodedCount = useMemo(() => {
+    const count = selectedFiles.filter(f => f.type === 'image' && f.isDuckEncoded).length;
+    console.log('[MediaSelectionToolbar] Duck-encoded count:', count, 'selectedFiles:', selectedFiles.length);
+    console.log('[MediaSelectionToolbar] Selected files with isDuckEncoded:', selectedFiles.map(f => ({ name: f.name, type: f.type, isDuckEncoded: f.isDuckEncoded })));
+    return count;
+  }, [selectedFiles]);
+
+  const hasDuckEncodedImages = duckEncodedCount > 0;
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDecodeDialog, setShowDecodeDialog] = useState(false);
@@ -76,6 +87,7 @@ export function MediaSelectionToolbar({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDecoding, setIsDecoding] = useState(false);
   const [isClipping, setIsClipping] = useState(false);
+  const [decodeProgress, setDecodeProgress] = useState({ current: 0, total: 0 });
 
   // Get workflows from store
   const { workflows } = useWorkspaceStore();
@@ -119,21 +131,36 @@ export function MediaSelectionToolbar({
     }
   }, [onDelete, selectedFiles]);
 
-  // Handle decode
+  // Handle decode (single or batch)
   const handleDecode = useCallback(async () => {
-    if (!onDecode || !isSingleSelection) return;
+    if (!onDecode || duckEncodedCount === 0) return;
 
     setIsDecoding(true);
+    setDecodeProgress({ current: 0, total: duckEncodedCount });
+
     try {
-      await onDecode(selectedFiles[0], decodePassword);
+      // Filter duck-encoded images
+      const duckEncodedFiles = selectedFiles.filter(f => f.type === 'image' && f.isDuckEncoded);
+
+      // Decode each file with progress tracking
+      for (let i = 0; i < duckEncodedFiles.length; i++) {
+        await onDecode(duckEncodedFiles[i], decodePassword, {
+          current: i + 1,
+          total: duckEncodedFiles.length
+        });
+        setDecodeProgress({ current: i + 1, total: duckEncodedCount });
+      }
+
       setShowDecodeDialog(false);
       setDecodePassword('');
+      setDecodeProgress({ current: 0, total: 0 });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to decode image');
+      toast.error(error instanceof Error ? error.message : 'Failed to decode images');
     } finally {
       setIsDecoding(false);
+      setDecodeProgress({ current: 0, total: 0 });
     }
-  }, [onDecode, isSingleSelection, selectedFiles, decodePassword]);
+  }, [onDecode, duckEncodedCount, selectedFiles, decodePassword]);
 
   // Handle deselect all
   const handleDeselectAll = useCallback(() => {
@@ -177,6 +204,13 @@ export function MediaSelectionToolbar({
   }, [onPreview, selectedFiles]);
 
   const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping;
+
+  // Debug: Log decode button visibility
+  console.log('[MediaSelectionToolbar] Decode button should show:', hasDuckEncodedImages && onDecode, {
+    hasDuckEncodedImages,
+    onDecode: !!onDecode,
+    duckEncodedCount
+  });
 
   return (
     <>
@@ -258,14 +292,18 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
-                {/* Decode - only for single duck-encoded images */}
-                {isSingleSelection && onDecode && selectedFiles[0]?.isDuckEncoded && (
+                {/* Decode - for single or multiple duck-encoded images */}
+                {hasDuckEncodedImages && onDecode && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const file = selectedFiles[0];
-                      if (file.duckRequiresPassword) {
+                      // Check if any duck-encoded file requires password
+                      const requiresPassword = selectedFiles
+                        .filter(f => f.type === 'image' && f.isDuckEncoded)
+                        .some(f => f.duckRequiresPassword);
+
+                      if (requiresPassword) {
                         setDecodePassword('');
                         setShowDecodeDialog(true);
                       } else {
@@ -273,10 +311,10 @@ export function MediaSelectionToolbar({
                       }
                     }}
                     disabled={toolbarDisabled}
-                    className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
+                    className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700 shadow-md shadow-green-200/50"
                   >
                     <Eye className="h-4 w-4 mr-2" />
-                    Decode
+                    {duckEncodedCount === 1 ? '🦆 Decode' : `🦆 Decode ${duckEncodedCount}`}
                   </Button>
                 )}
 
@@ -358,6 +396,69 @@ export function MediaSelectionToolbar({
                     <Pencil className="h-3.5 w-3.5 mr-2 text-green-400" />
                     <span className="text-xs">Rename</span>
                   </Button>
+                )}
+
+                {/* Decode - for single or multiple duck-encoded images in floating mode */}
+                {hasDuckEncodedImages && onDecode && (
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        // Check if any duck-encoded file requires password
+                        const requiresPassword = selectedFiles
+                          .filter(f => f.type === 'image' && f.isDuckEncoded)
+                          .some(f => f.duckRequiresPassword);
+
+                        if (requiresPassword) {
+                          setDecodePassword('');
+                          setShowDecodeDialog(true);
+                        } else {
+                          handleDecode();
+                        }
+                      }}
+                      disabled={toolbarDisabled}
+                      className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3 relative overflow-hidden"
+                      title={duckEncodedCount === 1 ? 'Decode Duck Image' : `Decode ${duckEncodedCount} Duck Images`}
+                    >
+                      <motion.span
+                        className="absolute inset-0 bg-gradient-to-r from-green-400/30 to-green-600/30"
+                        animate={{
+                          x: ['-100%', '100%']
+                        }}
+                        transition={{
+                          duration: 2,
+                          repeat: Infinity,
+                          repeatDelay: 1,
+                          ease: "linear"
+                        }}
+                      />
+                      <span className="relative flex items-center">
+                        <motion.div
+                          animate={{
+                            scale: [1, 1.2, 1],
+                            rotate: [0, 10, -10, 0]
+                          }}
+                          transition={{
+                            duration: 1.5,
+                            repeat: Infinity,
+                            repeatDelay: 2
+                          }}
+                          className="flex items-center"
+                        >
+                          <Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
+                          <span className="text-xs">
+                            {duckEncodedCount === 1 ? '🦆 Decode' : `🦆 ${duckEncodedCount}`}
+                          </span>
+                        </motion.div>
+                      </span>
+                    </Button>
+                  </motion.div>
                 )}
 
                 {onDelete && (
@@ -463,13 +564,21 @@ export function MediaSelectionToolbar({
       )}
 
       {/* Decode Password Dialog */}
-      {onDecode && isSingleSelection && selectedFiles[0]?.isDuckEncoded && (
+      {onDecode && hasDuckEncodedImages && (
         <Dialog open={showDecodeDialog} onOpenChange={setShowDecodeDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Decode Duck Image</DialogTitle>
+              <DialogTitle>
+                {duckEncodedCount === 1
+                  ? 'Decode Duck Image'
+                  : `Decode ${duckEncodedCount} Duck Images`
+                }
+              </DialogTitle>
               <DialogDescription>
-                This image contains hidden data. Enter password if required.
+                {duckEncodedCount === 1
+                  ? 'This image contains hidden data. Enter password if required.'
+                  : `These ${duckEncodedCount} images contain hidden data. Enter password if required.`
+                }
               </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
@@ -485,13 +594,36 @@ export function MediaSelectionToolbar({
                   autoFocus
                 />
               </div>
-              {selectedFiles[0]?.duckRequiresPassword && (
+
+              {/* Show password required alert if any file requires it */}
+              {selectedFiles.some(f => f.type === 'image' && f.isDuckEncoded && f.duckRequiresPassword) && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription className="text-sm">
-                    This image requires a password to decode.
+                    {duckEncodedCount === 1
+                      ? 'This image requires a password to decode.'
+                      : 'Some images require a password to decode.'
+                    }
                   </AlertDescription>
                 </Alert>
+              )}
+
+              {/* Show batch progress if decoding */}
+              {isDecoding && decodeProgress.total > 1 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Decoding progress:</span>
+                    <span className="font-medium">{decodeProgress.current} / {decodeProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-green-600 h-full transition-all duration-300"
+                      style={{
+                        width: `${(decodeProgress.current / decodeProgress.total) * 100}%`
+                      }}
+                    />
+                  </div>
+                </div>
               )}
             </div>
             <DialogFooter>
@@ -510,10 +642,13 @@ export function MediaSelectionToolbar({
                 {isDecoding ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Decoding...
+                    {decodeProgress.total > 1
+                      ? `Decoding ${decodeProgress.current}/${decodeProgress.total}...`
+                      : 'Decoding...'
+                    }
                   </>
                 ) : (
-                  'Decode'
+                  duckEncodedCount === 1 ? 'Decode' : `Decode ${duckEncodedCount} Images`
                 )}
               </Button>
             </DialogFooter>

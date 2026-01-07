@@ -151,11 +151,6 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (!selectedFolder) {
-      toast.error("No folder selected");
-      return;
-    }
-
     setUploadingParams(prev => ({ ...prev, [paramId]: true }));
 
     try {
@@ -171,25 +166,30 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
           reader.onerror = error => reject(error);
         });
 
+        // Generate unique filename to prevent collisions in uploads folder
+        const timestamp = Date.now();
+        const uniqueName = `${timestamp}_${file.name}`;
+        const uploadPath = '~/Downloads/workspace/uploads';
+
         // Upload
         const response = await fetch('/api/workspace/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            files: [{ name: file.name, data: base64Data }],
-            workspacePath: selectedFolder.folder_path
+            files: [{ name: uniqueName, data: base64Data }],
+            workspacePath: uploadPath
           })
         });
         
         const data = await response.json();
         if (!data.success) throw new Error(data.error || 'Upload failed');
 
-        // Add to mediaFiles store
+        // Add to assignment (but NOT to mediaFiles store to avoid polluting gallery)
         if (data.uploadedFiles && data.uploadedFiles.length > 0) {
           const uploadedFile = data.uploadedFiles[0];
           const newMediaFile: MediaFile = {
             id: uploadedFile.workspacePath,
-            name: uploadedFile.name,
+            name: uniqueName, // Use unique name
             path: uploadedFile.workspacePath,
             type: file.type.startsWith('video') ? 'video' : 'image',
             extension: file.name.split('.').pop() ? '.' + file.name.split('.').pop() : '',
@@ -200,9 +200,8 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
             thumbnail: `/api/images/serve?path=${encodeURIComponent(uploadedFile.workspacePath)}`,
           };
 
-          console.log(`[Direct Upload] ${uploadedFile.name} dimensions: ${uploadedFile.width} x ${uploadedFile.height}`);
+          console.log(`[Direct Upload] ${uploadedFile.name} uploaded to ${uploadPath}`);
 
-          addMediaFile(newMediaFile);
           assignFileToParameter(newMediaFile.path, paramId, newMediaFile);
         }
       }
