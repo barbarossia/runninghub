@@ -146,6 +146,7 @@ export function MediaGallery({
   const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
+  const [validatingFileIds, setValidatingFileIds] = useState<Set<string>>(new Set());
 
   // Get unique extensions for filter
   const uniqueExtensions = useMemo(() => {
@@ -193,6 +194,82 @@ export function MediaGallery({
   }, [mediaFiles]);
 
   const isAllSelected = selectedCount > 0 && selectedCount === filteredFiles.length;
+
+  // Lazy validation: Validate selected images that haven't been validated yet
+  useEffect(() => {
+    const selectedImages = mediaFiles.filter(
+      f => f.selected && f.type === 'image' && f.isDuckEncoded === undefined && !validatingFileIds.has(f.id)
+    );
+
+    if (selectedImages.length === 0) return;
+
+    console.log(`[MediaGallery] Lazy validating ${selectedImages.length} selected images...`);
+
+    // Mark files as being validated to prevent re-validation
+    setValidatingFileIds(prev => {
+      const newSet = new Set(prev);
+      selectedImages.forEach(f => newSet.add(f.id));
+      return newSet;
+    });
+
+    const validateImage = async (file: MediaFile) => {
+      try {
+        // Mark as pending
+        updateMediaFile(file.id, { duckValidationPending: true });
+
+        const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagePath: file.path }),
+        });
+
+        const data = await response.json();
+
+        console.log(`[MediaGallery] Validation result for ${file.name}:`, data);
+
+        // Update the file with validation result
+        updateMediaFile(file.id, {
+          isDuckEncoded: data.isDuckEncoded,
+          duckRequiresPassword: data.requiresPassword,
+          duckValidationPending: false,
+        });
+
+        // Remove from validating set
+        setValidatingFileIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(file.id);
+          return newSet;
+        });
+      } catch (error) {
+        console.error(`[MediaGallery] Failed to validate ${file.name}:`, error);
+        updateMediaFile(file.id, {
+          isDuckEncoded: false,
+          duckValidationPending: false,
+        });
+
+        // Remove from validating set
+        setValidatingFileIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(file.id);
+          return newSet;
+        });
+      }
+    };
+
+    // Validate all selected images in parallel (but limit to 3 at a time to avoid overwhelming)
+    const validateWithConcurrency = async (files: MediaFile[], concurrency = 3) => {
+      const chunks = [];
+      for (let i = 0; i < files.length; i += concurrency) {
+        chunks.push(files.slice(i, i + concurrency));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.allSettled(chunk.map(validateImage));
+      }
+    };
+
+    validateWithConcurrency(selectedImages);
+  }, [mediaFiles, updateMediaFile, validatingFileIds]);
 
   // Handle select all toggle
   const handleSelectAllToggle = useCallback(() => {
@@ -268,6 +345,14 @@ export function MediaGallery({
       setDeleteDialogFile(null);
     } catch (error) {
       console.error('Failed to delete file:', error);
+    }
+  };
+
+  const handlePreviewRequest = (file: MediaFile) => {
+    if (onPreview) {
+      onPreview(file);
+    } else {
+      setPreviewFile(file);
     }
   };
 
@@ -468,8 +553,7 @@ export function MediaGallery({
                                 className="h-4 w-4 text-white/90 drop-shadow-md pointer-events-auto cursor-pointer hover:scale-110 transition-transform"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setPreviewFile(file);
-                                  onPreview?.(file);
+                                  handlePreviewRequest(file);
                                 }}
                               />
                             </div>
@@ -555,8 +639,7 @@ export function MediaGallery({
                             className="bg-black/50 rounded-full p-1.5 backdrop-blur-sm text-white/90 shadow-md pointer-events-auto cursor-pointer hover:bg-black/70 transition-all hover:scale-110"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPreviewFile(file);
-                              onPreview?.(file);
+                              handlePreviewRequest(file);
                             }}
                           >
                             <PlayCircle className="h-5 w-5" />
@@ -619,17 +702,42 @@ export function MediaGallery({
                         <Checkbox checked={isSelected} onCheckedChange={() => toggleMediaFileSelection(file.id)} />
                       </div>
 
-                      {/* Duck-encoded indicator */}
-                      {file.isDuckEncoded && (
-                        <Badge 
-                          className={cn(
-                            'absolute z-10 bg-green-600 text-xs pointer-events-auto',
-                            file.type === 'video' ? 'top-2 left-10' : 'top-2 left-2'
-                          )}
-                        >
-                          Duck
-                        </Badge>
-                      )}
+                      {/* Duck-encoded indicator with animation */}
+                      <AnimatePresence>
+                        {file.isDuckEncoded && (
+                          <motion.div
+                            initial={{ scale: 0, rotate: -180, opacity: 0 }}
+                            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                            exit={{ scale: 0, rotate: 180, opacity: 0 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 260,
+                              damping: 20,
+                              delay: 0.1
+                            }}
+                            className={cn(
+                              'absolute z-10 pointer-events-auto',
+                              file.type === 'video' ? 'top-2 left-10' : 'top-2 left-2'
+                            )}
+                          >
+                            <motion.div
+                              animate={{
+                                scale: [1, 1.1, 1],
+                                rotate: [0, 5, -5, 0]
+                              }}
+                              transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                repeatDelay: 3
+                              }}
+                            >
+                              <Badge className="bg-green-600 text-xs shadow-lg shadow-green-600/50">
+                                🦆 Duck
+                              </Badge>
+                            </motion.div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
                       {/* More menu */}
                       <div
@@ -649,21 +757,37 @@ export function MediaGallery({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPreviewFile(file); onPreview?.(file); }}>
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handlePreviewRequest(file); }}>
                               <Eye className="h-4 w-4 mr-2" />
                               Preview
                             </DropdownMenuItem>
                             {onDecode && file.isDuckEncoded && (
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                if (file.duckRequiresPassword) {
-                                  setDecodeDialogOpen(file);
-                                } else {
-                                  handleDecodeConfirm(file);
-                                }
-                              }} className="text-green-600">
-                                <Eye className="h-4 w-4 mr-2" />
-                                Decode
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (file.duckRequiresPassword) {
+                                    setDecodeDialogOpen(file);
+                                  } else {
+                                    handleDecodeConfirm(file);
+                                  }
+                                }}
+                                className="text-green-600 bg-green-50/50 focus:bg-green-100"
+                              >
+                                <motion.div
+                                  animate={{
+                                    scale: [1, 1.2, 1],
+                                    rotate: [0, 10, -10, 0]
+                                  }}
+                                  transition={{
+                                    duration: 1.5,
+                                    repeat: Infinity,
+                                    repeatDelay: 2
+                                  }}
+                                  className="flex items-center"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Decode
+                                </motion.div>
                               </DropdownMenuItem>
                             )}
                             {onRename && (
@@ -864,8 +988,9 @@ export function MediaGallery({
                     <video
                       src={previewFile.blobUrl || ''}
                       controls
-                      className="w-full max-h-[70vh] object-contain"
+                      className="max-w-full max-h-[70vh] object-contain"
                       autoPlay
+                      preload="metadata"
                     />
                   ) : (
                     <Image
