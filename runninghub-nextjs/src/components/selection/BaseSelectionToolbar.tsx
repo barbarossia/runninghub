@@ -1,11 +1,12 @@
 'use client';
 
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useToolbarMode } from '@/hooks/useToolbarMode';
 
 export interface BaseToolbarProps {
   selectedCount: number;
@@ -24,13 +25,13 @@ export function BaseSelectionToolbar({
   children,
   onDeselectAll,
 }: BaseToolbarProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [mode, setMode] = useToolbarMode();
   const hasSelection = selectedCount > 0;
 
   return (
     <AnimatePresence mode="wait">
       {hasSelection && (
-        isExpanded ? (
+        mode === 'expanded' ? (
           /* Expanded Mode (Sticky at top of gallery area) */
           <motion.div
             key="expanded-toolbar"
@@ -60,7 +61,7 @@ export function BaseSelectionToolbar({
                   variant="outline"
                   size="icon"
                   className="h-9 w-9 border-gray-200 hover:bg-gray-100"
-                  onClick={() => setIsExpanded(false)}
+                  onClick={() => setMode('floating')}
                   title="Minimize to floating bar"
                 >
                   <Minimize2 className="h-4 w-4 text-gray-600" />
@@ -104,7 +105,7 @@ export function BaseSelectionToolbar({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setIsExpanded(true)}
+              onClick={() => setMode('expanded')}
               className="h-8 w-8 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full"
               title="Expand to card"
             >
