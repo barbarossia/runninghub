@@ -272,7 +272,7 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
                 node_id, field_type, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "input" if field_type == "text" else "value",
+                    "fieldName": "text" if field_type == "text" else "value",
                     "fieldValue": value,
                     "description": field_type,
                 })
@@ -400,7 +400,7 @@ def process_multiple(ctx, images, params, timeout, output_json, no_download, wor
                 node_id, field_type, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "input" if field_type == "text" else "value",
+                    "fieldName": "text" if field_type == "text" else "value",
                     "fieldValue": value,
                     "description": field_type,
                 })

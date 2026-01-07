@@ -609,6 +609,21 @@ async function processWorkflowInBackground(
 
       // Fallback: Remove param_ prefix
       const noPrefix = paramId.replace(/^param_/, '');
+      const lowerId = noPrefix.toLowerCase();
+      
+      // Check for known suffixes/keywords
+      if (lowerId.includes('width') || lowerId.includes('height') || 
+          lowerId.includes('seed') || lowerId.includes('steps') || 
+          lowerId.includes('cfg') || lowerId.includes('batch') ||
+          lowerId.includes('denoise') || lowerId.includes('scheduler') ||
+          lowerId.includes('sampler')) {
+        return 'value';
+      }
+
+      if (lowerId.includes('prompt') || lowerId.includes('text') || lowerId.includes('string')) {
+        return 'text';
+      }
+
       // If it contains underscore, take the last part (assuming format ID_type)
       if (noPrefix.includes('_')) {
         const type = noPrefix.split('_').pop();
@@ -617,7 +632,9 @@ async function processWorkflowInBackground(
         if (type === 'text') return 'text';
         if (type === 'image') return 'image';
       }
-      // Default to 'text' for backward compatibility
+      
+      // Default to 'text' for backward compatibility, but maybe 'value' is safer for unknown?
+      // Sticking to 'text' as default since most unknown inputs in workflows might be prompts
       return 'text';
     };
 
