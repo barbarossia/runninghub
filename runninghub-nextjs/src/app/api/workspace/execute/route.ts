@@ -606,167 +606,165 @@ async function processWorkflowInBackground(
       return noPrefix;
     };
 
-        // Helper to determine field type from parameter ID and Workflow definition
+            // Helper to determine field name from parameter ID and Workflow definition
 
-        const getParamType = (paramId: string, wf: Workflow | undefined) => {
+            const getParamFieldName = (paramId: string, wf: Workflow | undefined) => {
 
-          // First try to find in workflow definition
+              // First try to find in workflow definition
 
-          if (wf) {
+              if (wf) {
 
-            const param = wf.inputs.find(p => p.id === paramId);
+                const param = wf.inputs.find(p => p.id === paramId);
 
-            if (param) {
+                if (param && param.name) {
 
-              if (param.type === 'number' || param.type === 'boolean') return 'value';
-
-              if (param.type === 'text') return 'text';
-
-              // File types shouldn't be here in text inputs map, but if so:
-
-              if (param.type === 'file') return 'image';
-
-            }
-
-          }
-
-    
-
-          // Fallback: Remove param_ prefix
-
-          const noPrefix = paramId.replace(/^param_/, '');
-
-          const lowerId = noPrefix.toLowerCase();
-
-          
-
-          // Check for known suffixes/keywords
-
-          if (lowerId.includes('width') || lowerId.includes('height') || 
-
-              lowerId.includes('seed') || lowerId.includes('steps') || 
-
-              lowerId.includes('cfg') || lowerId.includes('batch') ||
-
-              lowerId.includes('denoise') || lowerId.includes('scheduler') ||
-
-              lowerId.includes('sampler')) {
-
-            return 'value';
-
-          }
-
-    
-
-          if (lowerId.includes('prompt') || lowerId.includes('text') || lowerId.includes('string')) {
-
-            return 'text';
-
-          }
-
-    
-
-          // If it contains underscore, take the last part (assuming format ID_type)
-
-          if (noPrefix.includes('_')) {
-
-            const type = noPrefix.split('_').pop();
-
-            // Map parameter suffix to field type
-
-            if (type === 'value') return 'value';
-
-            if (type === 'text') return 'text';
-
-            if (type === 'image') return 'image';
-
-          }
-
-          
-
-          // Default to 'text' for backward compatibility
-
-          return 'text';
-
-        };
-
-    
-
-        // DECISION: Use execution type to determine CLI command
-
-        if (executionType === 'workflow') {
-
-            // Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
-
-            if (jobFileInputs.length > 0) {
-
-                // Has file inputs -> use 'run-workflow' command
-
-                args.push("run-workflow");
-
-    
-
-                // Add file inputs
-
-                for (const input of jobFileInputs) {
-
-                    // Format: <node_id>:<file_path>
-
-                    args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
+                    return param.name;
 
                 }
 
-    
+              }
 
-                // Add text inputs
+        
 
-                for (const [paramId, value] of Object.entries(textInputs)) {
+              // Fallback: Remove param_ prefix
 
-                    // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
+              const noPrefix = paramId.replace(/^param_/, '');
 
-                    const fieldType = getParamType(paramId, workflow);
+              const lowerId = noPrefix.toLowerCase();
 
-                    args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
+              
+
+              // Check for known suffixes/keywords which act as field names
+
+              if (lowerId.includes('width')) return 'width';
+
+              if (lowerId.includes('height')) return 'height';
+
+              if (lowerId.includes('seed')) return 'seed';
+
+              if (lowerId.includes('steps')) return 'steps';
+
+              if (lowerId.includes('cfg')) return 'cfg';
+
+              if (lowerId.includes('batch')) return 'batch_size'; // Common mapping
+
+              if (lowerId.includes('denoise')) return 'denoise';
+
+              if (lowerId.includes('scheduler')) return 'scheduler';
+
+              if (lowerId.includes('sampler')) return 'sampler_name'; // Common mapping
+
+              
+
+              if (lowerId.includes('prompt')) return 'text'; // Most text encoders use 'text' input
+
+        
+
+              // If it contains underscore, take the last part (assuming format ID_fieldName)
+
+              if (noPrefix.includes('_')) {
+
+                const parts = noPrefix.split('_');
+
+                const candidate = parts[parts.length - 1];
+
+                // Filter out our own type suffixes if they aren't the field name
+
+                if (candidate !== 'value' && candidate !== 'text' && candidate !== 'image') {
+
+                    return candidate;
 
                 }
 
-    
+                // If it is 'value' or 'text', it might be the field name (e.g. Primitive Node)
 
-                // Note: run-workflow doesn't support --no-cleanup flag
+                return candidate;
+
+              }
+
+              
+
+              // Default fallback
+
+              return 'text';
+
+            };
+
+        
+
+            // DECISION: Use execution type to determine CLI command
+
+            if (executionType === 'workflow') {
+
+                // Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
+
+                if (jobFileInputs.length > 0) {
+
+                    // Has file inputs -> use 'run-workflow' command
+
+                    args.push("run-workflow");
+
+        
+
+                    // Add file inputs
+
+                    for (const input of jobFileInputs) {
+
+                        // Format: <node_id>:<file_path>
+
+                        args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
+
+                    }
+
+        
+
+                    // Add text inputs
+
+                    for (const [paramId, value] of Object.entries(textInputs)) {
+
+                        // Format: <node_id>:<field_name>:<value>
+
+                        const fieldName = getParamFieldName(paramId, workflow);
+
+                        args.push("-p", `${getNodeId(paramId)}:${fieldName}:${value}`);
+
+                    }
+
+        
+
+                    // Note: run-workflow doesn't support --no-cleanup flag
+
+                } else {
+
+                    // No file inputs -> use 'run-text-workflow' command (text-only workflow)
+
+                    args.push("run-text-workflow");
+
+        
+
+                    // Add text inputs
+
+                    // Note: run-text-workflow now supports explicit fieldName format: nodeId:fieldName:value
+
+                    for (const [paramId, value] of Object.entries(textInputs)) {
+
+                        const nodeId = getNodeId(paramId);
+
+                        const fieldName = getParamFieldName(paramId, workflow);
+
+                        // Construct format that CLI recognizes: nodeId:fieldName:value
+
+                        args.push("-p", `${nodeId}:${fieldName}:${value}`);
+
+                    }
+
+        
+
+                    // Note: run-text-workflow doesn't support --no-cleanup flag
+
+                }
 
             } else {
-
-                // No file inputs -> use 'run-text-workflow' command (text-only workflow)
-
-                args.push("run-text-workflow");
-
-    
-
-                // Add text inputs
-
-                // Note: run-text-workflow now supports explicit type format: nodeId:type:value
-
-                // We use the new robust getParamType to determine the type
-
-                for (const [paramId, value] of Object.entries(textInputs)) {
-
-                    const nodeId = getNodeId(paramId);
-
-                    const fieldType = getParamType(paramId, workflow);
-
-                    // Construct format that CLI recognizes: nodeId:type:value
-
-                    args.push("-p", `${nodeId}:${fieldType}:${value}`);
-
-                }
-
-    
-
-                // Note: run-text-workflow doesn't support --no-cleanup flag
-
-            }
-
-        } else {
         // AI app execution -> use 'process' or 'process-multiple' command
         if (jobFileInputs.length === 1) {
             // Single file mode -> use 'process' command
@@ -776,10 +774,11 @@ async function processWorkflowInBackground(
             args.push("--node", getNodeId(input.parameterId));
 
             // Add text inputs as params
+            // Add text inputs as params
             for (const [paramId, value] of Object.entries(textInputs)) {
-                // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-                const fieldType = getParamType(paramId, workflow);
-                args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
+                // Format: <node_id>:<field_name>:<value>
+                const fieldName = getParamFieldName(paramId, workflow);
+                args.push("-p", `${getNodeId(paramId)}:${fieldName}:${value}`);
             }
 
             // Handle cleanup flag
@@ -801,10 +800,11 @@ async function processWorkflowInBackground(
             }
 
             // Add text inputs
+            // Add text inputs as params
             for (const [paramId, value] of Object.entries(textInputs)) {
-                // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-                const fieldType = getParamType(paramId, workflow);
-                args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
+                // Format: <node_id>:<field_name>:<value>
+                const fieldName = getParamFieldName(paramId, workflow);
+                args.push("-p", `${getNodeId(paramId)}:${fieldName}:${value}`);
             }
 
             // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required

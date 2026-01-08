@@ -269,14 +269,14 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
                     print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
                     continue
 
-                node_id, field_type, value = parts
+                node_id, field_name, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "text" if field_type == "text" else "value",
+                    "fieldName": field_name,
                     "fieldValue": value,
-                    "description": field_type,
+                    "description": field_name,
                 })
-                print_info(f"  Added parameter: node {node_id} = {value}")
+                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -397,14 +397,14 @@ def process_multiple(ctx, images, params, timeout, output_json, no_download, wor
                     print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
                     continue
 
-                node_id, field_type, value = parts
+                node_id, field_name, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "text" if field_type == "text" else "value",
+                    "fieldName": field_name,
                     "fieldValue": value,
-                    "description": field_type,
+                    "description": field_name,
                 })
-                print_info(f"  Added parameter: node {node_id} = {value}")
+                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -483,13 +483,13 @@ def run_workflow(ctx, images, params, timeout, output_json, no_download, workflo
                     print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
                     continue
 
-                node_id, field_type, value = parts
+                node_id, field_name, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "text" if field_type == "text" else "value",
+                    "fieldName": field_name,
                     "fieldValue": value,
                 })
-                print_info(f"  Added parameter: node {node_id} = {value}")
+                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -569,16 +569,16 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
         print_info(f"Parsing {len(params)} parameter(s)...")
         for param in params:
             try:
-                # First try explicit format: nodeId:type:value
+                # First try explicit format: nodeId:fieldName:value
                 parts_explicit = param.split(':', 2)
                 if len(parts_explicit) == 3:
-                    node_id, field_type, value = parts_explicit
+                    node_id, field_name, value = parts_explicit
                     node_configs.append({
                         "nodeId": node_id,
-                        "fieldName": "text" if field_type == "text" else "value",
+                        "fieldName": field_name,
                         "fieldValue": value,
                     })
-                    print_success(f"  Added parameter: node {node_id} ({field_type}) = {value}")
+                    print_success(f"  Added parameter: node {node_id} ({field_name}) = {value}")
                     continue
 
                 # Fallback: suffix-based inference (nodeId:value)
