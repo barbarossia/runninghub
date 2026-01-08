@@ -606,89 +606,97 @@ async function processWorkflowInBackground(
       return noPrefix;
     };
 
-            // Helper to determine field name from parameter ID and Workflow definition
+                // Helper to determine field name from parameter ID and Workflow definition
 
-            const getParamFieldName = (paramId: string, wf: Workflow | undefined) => {
+                const getParamFieldName = (paramId: string, wf: Workflow | undefined) => {
 
-              // First try to find in workflow definition
+                  // First try to find in workflow definition
 
-              if (wf) {
+                  if (wf) {
 
-                const param = wf.inputs.find(p => p.id === paramId);
+                    const param = wf.inputs.find(p => p.id === paramId);
 
-                if (param && param.name) {
+                    if (param && param.name) {
 
-                    return param.name;
+                        return param.name;
 
-                }
+                    }
 
-              }
+                  }
 
-        
+            
 
-              // Fallback: Remove param_ prefix
+                  // Fallback: Remove param_ prefix
 
-              const noPrefix = paramId.replace(/^param_/, '');
+                  const noPrefix = paramId.replace(/^param_/, '');
 
-              const lowerId = noPrefix.toLowerCase();
+                  
 
-              
+                  // Try to extract ID and Name: start with number, then underscore, then rest
 
-              // Check for known suffixes/keywords which act as field names
+                  // e.g., "143_multi_line_prompt" -> ID "143", Name "multi_line_prompt"
 
-              if (lowerId.includes('width')) return 'width';
+                  // e.g., "7_width" -> ID "7", Name "width"
 
-              if (lowerId.includes('height')) return 'height';
+                  const match = noPrefix.match(/^(\d+)_(.+)$/);
 
-              if (lowerId.includes('seed')) return 'seed';
+                  if (match) {
 
-              if (lowerId.includes('steps')) return 'steps';
+                      const candidate = match[2];
 
-              if (lowerId.includes('cfg')) return 'cfg';
+                      // Filter out our own type suffixes if they are ALONE (e.g. "143_text")
 
-              if (lowerId.includes('batch')) return 'batch_size'; // Common mapping
+                      // If the candidate is EXACTLY "text", "value", or "image", we might still default to them
 
-              if (lowerId.includes('denoise')) return 'denoise';
+                      // but if it's "multi_line_prompt", it passes this check.
 
-              if (lowerId.includes('scheduler')) return 'scheduler';
+                      if (candidate !== 'value' && candidate !== 'text' && candidate !== 'image') {
 
-              if (lowerId.includes('sampler')) return 'sampler_name'; // Common mapping
+                          return candidate;
 
-              
+                      }
 
-              if (lowerId.includes('prompt')) return 'text'; // Most text encoders use 'text' input
+                      // If it is 'value' or 'text', it might be the actual field name (e.g. Primitive Node)
 
-        
+                      // so we can return it too, but the regex match is better than split.
 
-              // If it contains underscore, take the last part (assuming format ID_fieldName)
+                      return candidate;
 
-              if (noPrefix.includes('_')) {
+                  }
 
-                const parts = noPrefix.split('_');
+            
 
-                const candidate = parts[parts.length - 1];
+                  const lowerId = noPrefix.toLowerCase();
 
-                // Filter out our own type suffixes if they aren't the field name
+                  
 
-                if (candidate !== 'value' && candidate !== 'text' && candidate !== 'image') {
+                  // Check for known suffixes/keywords which act as field names (Legacy/Fallback)
 
-                    return candidate;
+                  if (lowerId.includes('width')) return 'width';
 
-                }
+                  if (lowerId.includes('height')) return 'height';
 
-                // If it is 'value' or 'text', it might be the field name (e.g. Primitive Node)
+                  if (lowerId.includes('seed')) return 'seed';
 
-                return candidate;
+                  if (lowerId.includes('steps')) return 'steps';
 
-              }
+                  if (lowerId.includes('cfg')) return 'cfg';
 
-              
+                  if (lowerId.includes('batch')) return 'batch_size';
 
-              // Default fallback
+                  if (lowerId.includes('denoise')) return 'denoise';
 
-              return 'text';
+                  if (lowerId.includes('scheduler')) return 'scheduler';
 
-            };
+                  if (lowerId.includes('sampler')) return 'sampler_name';
+
+                  
+
+                  // Default fallback
+
+                  return 'text';
+
+                };
 
         
 
