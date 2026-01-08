@@ -246,11 +246,10 @@ async function processJobOutputs(
     let cliResponse: any = null;
     try {
       // Extract JSON from stdout (might be mixed with log lines)
-      // Strategy: Find all JSON objects in stdout and try to parse the last valid one
-      // This handles cases where CLI outputs logs before/after the JSON response
-
-      // Method 1: Try to find JSON objects by looking for balanced braces
+      // Strategy: Find all JSON objects in stdout and try to parse them
+      // We look for the one that matches RunningHub response structure (has code and data)
       const lines = cliStdout.split('\n');
+      const validJsonObjects: any[] = [];
 
       for (let startIndex = 0; startIndex < lines.length; startIndex++) {
         // Look for lines that contain '{' (potential JSON start)
@@ -287,19 +286,32 @@ async function processJobOutputs(
             const jsonStart = firstBracePos > 0 ? jsonStr.indexOf('{') : 0;
             const jsonOnly = jsonStr.substring(jsonStart);
 
-            cliResponse = JSON.parse(jsonOnly);
-            await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
-            await writeLog(`Found JSON at lines ${startIndex}-${endIndex}`, 'info', taskId);
-            break; // Successfully parsed, stop searching
+            const parsed = JSON.parse(jsonOnly);
+            validJsonObjects.push(parsed);
+            
+            // Optimization: If this looks exactly like what we want, we can stop
+            if (parsed.code !== undefined && Array.isArray(parsed.data)) {
+                cliResponse = parsed;
+                await writeLog(`Found valid response JSON at lines ${startIndex}-${endIndex}`, 'info', taskId);
+                break;
+            }
           } catch (e) {
             // This isn't valid JSON, continue searching
-            await writeLog(`Attempted JSON parse at lines ${startIndex}-${endIndex} failed: ${e}`, 'debug', taskId);
             continue;
           }
         }
       }
 
-      if (!cliResponse) {
+      // If we didn't find the perfect match, try to use the last valid object
+      // (assuming result is usually at the end)
+      if (!cliResponse && validJsonObjects.length > 0) {
+          cliResponse = validJsonObjects[validJsonObjects.length - 1];
+          await writeLog(`Using last found JSON object as response`, 'info', taskId);
+      }
+      
+      if (cliResponse) {
+        await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+      } else {
         await writeLog('No valid JSON found in CLI output', 'warning', taskId);
         await writeLog(`CLI stdout preview: ${cliStdout.slice(0, 200)}...`, 'info', taskId);
       }
