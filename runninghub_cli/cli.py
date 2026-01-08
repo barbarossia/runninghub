@@ -569,10 +569,23 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
         print_info(f"Parsing {len(params)} parameter(s)...")
         for param in params:
             try:
+                # First try explicit format: nodeId:type:value
+                parts_explicit = param.split(':', 2)
+                if len(parts_explicit) == 3:
+                    node_id, field_type, value = parts_explicit
+                    node_configs.append({
+                        "nodeId": node_id,
+                        "fieldName": "text" if field_type == "text" else "value",
+                        "fieldValue": value,
+                    })
+                    print_success(f"  Added parameter: node {node_id} ({field_type}) = {value}")
+                    continue
+
+                # Fallback: suffix-based inference (nodeId:value)
                 parts = param.split(':', 1)
                 if len(parts) != 2:
                     print_error(f"Invalid parameter format: {param}")
-                    print_info("Expected format: nodeId:value or nodeId:type:value")
+                    print_info("Expected format: nodeId:type:value or nodeId:value")
                     continue
 
                 node_id, value = parts
