@@ -9,6 +9,7 @@ import {
   Settings,
   Loader2,
   Eye,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,7 @@ import { DuckDecodeDialog } from '@/components/images/DuckDecodeDialog';
 interface SelectionToolbarProps {
   onProcess?: (selectedPaths: string[]) => void;
   onDelete?: (selectedPaths: string[]) => void;
+  onExport?: (selectedPaths: string[]) => void;
   onDuckDecodeOpen?: () => void;
   nodes?: Array<{ id: string; name: string }>;
   selectedNode?: string;
@@ -49,6 +51,7 @@ interface SelectionToolbarProps {
 export function SelectionToolbar({
   onProcess,
   onDelete,
+  onExport,
   onDuckDecodeOpen,
   nodes = [],
   selectedNode,
@@ -63,6 +66,7 @@ export function SelectionToolbar({
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [showDecodeDialog, setShowDecodeDialog] = useState(false);
 
   // Get selected duck-encoded images
@@ -94,6 +98,20 @@ export function SelectionToolbar({
     }
   }, [onProcess, selectedPaths]);
 
+  // Handle export
+  const handleExport = useCallback(async () => {
+    if (!onExport) return;
+
+    setIsExporting(true);
+    try {
+      await onExport(selectedPaths);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to export images');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [onExport, selectedPaths]);
+
   // Handle delete with confirmation
   const handleDeleteConfirm = useCallback(async () => {
     if (!onDelete) return;
@@ -121,7 +139,7 @@ export function SelectionToolbar({
     store.deselectAll();
   }, [store]);
 
-  const toolbarDisabled = disabled || isProcessing;
+  const toolbarDisabled = disabled || isProcessing || isExporting;
 
   return (
     <>
@@ -188,6 +206,25 @@ export function SelectionToolbar({
                   <Play className="h-4 w-4 mr-2 fill-current" />
                   {isProcessing ? 'Processing...' : 'Start Processing'}
                 </Button>
+
+                {/* Export button */}
+                {onExport && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
+                    title="Export to folder"
+                  >
+                    {isExporting ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    Export
+                  </Button>
+                )}
 
                 {/* Duck Decode button - shown when there are duck-encoded images in selection */}
                 {hasDuckEncodedInSelection && (
@@ -274,6 +311,23 @@ export function SelectionToolbar({
                       <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
                     )}
                     <span className="text-xs font-bold">{isProcessing ? '...' : 'Process'}</span>
+                  </Button>
+                )}
+
+                {onExport && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleExport}
+                    disabled={toolbarDisabled}
+                    className="h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-950/30 rounded-full"
+                    title="Export to folder"
+                  >
+                    {isExporting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 )}
 
