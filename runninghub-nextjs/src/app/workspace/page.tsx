@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
-import { useFolderStore } from '@/store/folder-store';
+import { useFolderStore, useWorkspaceFolder } from '@/store/folder-store';
 import { useVideoClipStore } from '@/store/video-clip-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
@@ -56,8 +56,8 @@ import { API_ENDPOINTS } from '@/constants';
 import type { Workflow, Job, MediaFile, FileInputAssignment } from '@/types/workspace';
 
 export default function WorkspacePage() {
-  // Folder store state - selectedFolder comes from here
-  const { selectedFolder } = useFolderStore();
+  // Folder store state - use page-specific folder state for workspace page
+  const { selectedFolder } = useWorkspaceFolder();
 
   // Workspace store state
   const {
@@ -128,7 +128,7 @@ export default function WorkspacePage() {
   }, [filteredVideos]);
 
   // Custom hooks
-  const { loadFolderContents } = useFileSystem();
+  const { loadFolderContents } = useFileSystem({ pageType: 'workspace' });
 
   // Validate duck encoding for all images in parallel
   const validateAllImagesForDuck = useCallback(async (imageFiles: MediaFile[]) => {
@@ -308,14 +308,14 @@ export default function WorkspacePage() {
     }
   }, [jobs, updateJob]);
 
-  // Use folder selection hook (using 'images' type for workspace)
+  // Use folder selection hook for workspace
   const { handleFolderSelected } = useFolderSelection({
-    folderType: 'images',
+    folderType: 'workspace',
   });
 
   // Auto-load last opened folder on mount
   useAutoLoadFolder({
-    folderType: 'images',
+    folderType: 'workspace',
     onFolderLoaded: (folder, contents) => {
       // Folder is automatically set as selected by the hook
       // If contents were provided during validation, use them directly
@@ -395,9 +395,9 @@ export default function WorkspacePage() {
   };
 
   const handleBackToSelection = () => {
-    const { setSelectedFolder } = useFolderStore.getState();
+    const { setSelectedFolder, clearPageFolder } = useFolderStore.getState();
     const { setMediaFiles } = useWorkspaceStore.getState();
-    setSelectedFolder(null);
+    clearPageFolder('workspace');
     setMediaFiles([]);
     setError('');
   };

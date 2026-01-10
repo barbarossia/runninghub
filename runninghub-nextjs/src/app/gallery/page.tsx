@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useFolderStore } from '@/store/folder-store';
+import { useFolderStore, useImageFolder } from '@/store/folder-store';
 import { useImageStore } from '@/store/image-store';
 import { useSelectionStore } from '@/store/selection-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
@@ -17,7 +17,6 @@ import { ConsoleViewer } from '@/components/ui/ConsoleViewer';
 import { PageHeader } from '@/components/navigation/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   FolderOpen,
@@ -27,14 +26,14 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
-import { useFolderStore as useLegacyFolderStore, useImageStore as useLegacyImageStore, useSelectionStore as useLegacySelectionStore, useProcessStore } from '@/store';
+import { useProcessStore } from '@/store';
 import { useFileSystem } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
 import type { ImageFile } from '@/types';
 
 export default function GalleryPage() {
-  // Store state - use new modular stores
-  const { selectedFolder, isLoadingFolder } = useFolderStore();
+  // Store state - use page-specific folder state for images page
+  const { selectedFolder, isLoadingFolder } = useImageFolder();
   const { images, isLoadingImages, error: imageError, sortField, sortDirection } = useImageStore();
   const { deselectAll } = useSelectionStore();
 
@@ -49,8 +48,8 @@ export default function GalleryPage() {
   );
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
 
-  // Custom hooks
-  const { loadFolderContents } = useFileSystem();
+  // Custom hooks - pass pageType for per-page folder state
+  const { loadFolderContents } = useFileSystem({ pageType: 'images' });
 
   const handleRefresh = async (silent = false) => {
     if (selectedFolder) {
@@ -120,8 +119,8 @@ export default function GalleryPage() {
   };
 
   const handleBackToSelection = () => {
-    const { clearFolder } = useFolderStore.getState();
-    clearFolder();
+    const { clearPageFolder } = useFolderStore.getState();
+    clearPageFolder('images');
     useImageStore.getState().setImages([]);
     deselectAll();
     setLocalError('');

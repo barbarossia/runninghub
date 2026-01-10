@@ -22,7 +22,7 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
-import { useFolderStore } from '@/store/folder-store';
+import { useWorkspaceFolder } from '@/store/folder-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -54,7 +54,7 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
   // Local state for text inputs (isolated per workflow)
   const [localInputs, setLocalInputs] = useState<Record<string, string>>({});
 
-  const { selectedFolder } = useFolderStore();
+  const { selectedFolder } = useWorkspaceFolder();
 
   const [deleteSourceFiles, setDeleteSourceFiles] = useState(false);
   const [draggedOverParam, setDraggedOverParam] = useState<string | null>(null);

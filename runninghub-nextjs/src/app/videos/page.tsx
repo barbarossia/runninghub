@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useFolderStore } from '@/store/folder-store';
+import { useFolderStore, useVideoFolder } from '@/store/folder-store';
 import { useVideoStore } from '@/store/video-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
@@ -22,7 +22,8 @@ import { logger } from '@/utils/logger';
 import { Video } from 'lucide-react';
 
 export default function VideosPage() {
-  const { selectedFolder, clearFolder } = useFolderStore();
+  // Use page-specific folder state for videos page
+  const { selectedFolder } = useVideoFolder();
   const { videos, setVideos, filteredVideos, updateVideo } = useVideoStore();
   const { deselectAll, deselectVideo } = useVideoSelectionStore();
   const { isProgressModalOpen } = useProgressStore();
@@ -200,7 +201,8 @@ export default function VideosPage() {
   };
 
   const handleBackToSelection = () => {
-    clearFolder();
+    const { clearPageFolder } = useFolderStore.getState();
+    clearPageFolder('videos');
     setVideos([]);
     deselectAll();
   };
