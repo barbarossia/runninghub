@@ -13,6 +13,7 @@ export const ENVIRONMENT_VARIABLES = {
   MAX_FILES_COUNT: parseInt(process.env.MAX_FILES_COUNT || '100'),
   WORKSPACE_PATH: process.env.WORKSPACE_PATH || '~/Downloads/workspace',
   WORKSPACE_WORKFLOW_ID: process.env.WORKSPACE_WORKFLOW_ID || null,
+  MAX_CONCURRENT_PROCESSES: parseInt(process.env.RUNNINGHUB_MAX_CONCURRENT_PROCESSES || '5'),
 } as const;
 
 export const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];

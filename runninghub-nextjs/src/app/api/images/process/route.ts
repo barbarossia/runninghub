@@ -62,6 +62,55 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * Process a single image with infinite retry on TASK_QUEUE_MAXED error
+ * Will keep retrying until success for queue-related errors
+ */
+async function processSingleImageWithRetry(
+  imagePath: string,
+  nodeId: string,
+  timeout: number,
+  env: NodeJS.ProcessEnv,
+  params: Record<string, string> = {},
+  deleteOriginal: boolean = false,
+): Promise<{
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  error?: string;
+}> {
+  let attempt = 0;
+  let baseDelay = 2000; // Start with 2 seconds
+  const maxDelay = 30000; // Cap at 30 seconds between retries
+
+  while (true) { // Infinite retry for TASK_QUEUE_MAXED
+    const result = await processSingleImage(imagePath, nodeId, timeout, env, params, deleteOriginal);
+
+    // If successful, return immediately
+    if (result.success) {
+      return result;
+    }
+
+    // Check if error is TASK_QUEUE_MAXED
+    const isQueueMaxed = result.stdout?.includes('TASK_QUEUE_MAXED') ||
+                         result.stderr?.includes('TASK_QUEUE_MAXED') ||
+                         result.error?.includes('TASK_QUEUE_MAXED');
+
+    if (isQueueMaxed) {
+      attempt++;
+      // Exponential backoff with cap: 2s, 4s, 8s, 16s, 30s, 30s, 30s...
+      const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
+      console.log(`[${imagePath}] Task queue full, retry ${attempt} after ${delay}ms...`);
+      await writeLog(`Queue full, retrying ${attempt} for ${imagePath}`, 'info', 'process_queue');
+      await new Promise(resolve => setTimeout(resolve, delay));
+      continue; // Retry the same image
+    }
+
+    // Not a queue error - return failure immediately
+    return result;
+  }
+}
+
+/**
  * Process a single image using spawn for better control
  */
 function processSingleImage(
@@ -150,11 +199,13 @@ function processSingleImage(
 
       if (success) {
         console.log(`[${imagePath}] Successfully processed`);
+        resolve({ success: true, stdout, stderr });
       } else {
         console.error(`[${imagePath}] Failed to process (exit code: ${code})`);
+        // Include stderr in the error message for debugging
+        const errorMsg = stderr?.trim() || `Process exited with code ${code}`;
+        resolve({ success: false, stdout, stderr, error: errorMsg });
       }
-
-      resolve({ success, stdout, stderr });
     });
 
     // Handle process errors
@@ -169,6 +220,46 @@ function processSingleImage(
       });
     });
   });
+}
+
+/**
+ * Process items with concurrency limit
+ * @param items - Array of items to process
+ * @param limit - Maximum concurrent operations
+ * @param processor - Async function to process each item
+ * @returns Array of results in the same order as input
+ */
+async function processWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  processor: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  const executing: Promise<void>[] = [];
+  let index = 0;
+
+  for (const item of items) {
+    const currentIndex = index++;
+
+    const promise = processor(item, currentIndex).then((result) => {
+      results[currentIndex] = result;
+      // Remove from executing array when done
+      const idx = executing.indexOf(promise as any);
+      if (idx > -1) executing.splice(idx, 1);
+    });
+
+    executing.push(promise);
+
+    // When limit is reached, wait for one to finish
+    if (executing.length >= limit) {
+      await Promise.race(executing);
+    }
+  }
+
+  // Wait for all remaining to complete
+  await Promise.all(executing);
+
+  return results;
 }
 
 /**
@@ -233,40 +324,55 @@ async function processImagesInBackground(
     env.RUNNINGHUB_DOWNLOAD_DIR = downloadDir;
   }
 
+  // Get concurrency limit from environment variable (default: 5)
+  const maxConcurrent = parseInt(process.env.RUNNINGHUB_MAX_CONCURRENT_PROCESSES || '5');
+  await writeLog(`Concurrency limit: ${maxConcurrent} simultaneous processes`, 'info', taskId);
+
   let successCount = 0;
   let failureCount = 0;
 
   try {
-    for (let i = 0; i < images.length; i++) {
-      const imagePath = images[i];
-      await writeLog(`Processing image ${i + 1}/${images.length}: ${imagePath}`, 'info', taskId);
-      await updateTask(taskId, { currentImage: imagePath });
+    // Process images with concurrency control
+    const results = await processWithConcurrency(
+      images,
+      maxConcurrent,
+      async (imagePath: string, index: number) => {
+        await updateTask(taskId, {
+          currentImage: `${imagePath} (${index + 1}/${images.length})`
+        });
 
-      // Check if file exists
-      try {
-        const fs = await import("fs/promises");
-        await fs.access(imagePath);
-      } catch {
-        await writeLog(`Image file does not exist: ${imagePath}`, 'error', taskId);
-        failureCount++;
-        await updateTask(taskId, { failedCount: failureCount });
-        continue;
+        // Check if file exists
+        try {
+          const fs = await import("fs/promises");
+          await fs.access(imagePath);
+        } catch {
+          await writeLog(`Image file does not exist: ${imagePath}`, 'error', taskId);
+          return { success: false, imagePath, error: 'File not found' };
+        }
+
+        const result = await processSingleImageWithRetry(imagePath, nodeId, timeout, env, params, deleteOriginal);
+
+        if (result.success) {
+          await writeLog(`✓ Successfully processed: ${imagePath}`, 'success', taskId);
+          return { success: true, imagePath };
+        } else {
+          await writeLog(`✗ Failed to process: ${imagePath}`, 'error', taskId);
+          if (result.error) {
+            await writeLog(`  Error: ${result.error}`, 'error', taskId);
+          }
+          return { success: false, imagePath, error: result.error };
+        }
       }
+    );
 
-      // Process the image
-      const result = await processSingleImage(imagePath, nodeId, timeout, env, params, deleteOriginal);
-
+    // Count successes and failures (sequential to avoid race conditions)
+    for (const result of results) {
       if (result.success) {
         successCount++;
-        await writeLog(`✓ Successfully processed: ${imagePath}`, 'success', taskId);
         await updateTask(taskId, { completedCount: successCount });
       } else {
         failureCount++;
-        await writeLog(`✗ Failed to process: ${imagePath}`, 'error', taskId);
         await updateTask(taskId, { failedCount: failureCount });
-        if (result.error) {
-           await writeLog(`  Error: ${result.error}`, 'error', taskId);
-        }
       }
     }
 
