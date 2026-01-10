@@ -1,11 +1,13 @@
 /**
  * Job Management API
- * GET - Fetch job details by ID
+ * GET - Fetch job details by ID from local job.json file
  * PUT - Update job (add results, update status)
- * DELETE - Delete job
+ * DELETE - Delete job folder and job.json file
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs/promises';
+import path from 'path';
 import type { Job } from '@/types/workspace';
 
 interface JobUpdateRequest {
@@ -15,6 +17,17 @@ interface JobUpdateRequest {
   startedAt?: number;
   completedAt?: number;
   taskId?: string;
+  runninghubTaskId?: string;
+}
+
+// Get the job directory path
+function getJobDir(jobId: string): string {
+  const workspaceDir = path.join(
+    process.env.HOME || '~',
+    'Downloads',
+    'workspace'
+  );
+  return path.join(workspaceDir, jobId);
 }
 
 export async function GET(
@@ -24,21 +37,27 @@ export async function GET(
   try {
     const { jobId } = await params;
 
-    // NOTE: Job data is stored in client-side Zustand store with localStorage
-    // This endpoint is a placeholder for future backend integration
-    // Currently, the frontend should use useWorkspaceStore().getJobById(jobId) directly
+    const jobDir = getJobDir(jobId);
+    const jobJsonPath = path.join(jobDir, 'job.json');
+
+    // Check if job.json exists
+    try {
+      await fs.access(jobJsonPath);
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Job not found',
+      }, { status: 404 });
+    }
+
+    // Read job.json file
+    const content = await fs.readFile(jobJsonPath, 'utf-8');
+    const job: Job = JSON.parse(content);
 
     return NextResponse.json({
-      success: false,
-      error: 'Job management is handled client-side. Use useWorkspaceStore().getJobById() instead.',
-    }, { status: 501 }); // 501 Not Implemented
-
-    // Future implementation with backend store:
-    // const job = await getJobFromStore(jobId);
-    // if (!job) {
-    //   return NextResponse.json({ success: false, error: 'Job not found' }, { status: 404 });
-    // }
-    // return NextResponse.json({ success: true, job });
+      success: true,
+      job,
+    });
 
   } catch (error) {
     console.error('Job fetch error:', error);
@@ -58,25 +77,41 @@ export async function PUT(
     const body: JobUpdateRequest = await request.json();
 
     // Validate request
-    if (!body.status && !body.results && !body.error) {
+    if (!body.status && !body.results && !body.error && !body.startedAt && !body.completedAt && !body.taskId && !body.runninghubTaskId) {
       return NextResponse.json({
         success: false,
         error: 'No update data provided',
       }, { status: 400 });
     }
 
-    // NOTE: Job updates are handled client-side in Zustand store
-    // This endpoint is a placeholder for future backend integration
-    // Currently, the frontend should use useWorkspaceStore().updateJob(jobId, updates) directly
+    const jobDir = getJobDir(jobId);
+    const jobJsonPath = path.join(jobDir, 'job.json');
+
+    // Read existing job.json
+    let existingJob: Job | null = null;
+    try {
+      const content = await fs.readFile(jobJsonPath, 'utf-8');
+      existingJob = JSON.parse(content);
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'Job not found',
+      }, { status: 404 });
+    }
+
+    // Update job with new data
+    const updatedJob: Job = {
+      ...existingJob!,
+      ...body,
+    };
+
+    // Write updated job.json
+    await fs.writeFile(jobJsonPath, JSON.stringify(updatedJob, null, 2), 'utf-8');
 
     return NextResponse.json({
-      success: false,
-      error: 'Job updates are handled client-side. Use useWorkspaceStore().updateJob() instead.',
-    }, { status: 501 }); // 501 Not Implemented
-
-    // Future implementation with backend store:
-    // const updatedJob = await updateJobInStore(jobId, body);
-    // return NextResponse.json({ success: true, job: updatedJob });
+      success: true,
+      job: updatedJob,
+    });
 
   } catch (error) {
     console.error('Job update error:', error);
@@ -94,18 +129,15 @@ export async function DELETE(
   try {
     const { jobId } = await params;
 
-    // NOTE: Job deletion is handled client-side in Zustand store
-    // This endpoint is a placeholder for future backend integration
-    // Currently, the frontend should use useWorkspaceStore().deleteJob(jobId) directly
+    const jobDir = getJobDir(jobId);
+
+    // Delete the job directory and all its contents
+    await fs.rm(jobDir, { recursive: true, force: true });
 
     return NextResponse.json({
-      success: false,
-      error: 'Job deletion is handled client-side. Use useWorkspaceStore().deleteJob() instead.',
-    }, { status: 501 }); // 501 Not Implemented
-
-    // Future implementation with backend store:
-    // await deleteJobFromStore(jobId);
-    // return NextResponse.json({ success: true, message: 'Job deleted' });
+      success: true,
+      message: 'Job deleted',
+    });
 
   } catch (error) {
     console.error('Job delete error:', error);
