@@ -92,6 +92,10 @@ export const API_ENDPOINTS = {
   WORKSPACE_DUCK_DECODE: '/api/workspace/duck-decode',
   WORKSPACE_UPLOAD_TO_RUNNINGHUB: '/api/workspace/upload-to-runninghub',
 
+  // Gallery - Duck encode/decode (reuses workspace endpoints)
+  IMAGES_DUCK_VALIDATE: '/api/workspace/duck-validate',
+  IMAGES_DUCK_DECODE: '/api/workspace/duck-decode',
+
   // Workflows
   WORKFLOW_SAVE: '/api/workflow/save',
   WORKFLOW_DELETE: '/api/workflow/delete',

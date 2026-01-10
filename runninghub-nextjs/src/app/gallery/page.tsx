@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFolderStore, useImageFolder } from '@/store/folder-store';
 import { useImageStore } from '@/store/image-store';
 import { useSelectionStore } from '@/store/selection-store';
@@ -48,8 +48,12 @@ export default function GalleryPage() {
   );
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
 
+  // Track validated images to avoid re-validating
+  const validatedImagePaths = useRef<Set<string>>(new Set());
+
   // Custom hooks - pass pageType for per-page folder state
   const { loadFolderContents } = useFileSystem({ pageType: 'images' });
+  const { updateImageDuckStatus, getUnvalidatedImages } = useImageStore();
 
   const handleRefresh = async (silent = false) => {
     if (selectedFolder) {
@@ -90,6 +94,72 @@ export default function GalleryPage() {
       loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id, true);
     }
   }, []); // Empty dependency array = runs once on mount
+
+  // Duck validation: Automatically validate images when folder loads
+  // This runs in the background with concurrency control
+  useEffect(() => {
+    const unvalidatedImages = getUnvalidatedImages();
+    if (unvalidatedImages.length === 0) return;
+
+    // Filter out images that were already validated (tracked in ref)
+    const imagesToValidate = unvalidatedImages.filter(
+      img => !validatedImagePaths.current.has(img.path)
+    );
+
+    if (imagesToValidate.length === 0) return;
+
+    console.log(`[Gallery] Starting duck validation for ${imagesToValidate.length} images...`);
+
+    const validateImage = async (image: ImageFile): Promise<void> => {
+      try {
+        // Mark as pending to prevent re-validation
+        updateImageDuckStatus(image.path, { duckValidationPending: true });
+
+        const response = await fetch(API_ENDPOINTS.IMAGES_DUCK_VALIDATE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagePath: image.path }),
+        });
+
+        const data = await response.json();
+
+        // Update the image with validation result
+        updateImageDuckStatus(image.path, {
+          isDuckEncoded: data.isDuckEncoded,
+          duckRequiresPassword: data.requiresPassword,
+          duckValidationPending: false,
+        });
+
+        // Track as validated
+        validatedImagePaths.current.add(image.path);
+
+        if (data.isDuckEncoded) {
+          console.log(`[Gallery] Duck-encoded image found: ${image.name}`);
+        }
+      } catch (error) {
+        console.error(`[Gallery] Failed to validate ${image.name}:`, error);
+        updateImageDuckStatus(image.path, {
+          isDuckEncoded: false,
+          duckValidationPending: false,
+        });
+        validatedImagePaths.current.add(image.path);
+      }
+    };
+
+    // Validate with concurrency limit (3 at a time)
+    const validateWithConcurrency = async (imgs: ImageFile[], concurrency = 3) => {
+      const chunks = [];
+      for (let i = 0; i < imgs.length; i += concurrency) {
+        chunks.push(imgs.slice(i, i + concurrency));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.allSettled(chunk.map(validateImage));
+      }
+    };
+
+    validateWithConcurrency(imagesToValidate);
+  }, [images, updateImageDuckStatus, getUnvalidatedImages]);
 
   // Combine errors
   const error = localError || imageError;
@@ -326,6 +396,7 @@ export default function GalleryPage() {
             <SelectionToolbar
               onProcess={handleProcess}
               onDelete={handleDelete}
+              onDuckDecodeOpen={() => handleRefresh(true)}
               nodes={nodes}
               selectedNode={selectedNode}
               onNodeChange={setSelectedNode}

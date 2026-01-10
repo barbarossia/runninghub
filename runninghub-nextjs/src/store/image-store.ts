@@ -52,6 +52,18 @@ interface ImageState {
   // Like actions
   likedImages: Set<string>;
   toggleLike: (imagePath: string) => void;
+
+  // Duck encoding validation
+  getDuckEncodedImages: () => ImageFile[];
+  getUnvalidatedImages: () => ImageFile[];
+  updateImageDuckStatus: (
+    imagePath: string,
+    status: {
+      isDuckEncoded?: boolean;
+      duckRequiresPassword?: boolean;
+      duckValidationPending?: boolean;
+    }
+  ) => void;
 }
 
 export const useImageStore = create<ImageState>((set, get) => ({
@@ -200,5 +212,27 @@ export const useImageStore = create<ImageState>((set, get) => ({
       newLikedImages.add(imagePath);
     }
     set({ likedImages: newLikedImages });
+  },
+
+  // Duck encoding validation methods
+  getDuckEncodedImages: () => {
+    const state = get();
+    return state.images.filter((img) => img.isDuckEncoded === true);
+  },
+
+  getUnvalidatedImages: () => {
+    const state = get();
+    return state.images.filter(
+      (img) => img.isDuckEncoded === undefined && !img.duckValidationPending
+    );
+  },
+
+  updateImageDuckStatus: (imagePath, status) => {
+    const state = get();
+    const newImages = state.images.map((img) =>
+      img.path === imagePath ? { ...img, ...status } : img
+    );
+    set({ images: newImages });
+    get().applyFilters();
   },
 }));
