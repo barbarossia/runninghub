@@ -1,14 +1,31 @@
 /**
  * Import Workflow JSON API
  * Parses local workflow JSON files and converts them to Workflow format
+ * Returns detected nodes for user selection before creating the workflow
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import type { Workflow, WorkflowInputParameter } from '@/types/workspace';
 
+/**
+ * Detected node structure for user selection
+ */
+interface DetectedNode {
+  id: string;
+  name: string;
+  inputCount: number;
+  inputType: 'image' | 'video' | 'text' | 'number' | 'mixed' | 'unknown';
+  description: string;
+  inputs: Array<{
+    name: string;
+    type: string;
+    value: any;
+  }>;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { jsonContent, workflowName, workflowId } = await request.json();
+    const { jsonContent, workflowName, workflowId, selectedNodes } = await request.json();
 
     if (!jsonContent) {
       return NextResponse.json({
@@ -28,13 +45,26 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Convert JSON nodes to WorkflowInputParameter[]
-    const parameters = convertJsonToParameters(jsonContentParsed);
+    // If selectedNodes is provided, convert only selected nodes
+    // Otherwise, return detected nodes for selection
+    const allNodes = detectNodes(jsonContentParsed);
+
+    if (selectedNodes === undefined || selectedNodes === null) {
+      // First pass: return detected nodes for user selection
+      return NextResponse.json({
+        success: true,
+        nodes: allNodes,
+        requiresSelection: true,
+      });
+    }
+
+    // Second pass: user has selected nodes, create workflow with only selected ones
+    const parameters = convertSelectedNodesToParameters(jsonContentParsed, selectedNodes, allNodes);
 
     if (parameters.length === 0) {
       return NextResponse.json({
         success: false,
-        error: 'No valid parameters found in JSON. Ensure the JSON has the correct structure: { "nodeId": { "inputs": { ... } } }',
+        error: 'No valid parameters found in selected nodes. Ensure the JSON has the correct structure: { "nodeId": { "inputs": { ... } } }',
       }, { status: 400 });
     }
 
@@ -42,12 +72,12 @@ export async function POST(request: NextRequest) {
     const workflow: Workflow = {
       id: workflowId || `workflow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name: workflowName || 'Imported Workflow',
-      description: `Workflow imported from local JSON file with ${parameters.length} parameters`,
+      description: `Workflow imported from local JSON file with ${parameters.length} parameters from ${selectedNodes.length} node${selectedNodes.length !== 1 ? 's' : ''}`,
       inputs: parameters,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       sourceType: 'local',
-      executionType: 'workflow', // Imported workflows use workflow API endpoint
+      executionType: 'workflow',
     };
 
     return NextResponse.json({
@@ -62,6 +92,146 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : 'Import failed',
     }, { status: 500 });
   }
+}
+
+/**
+ * Detect nodes from JSON that have user-configurable inputs
+ * Returns array of nodes with metadata for user selection
+ */
+function detectNodes(jsonContent: any): DetectedNode[] {
+  const detectedNodes: DetectedNode[] = [];
+
+  if (typeof jsonContent !== 'object' || jsonContent === null) {
+    return detectedNodes;
+  }
+
+  for (const [nodeId, nodeData] of Object.entries(jsonContent)) {
+    // Validate node structure
+    if (!nodeData || typeof nodeData !== 'object') {
+      continue;
+    }
+
+    const inputs = (nodeData as any).inputs;
+    if (!inputs || typeof inputs !== 'object') {
+      continue;
+    }
+
+    const inputEntries = Object.entries(inputs);
+
+    // Count array vs non-array inputs
+    const arrayCount = inputEntries.filter(([, value]) => Array.isArray(value)).length;
+    const totalCount = inputEntries.length;
+
+    // Skip if more than half of the inputs are arrays (node references) - these are processing nodes
+    if (totalCount > 0 && arrayCount > totalCount / 2) {
+      continue;
+    }
+
+    // Get non-array inputs (actual user inputs)
+    const userInputs = inputEntries.filter(([, value]) => !Array.isArray(value) && value !== null && value !== undefined && value !== '');
+
+    if (userInputs.length === 0) {
+      continue;
+    }
+
+    // Detect input type
+    let inputType: DetectedNode['inputType'] = 'unknown';
+    const hasImage = userInputs.some(([name, value]) =>
+      name.toLowerCase().includes('image') ||
+      (typeof value === 'string' && /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(value))
+    );
+    const hasVideo = userInputs.some(([name, value]) =>
+      name.toLowerCase().includes('video') ||
+      (typeof value === 'string' && /\.(mp4|mov|avi|mkv|webm|flv)$/i.test(value))
+    );
+    const hasNumber = userInputs.some(([, value]) => typeof value === 'number');
+    const hasText = userInputs.some(([, value]) => typeof value === 'string' && !hasImage && !hasVideo);
+
+    if (hasImage && hasVideo) {
+      inputType = 'mixed';
+    } else if (hasImage) {
+      inputType = 'image';
+    } else if (hasVideo) {
+      inputType = 'video';
+    } else if (hasNumber) {
+      inputType = 'number';
+    } else if (hasText) {
+      inputType = 'text';
+    }
+
+    detectedNodes.push({
+      id: nodeId,
+      name: nodeId,
+      inputCount: userInputs.length,
+      inputType,
+      description: `${userInputs.length} input${userInputs.length !== 1 ? 's' : ''} (${inputType})`,
+      inputs: userInputs.map(([name, value]) => ({ name, type: typeof value, value })),
+    });
+  }
+
+  return detectedNodes;
+}
+
+/**
+ * Convert selected nodes to WorkflowInputParameter array
+ */
+function convertSelectedNodesToParameters(
+  jsonContent: any,
+  selectedNodeIds: string[],
+  allNodes: DetectedNode[]
+): WorkflowInputParameter[] {
+  const parameters: WorkflowInputParameter[] = [];
+
+  if (typeof jsonContent !== 'object' || jsonContent === null) {
+    return parameters;
+  }
+
+  for (const nodeId of selectedNodeIds) {
+    const nodeData = jsonContent[nodeId];
+    if (!nodeData || typeof nodeData !== 'object') {
+      continue;
+    }
+
+    const inputs = (nodeData as any).inputs;
+    if (!inputs || typeof inputs !== 'object') {
+      continue;
+    }
+
+    // Get node info for description
+    const nodeInfo = allNodes.find(n => n.id === nodeId);
+
+    for (const [fieldName, fieldValue] of Object.entries(inputs)) {
+      // Skip array values - these are node references, not user inputs
+      if (Array.isArray(fieldValue)) {
+        continue;
+      }
+
+      // Skip null/undefined/empty values
+      if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
+        continue;
+      }
+
+      const paramType = detectParameterType(fieldName, fieldValue);
+      const mediaType = paramType === 'file' ? detectMediaType(fieldName, String(fieldValue)) : undefined;
+
+      // Create unique parameter ID
+      const uniqueParamId = `${nodeId}_${fieldName}`;
+
+      parameters.push({
+        id: `param_${uniqueParamId}`,
+        name: fieldName,
+        type: paramType,
+        required: false,
+        description: nodeInfo ? `Parameter from node ${nodeId}` : `Parameter from node ${nodeId}`,
+        validation: paramType === 'file' ? {
+          mediaType,
+          fileType: mediaType ? [`${mediaType}/*`] : undefined,
+        } : undefined,
+      });
+    }
+  }
+
+  return parameters;
 }
 
 /**
@@ -111,79 +281,4 @@ function detectMediaType(fieldName: string, fieldValue: string): 'image' | 'vide
   }
 
   return undefined;
-}
-
-/**
- * Convert JSON structure to WorkflowInputParameter array
- */
-function convertJsonToParameters(jsonContent: any): WorkflowInputParameter[] {
-  const parameters: WorkflowInputParameter[] = [];
-
-  // Expected structure: { "nodeId": { "inputs": { "fieldName": "value" } } }
-  if (typeof jsonContent !== 'object' || jsonContent === null) {
-    return parameters;
-  }
-
-  for (const [nodeId, nodeData] of Object.entries(jsonContent)) {
-    // Validate node structure
-    if (!nodeData || typeof nodeData !== 'object') {
-      continue;
-    }
-
-    const inputs = (nodeData as any).inputs;
-    if (!inputs || typeof inputs !== 'object') {
-      continue;
-    }
-
-    // Skip nodes that are primarily middle/processing nodes
-    // If most inputs are arrays (node references), skip this node
-    const inputEntries = Object.entries(inputs);
-    const arrayCount = inputEntries.filter(([, value]) => Array.isArray(value)).length;
-    const totalCount = inputEntries.length;
-
-    // Skip if more than half of the inputs are arrays (node references)
-    if (totalCount > 0 && arrayCount > totalCount / 2) {
-      continue;
-    }
-
-    // Process each input field
-    for (const [fieldName, fieldValue] of Object.entries(inputs)) {
-      // Skip array values - these are node references, not user inputs
-      // Example: ["63", 0] means reference to node 63, output index 0
-      if (Array.isArray(fieldValue)) {
-        continue;
-      }
-
-      // Skip null values
-      if (fieldValue === null || fieldValue === undefined) {
-        continue;
-      }
-
-      // Skip empty strings - these are placeholder values, not actual user inputs
-      if (fieldValue === '') {
-        continue;
-      }
-
-      const paramType = detectParameterType(fieldName, fieldValue);
-      const mediaType = paramType === 'file' ? detectMediaType(fieldName, String(fieldValue)) : undefined;
-
-      // Create unique parameter ID by combining nodeId and fieldName
-      // This ensures uniqueness when a node has multiple inputs
-      const uniqueParamId = `${nodeId}_${fieldName}`;
-
-      parameters.push({
-        id: `param_${uniqueParamId}`,
-        name: fieldName,
-        type: paramType,
-        required: false,  // Default to optional for imported workflows
-        description: `Parameter from node ${nodeId}`,
-        validation: paramType === 'file' ? {
-          mediaType,
-          fileType: mediaType ? [`${mediaType}/*`] : undefined,
-        } : undefined,
-      });
-    }
-  }
-
-  return parameters;
 }
