@@ -269,14 +269,14 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
                     print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
                     continue
 
-                node_id, field_type, value = parts
+                node_id, field_name, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "input" if field_type == "text" else "value",
+                    "fieldName": field_name,
                     "fieldValue": value,
-                    "description": field_type,
+                    "description": field_name,
                 })
-                print_info(f"  Added parameter: node {node_id} = {value}")
+                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -397,14 +397,14 @@ def process_multiple(ctx, images, params, timeout, output_json, no_download, wor
                     print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
                     continue
 
-                node_id, field_type, value = parts
+                node_id, field_name, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "input" if field_type == "text" else "value",
+                    "fieldName": field_name,
                     "fieldValue": value,
-                    "description": field_type,
+                    "description": field_name,
                 })
-                print_info(f"  Added parameter: node {node_id} = {value}")
+                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -483,13 +483,13 @@ def run_workflow(ctx, images, params, timeout, output_json, no_download, workflo
                     print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
                     continue
 
-                node_id, field_type, value = parts
+                node_id, field_name, value = parts
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "text" if field_type == "text" else "value",
+                    "fieldName": field_name,
                     "fieldValue": value,
                 })
-                print_info(f"  Added parameter: node {node_id} = {value}")
+                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -511,6 +511,149 @@ def run_workflow(ctx, images, params, timeout, output_json, no_download, workflo
 
     except Exception as e:
         print_error(f"Failed to run workflow: {e}")
+        sys.exit(1)
+
+
+@cli.command("run-text-workflow")
+@click.option("-p", "--param", "params", multiple=True, help="Node parameters (format: nodeId:value)")
+@click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
+@click.option(
+    "--no-download", is_flag=True, help="Skip automatic download of output files"
+)
+@click.option(
+    "--workflow-id", help="Override workflow ID from configuration"
+)
+@click.pass_context
+def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_id):
+    """Run a workflow using text/number parameters only (no image input).
+
+    This command submits workflows that only require text or numeric parameters,
+    without requiring any image uploads. Useful for workflows that process
+    text input, generate content from prompts, or perform calculations.
+
+    Parameters are specified in format: nodeId:value
+    - Type is auto-detected from nodeId suffix (_text, _value, _image)
+    - Example: param_187_text:hello (auto-detected as text field)
+    - Example: param_386_value:720 (auto-detected as value field)
+
+    Example:
+        runninghub run-text-workflow -p "param_187_text:hello" -p "param_386_value:720"
+
+    Requires at least one -p parameter.
+    """
+    cfg = ctx.obj["config"]
+    # Use provided workflow_id or fall back to config
+    active_workflow_id = workflow_id if workflow_id else cfg.workflow_id
+
+    client = RunningHubClient(cfg.api_key, cfg.api_host)
+    node_configs = []
+
+    try:
+        # Validate at least one parameter is provided
+        if not params:
+            print_error("Error: At least one parameter is required.")
+            print_info("Use -p to specify parameters in format: nodeId:value")
+            print_info("")
+            print_info("Type is auto-detected from nodeId suffix:")
+            print_info("  - nodeId_text:value  → text field")
+            print_info("  - nodeId_value:value  → value/number field")
+            print_info("  - nodeId_image:value  → image field")
+            print_info("")
+            print_info("Examples:")
+            print_info("  runninghub run-text-workflow -p \"param_187_text:hello\"")
+            print_info("  runninghub run-text-workflow -p \"param_187_text:prompt\" -p \"param_386_value:720\"")
+            sys.exit(1)
+
+        # Step 1: Parse all text/number parameters
+        print_info(f"Parsing {len(params)} parameter(s)...")
+        for param in params:
+            try:
+                # First try explicit format: nodeId:fieldName:value
+                parts_explicit = param.split(':', 2)
+                if len(parts_explicit) == 3:
+                    node_id, field_name, value = parts_explicit
+                    node_configs.append({
+                        "nodeId": node_id,
+                        "fieldName": field_name,
+                        "fieldValue": value,
+                    })
+                    print_success(f"  Added parameter: node {node_id} ({field_name}) = {value}")
+                    continue
+
+                # Fallback: suffix-based inference (nodeId:value)
+                parts = param.split(':', 1)
+                if len(parts) != 2:
+                    print_error(f"Invalid parameter format: {param}")
+                    print_info("Expected format: nodeId:type:value or nodeId:value")
+                    continue
+
+                node_id, value = parts
+
+                # Auto-detect type from nodeId suffix if present
+                # Supports formats like: 187_text, 386_value, param_187_text, etc.
+                if node_id.endswith('_text'):
+                    field_type = 'text'
+                    field_name = 'text'
+                    # Extract node ID by removing type suffix
+                    actual_node_id = node_id.rsplit('_', 1)[0]
+                elif node_id.endswith('_value'):
+                    field_type = 'value'
+                    field_name = 'value'
+                    # Extract node ID by removing type suffix
+                    actual_node_id = node_id.rsplit('_', 1)[0]
+                elif node_id.endswith('_image'):
+                    field_type = 'image'
+                    field_name = 'image'
+                    # Extract node ID by removing type suffix
+                    actual_node_id = node_id.rsplit('_', 1)[0]
+                else:
+                    # No type suffix in nodeId, use default
+                    field_type = 'value'
+                    field_name = 'value'
+                    actual_node_id = node_id
+
+                node_configs.append({
+                    "nodeId": actual_node_id,
+                    "fieldName": field_name,
+                    "fieldValue": value,
+                })
+                print_success(f"  Added parameter: node {actual_node_id} ({field_name}) = {value}")
+            except Exception as e:
+                print_error(f"Failed to parse parameter '{param}': {e}")
+
+        # Step 2: Submit task using workflow endpoint
+        print_info(f"Submitting task to workflow {active_workflow_id}...")
+        task_id = client.submit_workflow_task(active_workflow_id, node_configs)
+        print_success(f"Task submitted successfully! Task ID: {task_id}")
+
+        # Step 3: Wait for completion
+        print_info("Waiting for task completion...")
+        final_status = client.wait_for_completion(task_id, timeout=timeout)
+        print_success("Processing completed!")
+
+        # Step 4: Display results
+        if output_json:
+            print(format_json(final_status))
+        else:
+            print(format_task_status(final_status))
+
+            # Display results if available
+            data = final_status.get("data", {})
+            if data:
+                print("\nResults:")
+                if isinstance(data, list):
+                    for i, item in enumerate(data):
+                        print(f"  Result {i + 1}:")
+                        for key, value in item.items():
+                            print(f"    {key}: {value}")
+                else:
+                    for key, value in data.items():
+                        if key != "taskId":
+                            print(f"  {key}: {value}")
+
+    except Exception as e:
+        print_error(f"Failed to run text workflow: {e}")
         sys.exit(1)
 
 

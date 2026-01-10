@@ -1,25 +1,35 @@
 import { useCallback } from 'react';
-import { useFolderStore } from '@/store/folder-store';
+import { useFolderStore, type PageType } from '@/store/folder-store';
 import { useVideoStore } from '@/store/video-store';
 import { useImageStore } from '@/store/image-store';
 import type { FolderInfo as FolderSelectorFolderInfo } from '@/components/folder/FolderSelector';
 import type { ImageFile, VideoFile } from '@/types';
 
-export type FolderType = 'images' | 'videos';
+export type FolderType = 'images' | 'videos' | 'workspace' | 'clip' | 'crop';
 
 interface UseFolderSelectionOptions {
   folderType: FolderType;
   onFolderLoaded?: () => void;
 }
 
+const folderTypeToPageType: Record<FolderType, PageType> = {
+  images: 'images',
+  videos: 'videos',
+  workspace: 'workspace',
+  clip: 'clip',
+  crop: 'crop',
+};
+
 export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSelectionOptions) {
-  const { setSelectedFolder, addRecentFolder, setLastImageFolder, setLastVideoFolder } = useFolderStore();
+  const { setSelectedFolder, addRecentFolder, setFolderContents } = useFolderStore();
   const { setVideos } = useVideoStore();
   const { setImages } = useImageStore();
 
+  const pageType = folderTypeToPageType[folderType];
+
   const handleFolderSelected = useCallback(
     (folderInfo: FolderSelectorFolderInfo) => {
-      // Set the selected folder in the store
+      // Set the selected folder in the store for the specific page
       const folderResponse = {
         success: true,
         folder_name: folderInfo.name,
@@ -29,14 +39,7 @@ export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSele
         message: 'Folder selected',
       };
 
-      setSelectedFolder(folderResponse);
-
-      // Persist folder for auto-load on next visit
-      if (folderType === 'images') {
-        setLastImageFolder(folderResponse);
-      } else if (folderType === 'videos') {
-        setLastVideoFolder(folderResponse);
-      }
+      setSelectedFolder(pageType, folderResponse);
 
       // Add to recent folders
       if (folderInfo.path) {
@@ -56,8 +59,7 @@ export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSele
         setImages(folderInfo.images as ImageFile[]);
 
         // Also set folder contents for images
-        const { setFolderContents } = useFolderStore.getState();
-        setFolderContents({
+        setFolderContents(pageType, {
           current_path: folderInfo.path,
           parent_path: undefined,
           images: folderInfo.images as ImageFile[],
@@ -72,9 +74,26 @@ export function useFolderSelection({ folderType, onFolderLoaded }: UseFolderSele
         });
       }
 
+      // For workspace, clip, crop - set folder contents with all available data
+      if ((folderType === 'workspace' || folderType === 'clip' || folderType === 'crop') && folderInfo) {
+        setFolderContents(pageType, {
+          current_path: folderInfo.path,
+          parent_path: undefined,
+          images: (folderInfo.images || []) as ImageFile[],
+          videos: (folderInfo.videos || []) as VideoFile[],
+          folders: (folderInfo.folders || []).map((f) => ({
+            name: f.name,
+            path: f.path,
+            is_virtual: f.is_virtual,
+            type: 'folder' as const,
+          })),
+          is_direct_access: true,
+        });
+      }
+
       onFolderLoaded?.();
     },
-    [folderType, setSelectedFolder, addRecentFolder, setVideos, setImages, onFolderLoaded, setLastImageFolder, setLastVideoFolder]
+    [pageType, folderType, setSelectedFolder, addRecentFolder, setVideos, setImages, setFolderContents, onFolderLoaded]
   );
 
   return {

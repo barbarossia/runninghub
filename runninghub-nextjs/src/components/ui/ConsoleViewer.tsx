@@ -184,10 +184,10 @@ export function ConsoleViewer({
     }
   }, [isPaused]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to top (newest logs are first)
   useEffect(() => {
     if (scrollRef.current && panelState === 'expanded' && !isPaused) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollRef.current.scrollTop = 0;
     }
   }, [logs, panelState, isPaused]);
 

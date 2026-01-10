@@ -40,6 +40,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fast pre-check: Skip validation for decoded files
+    const filename = path.basename(imagePath).toLowerCase();
+    if (filename.includes('_decoded') || filename.includes('-decoded')) {
+      console.log('[Duck Validate] Skipping decoded file:', imagePath);
+      return NextResponse.json({
+        isDuckEncoded: false,
+        requiresPassword: false
+      });
+    }
+
+    // Fast pre-check: Skip validation for recovered files
+    if (filename.includes('_recovered') || filename.includes('-recovered')) {
+      console.log('[Duck Validate] Skipping recovered file:', imagePath);
+      return NextResponse.json({
+        isDuckEncoded: false,
+        requiresPassword: false
+      });
+    }
+
     // Try to decode the image with an empty password to validate
     // This is more reliable than trying to use internal functions
     // We'll check the specific error messages to determine if it's duck-encoded
@@ -71,7 +90,7 @@ export async function POST(request: NextRequest) {
 
       const output = execSync(`python ${args.map(arg => `"${arg}"`).join(' ')}`, {
         encoding: 'utf-8',
-        timeout: 30000, // 30 seconds timeout for validation
+        timeout: 5000, // 5 seconds timeout for validation (reduced from 30s for better UX)
         stdio: ['pipe', 'pipe', 'pipe'],
         env: {
           ...process.env,

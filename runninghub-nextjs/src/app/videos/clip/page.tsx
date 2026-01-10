@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useFolderStore } from '@/store/folder-store';
+import { useFolderStore, useClipFolder } from '@/store/folder-store';
 import { useVideoStore } from '@/store/video-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
@@ -23,9 +23,10 @@ import { toast } from 'sonner';
 import { Scissors } from 'lucide-react';
 
 export default function VideoClipPage() {
-  const { selectedFolder, clearFolder } = useFolderStore();
+  // Use page-specific folder state for clip page
+  const { selectedFolder } = useClipFolder();
   const { videos, setVideos, filteredVideos } = useVideoStore();
-  const { deselectAll, deselectVideo } = useVideoSelectionStore();
+  const { selectedVideos, deselectAll, deselectVideo } = useVideoSelectionStore();
   const { isProgressModalOpen } = useProgressStore();
   const { clipConfig } = useVideoClipStore();
 
@@ -58,7 +59,7 @@ export default function VideoClipPage() {
 
   // Auto-load last opened folder on mount
   useAutoLoadFolder({
-    folderType: 'videos',
+    folderType: 'clip',
     onFolderLoaded: (folder) => {
       // Load folder contents when auto-loaded
       loadFolderContents(folder.folder_path, folder.session_id);
@@ -99,7 +100,7 @@ export default function VideoClipPage() {
   });
 
   const { handleFolderSelected } = useFolderSelection({
-    folderType: 'videos',
+    folderType: 'clip',
   });
 
   // Load folder contents when folder is selected
@@ -142,7 +143,8 @@ export default function VideoClipPage() {
   };
 
   const handleBackToSelection = () => {
-    clearFolder();
+    const { clearPageFolder } = useFolderStore.getState();
+    clearPageFolder('clip');
     setVideos([]);
     deselectAll();
   };
@@ -240,6 +242,7 @@ export default function VideoClipPage() {
 
             {/* Selection Toolbar */}
             <VideoClipSelectionToolbar
+              selectedCount={selectedVideos.size}
               onClip={handleClipVideos}
               onRefresh={() => handleRefresh(true)}
               disabled={isLoadingFolder}

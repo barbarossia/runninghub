@@ -7,7 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { Youtube, Download, Trash2, FolderOpen, AlertCircle } from 'lucide-react';
-import { useFolderStore } from '@/store/folder-store';
+import { useWorkspaceFolder } from '@/store/folder-store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ export function YoutubeDownloader({
   onDownloadComplete,
   className = '',
 }: YoutubeDownloaderProps) {
-  const { selectedFolder } = useFolderStore();
+  const { selectedFolder } = useWorkspaceFolder();
 
   // URL input state
   const [url, setUrl] = useState('');

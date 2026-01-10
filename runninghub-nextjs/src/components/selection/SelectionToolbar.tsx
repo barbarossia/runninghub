@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Settings,
   Loader2,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,34 +28,52 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useSelectionStore } from '@/store';
+import { useImageStore } from '@/store/image-store';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BaseSelectionToolbar } from './BaseSelectionToolbar';
+import { DuckDecodeDialog } from '@/components/images/DuckDecodeDialog';
 
 interface SelectionToolbarProps {
   onProcess?: (selectedPaths: string[]) => void;
   onDelete?: (selectedPaths: string[]) => void;
+  onDuckDecodeOpen?: () => void;
   nodes?: Array<{ id: string; name: string }>;
   selectedNode?: string;
   onNodeChange?: (nodeId: string) => void;
   disabled?: boolean;
   className?: string;
+  showDuckDecodeButton?: boolean;
 }
 
 export function SelectionToolbar({
   onProcess,
   onDelete,
+  onDuckDecodeOpen,
   nodes = [],
   selectedNode,
   onNodeChange,
   disabled = false,
   className = '',
+  showDuckDecodeButton = false,
 }: SelectionToolbarProps) {
   const store = useSelectionStore();
   const selectedCount = store.selectedImages.size;
+  const { images, getDuckEncodedImages } = useImageStore();
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showDecodeDialog, setShowDecodeDialog] = useState(false);
+
+  // Get selected duck-encoded images
+  const selectedDuckEncodedImages = useMemo(() => {
+    const selectedPaths = Array.from(store.selectedImages.keys());
+    return images.filter(img =>
+      selectedPaths.includes(img.path) && img.isDuckEncoded === true
+    );
+  }, [images, store.selectedImages]);
+
+  const hasDuckEncodedInSelection = selectedDuckEncodedImages.length > 0;
 
   // Get selected paths
   const selectedPaths = useMemo(() => {
@@ -170,6 +189,21 @@ export function SelectionToolbar({
                   {isProcessing ? 'Processing...' : 'Start Processing'}
                 </Button>
 
+                {/* Duck Decode button - shown when there are duck-encoded images in selection */}
+                {hasDuckEncodedInSelection && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDecodeDialog(true)}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-green-200 bg-green-50/50 hover:bg-green-100 text-green-700"
+                    title={`Decode ${selectedDuckEncodedImages.length} duck-encoded image${selectedDuckEncodedImages.length !== 1 ? 's' : ''}`}
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Decode ({selectedDuckEncodedImages.length})
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
                   size="icon"
@@ -255,6 +289,20 @@ export function SelectionToolbar({
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 )}
+
+                {/* Duck Decode button - shown when there are duck-encoded images in selection */}
+                {hasDuckEncodedInSelection && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowDecodeDialog(true)}
+                    disabled={toolbarDisabled}
+                    className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-950/30 rounded-full"
+                    title={`Decode ${selectedDuckEncodedImages.length} duck-encoded image${selectedDuckEncodedImages.length !== 1 ? 's' : ''}`}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </>
             );
           }
@@ -280,6 +328,17 @@ export function SelectionToolbar({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Duck Decode dialog */}
+      <DuckDecodeDialog
+        open={showDecodeDialog}
+        onOpenChange={setShowDecodeDialog}
+        images={selectedDuckEncodedImages}
+        onDecoded={() => {
+          // Callback after successful decode - parent can refresh folder
+          onDuckDecodeOpen?.();
+        }}
+      />
     </>
   );
 }

@@ -9,11 +9,19 @@ export interface ImageFile {
   size: number;
   type: 'image';
   extension: string;
+  width?: number; // Image width in pixels
+  height?: number; // Image height in pixels
+  thumbnail?: string; // Thumbnail path or URL
   is_virtual?: boolean;
   file_handle_info?: FileHandleInfo;
   blob_url?: string; // Blob URL for virtual files from File System Access API
   created_at?: number; // File creation timestamp (Unix timestamp in ms)
   modified_at?: number; // File modification timestamp (Unix timestamp in ms)
+
+  // Duck encoding status
+  isDuckEncoded?: boolean; // True if image contains duck-encoded hidden data
+  duckRequiresPassword?: boolean; // True if duck-encoded image requires password
+  duckValidationPending?: boolean; // True while validation is in progress
 }
 
 export interface VideoFile {
@@ -22,6 +30,10 @@ export interface VideoFile {
   size: number;
   type: 'video';
   extension: string;
+  width?: number; // Video width in pixels
+  height?: number; // Video height in pixels
+  fps?: number; // Frames per second
+  thumbnail?: string; // Thumbnail path or URL
   duration?: number; // Video duration in seconds
   is_virtual?: boolean;
   file_handle_info?: FileHandleInfo;

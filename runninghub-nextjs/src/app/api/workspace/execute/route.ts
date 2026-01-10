@@ -246,11 +246,10 @@ async function processJobOutputs(
     let cliResponse: any = null;
     try {
       // Extract JSON from stdout (might be mixed with log lines)
-      // Strategy: Find all JSON objects in stdout and try to parse the last valid one
-      // This handles cases where CLI outputs logs before/after the JSON response
-
-      // Method 1: Try to find JSON objects by looking for balanced braces
+      // Strategy: Find all JSON objects in stdout and try to parse them
+      // We look for the one that matches RunningHub response structure (has code and data)
       const lines = cliStdout.split('\n');
+      const validJsonObjects: any[] = [];
 
       for (let startIndex = 0; startIndex < lines.length; startIndex++) {
         // Look for lines that contain '{' (potential JSON start)
@@ -287,19 +286,32 @@ async function processJobOutputs(
             const jsonStart = firstBracePos > 0 ? jsonStr.indexOf('{') : 0;
             const jsonOnly = jsonStr.substring(jsonStart);
 
-            cliResponse = JSON.parse(jsonOnly);
-            await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
-            await writeLog(`Found JSON at lines ${startIndex}-${endIndex}`, 'info', taskId);
-            break; // Successfully parsed, stop searching
+            const parsed = JSON.parse(jsonOnly);
+            validJsonObjects.push(parsed);
+            
+            // Optimization: If this looks exactly like what we want, we can stop
+            if (parsed.code !== undefined && Array.isArray(parsed.data)) {
+                cliResponse = parsed;
+                await writeLog(`Found valid response JSON at lines ${startIndex}-${endIndex}`, 'info', taskId);
+                break;
+            }
           } catch (e) {
             // This isn't valid JSON, continue searching
-            await writeLog(`Attempted JSON parse at lines ${startIndex}-${endIndex} failed: ${e}`, 'debug', taskId);
             continue;
           }
         }
       }
 
-      if (!cliResponse) {
+      // If we didn't find the perfect match, try to use the last valid object
+      // (assuming result is usually at the end)
+      if (!cliResponse && validJsonObjects.length > 0) {
+          cliResponse = validJsonObjects[validJsonObjects.length - 1];
+          await writeLog(`Using last found JSON object as response`, 'info', taskId);
+      }
+      
+      if (cliResponse) {
+        await writeLog(`CLI Response code: ${cliResponse.code}`, 'info', taskId);
+      } else {
         await writeLog('No valid JSON found in CLI output', 'warning', taskId);
         await writeLog(`CLI stdout preview: ${cliStdout.slice(0, 200)}...`, 'info', taskId);
       }
@@ -525,6 +537,35 @@ async function processWorkflowInBackground(
     // This ensures job history references files from job folder, not original location
     await updateJobFile(jobId, { fileInputs: jobFileInputs });
 
+    // Clean up temporary uploads immediately after ensuring they are in the job folder
+    // This prevents accumulation of files in ~/Downloads/workspace/uploads
+    try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        // Check for uploads folder in path (platform agnostic)
+        const uploadsDirMarker = path.join('workspace', 'uploads');
+
+        for (let i = 0; i < fileInputs.length; i++) {
+            const originalPath = fileInputs[i].filePath;
+            const newPath = jobFileInputs[i].filePath;
+
+            // Only delete if:
+            // 1. File was successfully copied (path changed)
+            // 2. Original file is in the uploads directory
+            if (originalPath !== newPath && originalPath.includes(uploadsDirMarker)) {
+                try {
+                    await fs.unlink(originalPath);
+                    await writeLog(`Cleaned up temporary upload: ${path.basename(originalPath)}`, 'info', taskId);
+                } catch (cleanupError) {
+                    // Log but don't fail the job
+                    console.warn(`Failed to cleanup temporary file ${originalPath}:`, cleanupError);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Error during temporary file cleanup:', e);
+    }
+
     // Before executing CLI, get workflow info
     const workflow = await getWorkflowById(workflowId);
     const executionType = workflow?.executionType || 'ai-app';  // Default to ai-app for backward compatibility
@@ -565,42 +606,173 @@ async function processWorkflowInBackground(
       return noPrefix;
     };
 
-    // Helper to determine field type from parameter ID (e.g., "param_203_value" -> "value", "param_204_text" -> "text")
-    const getFieldType = (paramId: string) => {
-      // Remove param_ prefix
-      const noPrefix = paramId.replace(/^param_/, '');
-      // If it contains underscore, take the last part (assuming format ID_type)
-      if (noPrefix.includes('_')) {
-        const type = noPrefix.split('_').pop();
-        // Map parameter suffix to field type
-        if (type === 'value') return 'value';
-        if (type === 'text') return 'text';
-        if (type === 'image') return 'image';
-      }
-      // Default to 'text' for backward compatibility
-      return 'text';
-    };
+                // Helper to determine field name from parameter ID and Workflow definition
 
-    // DECISION: Use execution type to determine CLI command
-    if (executionType === 'workflow') {
-        // Workflow execution -> use 'run-workflow' command
-        args.push("run-workflow");
+                const getParamFieldName = (paramId: string, wf: Workflow | undefined) => {
 
-        // Add file inputs
-        for (const input of jobFileInputs) {
-            // Format: <node_id>:<file_path>
-            args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
-        }
+                  // First try to find in workflow definition
 
-        // Add text inputs
-        for (const [paramId, value] of Object.entries(textInputs)) {
-            // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-            const fieldType = getFieldType(paramId);
-            args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
-        }
+                  if (wf) {
 
-        // Note: run-workflow doesn't support --no-cleanup flag
-    } else {
+                    const param = wf.inputs.find(p => p.id === paramId);
+
+                    if (param && param.name) {
+
+                        return param.name;
+
+                    }
+
+                  }
+
+            
+
+                  // Fallback: Remove param_ prefix
+
+                  const noPrefix = paramId.replace(/^param_/, '');
+
+                  
+
+                  // Try to extract ID and Name: start with number, then underscore, then rest
+
+                  // e.g., "143_multi_line_prompt" -> ID "143", Name "multi_line_prompt"
+
+                  // e.g., "7_width" -> ID "7", Name "width"
+
+                  const match = noPrefix.match(/^(\d+)_(.+)$/);
+
+                  if (match) {
+
+                      const candidate = match[2];
+
+                      // Filter out our own type suffixes if they are ALONE (e.g. "143_text")
+
+                      // If the candidate is EXACTLY "text", "value", or "image", we might still default to them
+
+                      // but if it's "multi_line_prompt", it passes this check.
+
+                      if (candidate !== 'value' && candidate !== 'text' && candidate !== 'image') {
+
+                          return candidate;
+
+                      }
+
+                      // If it is 'value' or 'text', it might be the actual field name (e.g. Primitive Node)
+
+                      // so we can return it too, but the regex match is better than split.
+
+                      return candidate;
+
+                  }
+
+            
+
+                  const lowerId = noPrefix.toLowerCase();
+
+                  
+
+                  // Check for known suffixes/keywords which act as field names (Legacy/Fallback)
+
+                  if (lowerId.includes('width')) return 'width';
+
+                  if (lowerId.includes('height')) return 'height';
+
+                  if (lowerId.includes('seed')) return 'seed';
+
+                  if (lowerId.includes('steps')) return 'steps';
+
+                  if (lowerId.includes('cfg')) return 'cfg';
+
+                  if (lowerId.includes('batch')) return 'batch_size';
+
+                  if (lowerId.includes('denoise')) return 'denoise';
+
+                  if (lowerId.includes('scheduler')) return 'scheduler';
+
+                  if (lowerId.includes('sampler')) return 'sampler_name';
+
+                  
+
+                  // Default fallback
+
+                  return 'text';
+
+                };
+
+        
+
+            // DECISION: Use execution type to determine CLI command
+
+            if (executionType === 'workflow') {
+
+                // Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
+
+                if (jobFileInputs.length > 0) {
+
+                    // Has file inputs -> use 'run-workflow' command
+
+                    args.push("run-workflow");
+
+        
+
+                    // Add file inputs
+
+                    for (const input of jobFileInputs) {
+
+                        // Format: <node_id>:<file_path>
+
+                        args.push("--image", `${getNodeId(input.parameterId)}:${input.filePath}`);
+
+                    }
+
+        
+
+                    // Add text inputs
+
+                    for (const [paramId, value] of Object.entries(textInputs)) {
+
+                        // Format: <node_id>:<field_name>:<value>
+
+                        const fieldName = getParamFieldName(paramId, workflow);
+
+                        args.push("-p", `${getNodeId(paramId)}:${fieldName}:${value}`);
+
+                    }
+
+        
+
+                    // Note: run-workflow doesn't support --no-cleanup flag
+
+                } else {
+
+                    // No file inputs -> use 'run-text-workflow' command (text-only workflow)
+
+                    args.push("run-text-workflow");
+
+        
+
+                    // Add text inputs
+
+                    // Note: run-text-workflow now supports explicit fieldName format: nodeId:fieldName:value
+
+                    for (const [paramId, value] of Object.entries(textInputs)) {
+
+                        const nodeId = getNodeId(paramId);
+
+                        const fieldName = getParamFieldName(paramId, workflow);
+
+                        // Construct format that CLI recognizes: nodeId:fieldName:value
+
+                        args.push("-p", `${nodeId}:${fieldName}:${value}`);
+
+                    }
+
+        
+
+                    // Note: run-text-workflow doesn't support --no-cleanup flag
+
+                }
+
+            } else {
         // AI app execution -> use 'process' or 'process-multiple' command
         if (jobFileInputs.length === 1) {
             // Single file mode -> use 'process' command
@@ -610,10 +782,11 @@ async function processWorkflowInBackground(
             args.push("--node", getNodeId(input.parameterId));
 
             // Add text inputs as params
+            // Add text inputs as params
             for (const [paramId, value] of Object.entries(textInputs)) {
-                // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-                const fieldType = getFieldType(paramId);
-                args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
+                // Format: <node_id>:<field_name>:<value>
+                const fieldName = getParamFieldName(paramId, workflow);
+                args.push("-p", `${getNodeId(paramId)}:${fieldName}:${value}`);
             }
 
             // Handle cleanup flag
@@ -635,10 +808,11 @@ async function processWorkflowInBackground(
             }
 
             // Add text inputs
+            // Add text inputs as params
             for (const [paramId, value] of Object.entries(textInputs)) {
-                // Format: <node_id>:<field_type>:<value> where field_type is 'value' or 'text'
-                const fieldType = getFieldType(paramId);
-                args.push("-p", `${getNodeId(paramId)}:${fieldType}:${value}`);
+                // Format: <node_id>:<field_name>:<value>
+                const fieldName = getParamFieldName(paramId, workflow);
+                args.push("-p", `${getNodeId(paramId)}:${fieldName}:${value}`);
             }
 
             // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required

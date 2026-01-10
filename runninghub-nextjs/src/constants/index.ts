@@ -13,6 +13,7 @@ export const ENVIRONMENT_VARIABLES = {
   MAX_FILES_COUNT: parseInt(process.env.MAX_FILES_COUNT || '100'),
   WORKSPACE_PATH: process.env.WORKSPACE_PATH || '~/Downloads/workspace',
   WORKSPACE_WORKFLOW_ID: process.env.WORKSPACE_WORKFLOW_ID || null,
+  MAX_CONCURRENT_PROCESSES: parseInt(process.env.RUNNINGHUB_MAX_CONCURRENT_PROCESSES || '5'),
 } as const;
 
 export const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
@@ -90,6 +91,10 @@ export const API_ENDPOINTS = {
   WORKSPACE_DUCK_VALIDATE: '/api/workspace/duck-validate',
   WORKSPACE_DUCK_DECODE: '/api/workspace/duck-decode',
   WORKSPACE_UPLOAD_TO_RUNNINGHUB: '/api/workspace/upload-to-runninghub',
+
+  // Gallery - Duck encode/decode (reuses workspace endpoints)
+  IMAGES_DUCK_VALIDATE: '/api/workspace/duck-validate',
+  IMAGES_DUCK_DECODE: '/api/workspace/duck-decode',
 
   // Workflows
   WORKFLOW_SAVE: '/api/workflow/save',

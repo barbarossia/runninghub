@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useFolderStore } from '@/store/folder-store';
+import { useFolderStore, useCropFolder } from '@/store/folder-store';
 import { useVideoStore } from '@/store/video-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useProgressStore } from '@/store/progress-store';
@@ -23,7 +23,8 @@ import { toast } from 'sonner';
 import { Crop } from 'lucide-react';
 
 export default function VideoCropPage() {
-  const { selectedFolder, clearFolder } = useFolderStore();
+  // Use page-specific folder state for crop page
+  const { selectedFolder } = useCropFolder();
   const { videos, setVideos, filteredVideos } = useVideoStore();
   const { deselectAll } = useVideoSelectionStore();
   const { isProgressModalOpen } = useProgressStore();
@@ -34,7 +35,7 @@ export default function VideoCropPage() {
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
 
   const { handleFolderSelected } = useFolderSelection({
-    folderType: 'videos',
+    folderType: 'crop',
   });
 
   const loadFolderContents = useCallback(async (folderPath: string, sessionId?: string) => {
@@ -62,7 +63,7 @@ export default function VideoCropPage() {
 
   // Auto-load last opened folder on mount
   useAutoLoadFolder({
-    folderType: 'videos',
+    folderType: 'crop',
     onFolderLoaded: (folder) => {
       // Load folder contents when auto-loaded
       loadFolderContents(folder.folder_path, folder.session_id);
@@ -166,7 +167,8 @@ export default function VideoCropPage() {
   };
 
   const handleBackToSelection = () => {
-    clearFolder();
+    const { clearPageFolder } = useFolderStore.getState();
+    clearPageFolder('crop');
     setVideos([]);
     deselectAll();
   };

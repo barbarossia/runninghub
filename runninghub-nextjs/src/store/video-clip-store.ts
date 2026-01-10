@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { ClipMode, VideoClipConfig } from '@/types/video-clip';
 import { DEFAULT_CLIP_CONFIG } from '@/constants';
 
@@ -21,59 +22,69 @@ interface VideoClipState {
   resetConfig: () => void;
 }
 
-export const useVideoClipStore = create<VideoClipState>((set) => ({
-  // Initial state
-  clipConfig: DEFAULT_CLIP_CONFIG,
+export const useVideoClipStore = create<VideoClipState>()(
+  persist(
+    (set) => ({
+      // Initial state
+      clipConfig: DEFAULT_CLIP_CONFIG,
 
-  // Setters
-  setClipConfig: (config) => set({ clipConfig: config }),
+      // Setters
+      setClipConfig: (config) => set({ clipConfig: config }),
 
-  setClipMode: (mode) =>
-    set((state) => ({
-      clipConfig: { ...state.clipConfig, mode },
-    })),
+      setClipMode: (mode) =>
+        set((state) => ({
+          clipConfig: { ...state.clipConfig, mode },
+        })),
 
-  setImageFormat: (format) =>
-    set((state) => ({
-      clipConfig: { ...state.clipConfig, imageFormat: format },
-    })),
+      setImageFormat: (format) =>
+        set((state) => ({
+          clipConfig: { ...state.clipConfig, imageFormat: format },
+        })),
 
-  setQuality: (quality) =>
-    set((state) => ({
-      clipConfig: { ...state.clipConfig, quality },
-    })),
+      setQuality: (quality) =>
+        set((state) => ({
+          clipConfig: { ...state.clipConfig, quality },
+        })),
 
-  setFrameCount: (count) =>
-    set((state) => ({
-      clipConfig: { ...state.clipConfig, frameCount: count },
-    })),
+      setFrameCount: (count) =>
+        set((state) => ({
+          clipConfig: { ...state.clipConfig, frameCount: count },
+        })),
 
-  setIntervalSeconds: (seconds) =>
-    set((state) => ({
-      clipConfig: { ...state.clipConfig, intervalSeconds: seconds },
-    })),
+      setIntervalSeconds: (seconds) =>
+        set((state) => ({
+          clipConfig: { ...state.clipConfig, intervalSeconds: seconds },
+        })),
 
-  setIntervalFrames: (frames) =>
-    set((state) => ({
-      clipConfig: { ...state.clipConfig, intervalFrames: frames },
-    })),
+      setIntervalFrames: (frames) =>
+        set((state) => ({
+          clipConfig: { ...state.clipConfig, intervalFrames: frames },
+        })),
 
-  toggleOrganizeByVideo: () =>
-    set((state) => ({
-      clipConfig: {
-        ...state.clipConfig,
-        organizeByVideo: !state.clipConfig.organizeByVideo,
-      },
-    })),
+      toggleOrganizeByVideo: () =>
+        set((state) => ({
+          clipConfig: {
+            ...state.clipConfig,
+            organizeByVideo: !state.clipConfig.organizeByVideo,
+          },
+        })),
 
-  toggleDeleteOriginal: () =>
-    set((state) => ({
-      clipConfig: {
-        ...state.clipConfig,
-        deleteOriginal: !state.clipConfig.deleteOriginal,
-      },
-    })),
+      toggleDeleteOriginal: () =>
+        set((state) => ({
+          clipConfig: {
+            ...state.clipConfig,
+            deleteOriginal: !state.clipConfig.deleteOriginal,
+          },
+        })),
 
-  // Reset
-  resetConfig: () => set({ clipConfig: DEFAULT_CLIP_CONFIG }),
-}));
+      // Reset
+      resetConfig: () => set({ clipConfig: DEFAULT_CLIP_CONFIG }),
+    }),
+    {
+      name: 'runninghub-video-clip-storage',
+      partialize: (state) => ({
+        clipConfig: state.clipConfig,
+      }),
+    }
+  )
+);

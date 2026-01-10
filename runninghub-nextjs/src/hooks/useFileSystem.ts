@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useFolderStore, useImageStore } from '@/store';
+import { useFolderStore, type PageType } from '@/store/folder-store';
+import { useImageStore } from '@/store';
 import { API_ENDPOINTS } from '@/constants';
 import type { FolderSelectionResponse, FileSystemContents, ImageFile, VideoFile } from '@/types';
 
@@ -27,11 +28,24 @@ interface UseFileSystemReturn {
   clearCurrentFolder: () => void;
 }
 
-export function useFileSystem(): UseFileSystemReturn {
+interface UseFileSystemOptions {
+  pageType: PageType;
+}
+
+export function useFileSystem({ pageType }: UseFileSystemOptions): UseFileSystemReturn {
   const [isSelecting, setIsSelecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { setLoadingFolder, setLoadingContents, setSelectedFolder, setFolderContents, setError: setStoreError } = useFolderStore();
+  const {
+    setLoadingFolder,
+    setLoadingContents,
+    setSelectedFolder,
+    setFolderContents,
+    setError: setStoreError,
+    clearPageFolder,
+    getIsLoadingFolder,
+    getIsLoadingContents,
+  } = useFolderStore();
   const { setLoadingImages, setImages, setError: setImageError } = useImageStore();
 
   const selectFolder = useCallback(async (
@@ -41,8 +55,8 @@ export function useFileSystem(): UseFileSystemReturn {
   ): Promise<FolderSelectionResponse | null> => {
     setIsSelecting(true);
     setError(null);
-    setLoadingFolder(true);
-    setStoreError(null);
+    setLoadingFolder(pageType, true);
+    setStoreError(pageType, null);
 
     try {
       const endpoint = isVirtual ? API_ENDPOINTS.FOLDER_PROCESS_DIRECT : API_ENDPOINTS.FOLDER_SELECT;
@@ -68,18 +82,18 @@ export function useFileSystem(): UseFileSystemReturn {
         throw new Error(data.error || 'Failed to select folder');
       }
 
-      setSelectedFolder(data);
+      setSelectedFolder(pageType, data);
       return data;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to select folder';
       setError(errorMessage);
-      setStoreError(errorMessage);
+      setStoreError(pageType, errorMessage);
       return null;
     } finally {
       setIsSelecting(false);
-      setLoadingFolder(false);
+      setLoadingFolder(pageType, false);
     }
-  }, [setLoadingFolder, setSelectedFolder, setStoreError]);
+  }, [pageType, setLoadingFolder, setSelectedFolder, setStoreError]);
 
   const loadFolderContents = useCallback(async (
     folderPath: string,
@@ -88,7 +102,7 @@ export function useFileSystem(): UseFileSystemReturn {
   ): Promise<FileSystemContents | null> => {
     if (!silent) {
       setError(null);
-      setLoadingContents(true);
+      setLoadingContents(pageType, true);
       setLoadingImages(true);
     }
 
@@ -101,7 +115,7 @@ export function useFileSystem(): UseFileSystemReturn {
                 session_id: sessionId,
               }),
             });
-      
+
             const text = await response.text();
             let data: FileSystemContents;
             try {
@@ -109,12 +123,13 @@ export function useFileSystem(): UseFileSystemReturn {
             } catch (e) {
               throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
             }
-      
-            if (!response.ok) {        throw new Error(data.message || 'Failed to load folder contents');
+
+            if (!response.ok) {
+              throw new Error(data.message || 'Failed to load folder contents');
       }
 
       // Update folder contents in store
-      setFolderContents(data);
+      setFolderContents(pageType, data);
 
       // Update images in image store
       setImages(data.images || []);
@@ -124,17 +139,17 @@ export function useFileSystem(): UseFileSystemReturn {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load folder contents';
       if (!silent) {
         setError(errorMessage);
-        setStoreError(errorMessage);
+        setStoreError(pageType, errorMessage);
         setImageError(errorMessage);
       }
       return null;
     } finally {
       if (!silent) {
-        setLoadingContents(false);
+        setLoadingContents(pageType, false);
         setLoadingImages(false);
       }
     }
-  }, [setLoadingContents, setLoadingImages, setFolderContents, setImages, setStoreError, setImageError]);
+  }, [pageType, setLoadingContents, setLoadingImages, setFolderContents, setImages, setStoreError, setImageError]);
 
   const validatePath = useCallback(async (
     path: string
@@ -145,7 +160,7 @@ export function useFileSystem(): UseFileSystemReturn {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ path }),
             });
-      
+
             const text = await response.text();
             let data;
             try {
@@ -153,8 +168,9 @@ export function useFileSystem(): UseFileSystemReturn {
             } catch (e) {
               throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
             }
-      
-            if (!response.ok) {        return { valid: false, message: data.error || 'Invalid path' };
+
+            if (!response.ok) {
+              return { valid: false, message: data.error || 'Invalid path' };
       }
 
       return {
@@ -171,15 +187,14 @@ export function useFileSystem(): UseFileSystemReturn {
   }, []);
 
   const clearCurrentFolder = useCallback(() => {
-    const { clearFolder } = useFolderStore.getState();
-    clearFolder();
+    clearPageFolder(pageType);
     setImages([]);
     setError(null);
-  }, [setImages]);
+  }, [pageType, clearPageFolder, setImages]);
 
   return {
     isSelecting,
-    isLoading: useFolderStore.getState().isLoadingFolder || useFolderStore.getState().isLoadingContents,
+    isLoading: getIsLoadingFolder(pageType) || getIsLoadingContents(pageType),
     error,
     selectFolder,
     loadFolderContents,
