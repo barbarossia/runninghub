@@ -518,7 +518,12 @@ export default function WorkspacePage() {
         setActiveConsoleTaskId(resp.taskId);
       }
 
-      // DON'T clear inputs - Job Detail page will manage its own inputs
+      // Clear jobFiles after starting a new job (not a re-run)
+      // Re-runs from Job Detail use job's own inputs, not global jobFiles
+      if (!isReRun) {
+        clearJobInputs();
+      }
+
       // DO switch to jobs tab - go to Job Detail page to see results
       setActiveTab('jobs');
       toast.success(`Job #${runNumber} started. View results and run variations.`);
