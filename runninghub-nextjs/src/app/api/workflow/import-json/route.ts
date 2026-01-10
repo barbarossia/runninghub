@@ -97,38 +97,69 @@ export async function POST(request: NextRequest) {
 /**
  * Detect nodes from JSON that have user-configurable inputs
  * Returns array of nodes with metadata for user selection
+ *
+ * Supports multiple JSON structures:
+ * 1. { "nodeId": { "inputs": { "fieldName": "value" } } }
+ * 2. { "nodeId": { "class_type": "...", "inputs": { ... } } }
+ * 3. { "key": value } - treat each key-value pair as a node
  */
 function detectNodes(jsonContent: any): DetectedNode[] {
   const detectedNodes: DetectedNode[] = [];
+
+  // Debug logging
+  console.log('[import-json] Raw JSON content type:', typeof jsonContent);
+  console.log('[import-json] Raw JSON keys:', Object.keys(jsonContent || {}));
 
   if (typeof jsonContent !== 'object' || jsonContent === null) {
     return detectedNodes;
   }
 
-  for (const [nodeId, nodeData] of Object.entries(jsonContent)) {
-    // Validate node structure
-    if (!nodeData || typeof nodeData !== 'object') {
+  for (const [key, value] of Object.entries(jsonContent)) {
+    // Skip if value is null or not an object
+    if (!value || typeof value !== 'object') {
       continue;
     }
 
-    const inputs = (nodeData as any).inputs;
-    if (!inputs || typeof inputs !== 'object') {
+    // Skip if value is an array (likely a list of something, not a node)
+    if (Array.isArray(value)) {
+      continue;
+    }
+
+    const valueObj = value as any;
+    let inputs: Record<string, any> | null = null;
+    let nodeId = key;
+
+    // Case 1: value has "inputs" property (ComfyUI/RunningHub format)
+    if (valueObj.inputs && typeof valueObj.inputs === 'object') {
+      inputs = valueObj.inputs;
+    }
+    // Case 2: value itself is the inputs object (simplified format)
+    else if (Object.keys(valueObj).length > 0) {
+      inputs = valueObj;
+    }
+
+    if (!inputs) {
       continue;
     }
 
     const inputEntries = Object.entries(inputs);
 
     // Count array vs non-array inputs
-    const arrayCount = inputEntries.filter(([, value]) => Array.isArray(value)).length;
+    const arrayCount = inputEntries.filter(([, v]) => Array.isArray(v)).length;
     const totalCount = inputEntries.length;
+
+    console.log(`[import-json] Node "${key}": total=${totalCount}, arrays=${arrayCount}`);
 
     // Skip if more than half of the inputs are arrays (node references) - these are processing nodes
     if (totalCount > 0 && arrayCount > totalCount / 2) {
+      console.log(`[import-json] Skipping node "${key}" - too many array inputs (processing node)`);
       continue;
     }
 
     // Get non-array inputs (actual user inputs)
-    const userInputs = inputEntries.filter(([, value]) => !Array.isArray(value) && value !== null && value !== undefined && value !== '');
+    const userInputs = inputEntries.filter(([, v]) => !Array.isArray(v) && v !== null && v !== undefined && v !== '');
+
+    console.log(`[import-json] Node "${key}" userInputs:`, userInputs.length);
 
     if (userInputs.length === 0) {
       continue;
@@ -136,16 +167,16 @@ function detectNodes(jsonContent: any): DetectedNode[] {
 
     // Detect input type
     let inputType: DetectedNode['inputType'] = 'unknown';
-    const hasImage = userInputs.some(([name, value]) =>
+    const hasImage = userInputs.some(([name, v]) =>
       name.toLowerCase().includes('image') ||
-      (typeof value === 'string' && /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(value))
+      (typeof v === 'string' && /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(v))
     );
-    const hasVideo = userInputs.some(([name, value]) =>
+    const hasVideo = userInputs.some(([name, v]) =>
       name.toLowerCase().includes('video') ||
-      (typeof value === 'string' && /\.(mp4|mov|avi|mkv|webm|flv)$/i.test(value))
+      (typeof v === 'string' && /\.(mp4|mov|avi|mkv|webm|flv)$/i.test(v))
     );
-    const hasNumber = userInputs.some(([, value]) => typeof value === 'number');
-    const hasText = userInputs.some(([, value]) => typeof value === 'string' && !hasImage && !hasVideo);
+    const hasNumber = userInputs.some(([, v]) => typeof v === 'number');
+    const hasText = userInputs.some(([, v]) => typeof v === 'string' && !hasImage && !hasVideo);
 
     if (hasImage && hasVideo) {
       inputType = 'mixed';
@@ -161,14 +192,15 @@ function detectNodes(jsonContent: any): DetectedNode[] {
 
     detectedNodes.push({
       id: nodeId,
-      name: nodeId,
+      name: valueObj.class_type || nodeId,
       inputCount: userInputs.length,
       inputType,
       description: `${userInputs.length} input${userInputs.length !== 1 ? 's' : ''} (${inputType})`,
-      inputs: userInputs.map(([name, value]) => ({ name, type: typeof value, value })),
+      inputs: userInputs.map(([name, v]) => ({ name, type: typeof v, value: v })),
     });
   }
 
+  console.log(`[import-json] Total detected nodes:`, detectedNodes.length);
   return detectedNodes;
 }
 
@@ -182,18 +214,32 @@ function convertSelectedNodesToParameters(
 ): WorkflowInputParameter[] {
   const parameters: WorkflowInputParameter[] = [];
 
+  console.log('[import-json] Converting nodes:', selectedNodeIds);
+
   if (typeof jsonContent !== 'object' || jsonContent === null) {
     return parameters;
   }
 
   for (const nodeId of selectedNodeIds) {
     const nodeData = jsonContent[nodeId];
-    if (!nodeData || typeof nodeData !== 'object') {
+    if (!nodeData || typeof nodeData !== 'object' || Array.isArray(nodeData)) {
+      console.log(`[import-json] Skipping node "${nodeId}" - invalid data`);
       continue;
     }
 
-    const inputs = (nodeData as any).inputs;
-    if (!inputs || typeof inputs !== 'object') {
+    const valueObj = nodeData as any;
+    let inputs: Record<string, any> | null = null;
+
+    // Case 1: node has "inputs" property
+    if (valueObj.inputs && typeof valueObj.inputs === 'object') {
+      inputs = valueObj.inputs;
+    }
+    // Case 2: node itself is the inputs object
+    else if (Object.keys(valueObj).length > 0) {
+      inputs = valueObj;
+    }
+
+    if (!inputs) {
       continue;
     }
 
@@ -231,6 +277,7 @@ function convertSelectedNodesToParameters(
     }
   }
 
+  console.log(`[import-json] Generated ${parameters.length} parameters`);
   return parameters;
 }
 
