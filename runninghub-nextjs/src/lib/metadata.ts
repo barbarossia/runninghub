@@ -1,5 +1,4 @@
 import { spawn } from 'child_process';
-import { promisify } from 'util';
 
 export interface ImageMetadata {
   width: number;
@@ -15,6 +14,7 @@ export interface VideoMetadata {
 
 /**
  * Extract video metadata using ffprobe
+ * Has a 3-second timeout to prevent hanging on corrupted videos
  */
 async function getVideoMetadata(filePath: string): Promise<VideoMetadata | null> {
   return new Promise((resolve) => {
@@ -30,6 +30,13 @@ async function getVideoMetadata(filePath: string): Promise<VideoMetadata | null>
     let stdout = '';
     let stderr = '';
 
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      ffprobe.kill();
+      console.warn(`Video metadata extraction timeout for ${filePath}`);
+      resolve(null);
+    }, 3000);
+
     ffprobe.stdout.on('data', (data) => {
       stdout += data.toString();
     });
@@ -39,8 +46,8 @@ async function getVideoMetadata(filePath: string): Promise<VideoMetadata | null>
     });
 
     ffprobe.on('close', (code) => {
+      clearTimeout(timeout);
       if (code !== 0 || !stdout) {
-        console.warn(`Failed to get video metadata for ${filePath}:`, stderr);
         resolve(null);
         return;
       }
@@ -69,14 +76,13 @@ async function getVideoMetadata(filePath: string): Promise<VideoMetadata | null>
           duration: parseFloat(format.duration) || 0,
           fps: fps || 0
         });
-      } catch (error) {
-        console.error(`Error parsing video metadata for ${filePath}:`, error);
+      } catch {
         resolve(null);
       }
     });
 
     ffprobe.on('error', (error) => {
-      console.error(`ffprobe error for ${filePath}:`, error);
+      clearTimeout(timeout);
       resolve(null);
     });
   });
@@ -85,20 +91,28 @@ async function getVideoMetadata(filePath: string): Promise<VideoMetadata | null>
 /**
  * Extract image dimensions using sharp (if available)
  * Note: This requires installing sharp: npm install sharp
+ * Has a 2-second timeout to prevent hanging on large/corrupted images
  */
 async function getImageMetadata(filePath: string): Promise<ImageMetadata | null> {
   try {
     // Try to use sharp if available
     const sharp = (await import('sharp')).default;
-    const metadata = await sharp(filePath).metadata();
+
+    // Add timeout to prevent hanging on large images
+    const metadata = await Promise.race([
+      sharp(filePath).metadata(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Metadata extraction timeout')), 2000)
+      )
+    ]);
 
     return {
       width: metadata.width || 0,
       height: metadata.height || 0
     };
   } catch (error) {
-    // sharp not available or error reading image
-    console.warn(`Failed to get image metadata for ${filePath} (sharp not available):`, error);
+    // sharp not available, error reading image, or timeout
+    // Silently fail - metadata is optional for display
     return null;
   }
 }
