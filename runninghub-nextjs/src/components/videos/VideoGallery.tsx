@@ -16,6 +16,8 @@ import {
   Pencil,
   Trash2,
   Eye,
+  Scissors,
+  Zap,
 } from 'lucide-react';
 import { useVideoStore } from '@/store';
 import { useVideoSelection } from '@/hooks/useVideoSelection';
@@ -50,6 +52,8 @@ interface VideoGalleryProps {
   onRefresh?: () => void;
   onRename?: (video: VideoFile, newName: string) => Promise<void>;
   onDelete?: (video: VideoFile) => Promise<void>;
+  onCrop?: (video: VideoFile) => void;
+  onConvertFps?: (video: VideoFile) => void;
   className?: string;
 }
 
@@ -59,6 +63,8 @@ export function VideoGallery({
   onRefresh,
   onRename,
   onDelete,
+  onCrop,
+  onConvertFps,
   className = '',
 }: VideoGalleryProps) {
   const store = useVideoStore();
@@ -137,16 +143,16 @@ export function VideoGallery({
     setPlayingVideo(video);
   }, []);
 
-  // Get grid columns based on view mode
+  // Get grid columns based on view mode (matching MediaGallery)
   const getGridCols = () => {
     switch (viewMode) {
       case 'large':
-        return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+        return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
       case 'list':
         return 'grid-cols-1';
       case 'grid':
       default:
-        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
     }
   };
 
@@ -160,9 +166,9 @@ export function VideoGallery({
           <div className="h-10 w-24 bg-muted animate-pulse rounded-md" />
         </div>
         {/* Grid skeleton */}
-        <div className={cn('grid gap-4', getGridCols())}>
+        <div className={cn('grid gap-3', getGridCols())}>
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="aspect-video bg-muted animate-pulse rounded-lg" />
+            <div key={i} className="aspect-square bg-gray-100 animate-pulse rounded-md" />
           ))}
         </div>
       </div>
@@ -307,7 +313,7 @@ export function VideoGallery({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className={cn('grid gap-4', getGridCols())}
+          className={cn('grid gap-3', getGridCols())}
         >
           {videos.map((video, index) => (
             <VideoCard
@@ -320,6 +326,8 @@ export function VideoGallery({
               onPlay={() => handlePlayVideo(video)}
               onRename={onRename}
               onDelete={onDelete}
+              onCrop={onCrop}
+              onConvertFps={onConvertFps}
             />
           ))}
         </motion.div>
@@ -345,10 +353,11 @@ interface VideoCardProps {
   onPlay: () => void;
   onRename?: (video: VideoFile, newName: string) => Promise<void>;
   onDelete?: (video: VideoFile) => Promise<void>;
+  onCrop?: (video: VideoFile) => void;
+  onConvertFps?: (video: VideoFile) => void;
 }
 
-function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay, onRename, onDelete }: VideoCardProps) {
-  const isListMode = viewMode === 'list';
+function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay, onRename, onDelete, onCrop, onConvertFps }: VideoCardProps) {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [newName, setNewName] = useState(video.name);
@@ -392,75 +401,26 @@ function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay, onRen
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.15, delay: index * 0.02 }}
       className="relative group"
     >
       <Card
         className={cn(
-          'cursor-pointer transition-all hover:shadow-lg',
-          isSelected && 'ring-2 ring-primary',
-          isListMode && 'flex items-center gap-4 p-4'
+          'overflow-hidden cursor-pointer transition-all',
+          isSelected
+            ? 'ring-4 ring-blue-500 ring-offset-2 bg-blue-50 shadow-lg scale-[1.02] z-10'
+            : 'hover:ring-2 hover:ring-gray-300 hover:ring-offset-2'
         )}
         onClick={onToggle}
       >
-        {/* Checkbox */}
-        <div className="absolute top-2 left-2 z-10">
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={onToggle}
-            className="pointer-events-none bg-background/50 backdrop-blur-sm"
-            aria-label={`Select ${video.name}`}
-          />
-        </div>
-
-        {/* More menu */}
-        {(onRename || onDelete) && (
-          <div className="absolute top-2 right-2 z-10">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 bg-background/50 backdrop-blur-sm hover:bg-background/80"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handlePlayClick}>
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview
-                </DropdownMenuItem>
-                {onRename && (
-                  <DropdownMenuItem onClick={handleRenameClick}>
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Rename
-                  </DropdownMenuItem>
-                )}
-                {onDelete && (
-                  <DropdownMenuItem onClick={handleDeleteClick} className="text-destructive">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
-
         {/* Video thumbnail */}
-        <div
-          className={cn(
-            'relative bg-muted flex items-center justify-center overflow-hidden',
-            !isListMode && 'aspect-video rounded-t-lg',
-            isListMode && 'w-32 h-20 flex-shrink-0 rounded-md'
-          )}
-        >
+        <div className="relative bg-gray-100 aspect-square">
           <video
             src={videoSrc}
-            className="w-full h-full object-contain"
+            className="absolute inset-0 w-full h-full object-contain p-1"
             preload="metadata"
             muted
             playsInline
@@ -474,37 +434,123 @@ function VideoCard({ video, index, isSelected, viewMode, onToggle, onPlay, onRen
               vid.currentTime = 0;
             }}
           />
-          
-          {/* Play Overlay */}
-          <div 
-            className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={handlePlayClick}
-          >
-            <div className="bg-black/50 rounded-full p-2 backdrop-blur-sm text-white transform transition-transform hover:scale-110">
-              <PlayCircle className="w-8 h-8 sm:w-10 sm:h-10" />
-            </div>
-          </div>
 
-          {/* Format badge */}
-          <Badge className="absolute bottom-2 right-2 pointer-events-none" variant="secondary">
-            {video.extension.replace('.', '').toUpperCase()}
-          </Badge>
+          {/* Overlay with controls */}
+          <div
+            className={cn(
+              'absolute inset-0 transition-all pointer-events-none',
+              isSelected ? 'bg-blue-500/10' : 'bg-black/0 group-hover:bg-black/5'
+            )}
+          >
+            {/* Play Button */}
+            <div className="absolute top-2 left-2 z-20 pointer-events-none">
+              <div
+                className="bg-black/50 rounded-full p-1.5 backdrop-blur-sm text-white shadow-md pointer-events-auto cursor-pointer hover:bg-black/70 transition-all hover:scale-110"
+                onClick={handlePlayClick}
+              >
+                <PlayCircle className="h-5 w-5" />
+              </div>
+            </div>
+
+            {/* Checkbox */}
+            <div
+              className={cn(
+                'absolute transition-opacity pointer-events-auto top-10 left-2',
+                isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={onToggle}
+              />
+            </div>
+
+            {/* Format badge */}
+            <Badge className="absolute bottom-2 right-2 pointer-events-none" variant="secondary">
+              {video.extension.replace('.', '').toUpperCase()}
+            </Badge>
+
+            {/* More menu */}
+            {(onRename || onDelete || onCrop || onConvertFps) && (
+              <div
+                className={cn(
+                  'absolute top-2 right-2 transition-opacity pointer-events-auto',
+                  isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                )}
+              >
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 bg-white/90 hover:bg-white text-gray-700 hover:text-gray-900 shadow-sm"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handlePlayClick}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Preview
+                    </DropdownMenuItem>
+                    {onCrop && (
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onCrop(video);
+                        }}
+                        className="text-green-600 focus:text-green-700 focus:bg-green-50"
+                      >
+                        <Scissors className="h-4 w-4 mr-2" />
+                        Crop
+                      </DropdownMenuItem>
+                    )}
+                    {onConvertFps && (
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onConvertFps(video);
+                        }}
+                        className="text-blue-600 focus:text-blue-700 focus:bg-blue-50"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        Convert
+                      </DropdownMenuItem>
+                    )}
+                    {onRename && (
+                      <DropdownMenuItem onClick={handleRenameClick}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Rename
+                      </DropdownMenuItem>
+                    )}
+                    {onDelete && (
+                      <DropdownMenuItem onClick={handleDeleteClick} className="text-destructive">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Video info */}
-        <div className={cn('p-4', isListMode && 'flex-1 min-w-0')}>
-          <p className="font-medium truncate text-sm" title={video.name}>
+        {/* Info section */}
+        <div
+          className={cn(
+            'p-2 border-t transition-colors',
+            isSelected ? 'bg-blue-100 border-blue-200' : 'bg-white border-gray-100'
+          )}
+        >
+          <p className={cn('text-xs font-bold line-clamp-1 h-4', isSelected ? 'text-blue-800' : 'text-gray-900')} title={video.name}>
             {video.name}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-gray-500 line-clamp-1 h-4">
             {(video.size / (1024 * 1024)).toFixed(2)} MB
           </p>
         </div>
-
-        {/* Selection indicator */}
-        {isSelected && (
-          <div className="absolute inset-0 bg-primary/10 pointer-events-none rounded-lg" />
-        )}
       </Card>
 
       {/* Rename Dialog */}

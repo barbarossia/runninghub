@@ -24,6 +24,13 @@ export interface ExportOptions {
   signal?: AbortSignal;
 }
 
+// Simplified type for files that can be exported
+export interface ExportableFile {
+  path: string;
+  name: string;
+  blob_url?: string;
+}
+
 /**
  * Check if File System Access API is supported
  */
@@ -36,7 +43,7 @@ export function isFileSystemAccessAPISupported(): boolean {
  * Export images to a user-selected folder
  */
 export async function exportImagesToFolder(
-  images: ImageFile[],
+  images: ImageFile[] | ExportableFile[],
   options: ExportOptions = {}
 ): Promise<ExportResult> {
   const { onProgress, signal } = options;

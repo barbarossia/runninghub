@@ -49,3 +49,52 @@
 - [x] Build passes with `npm run build`
 
 ## Status: Completed ✅
+
+## Workspace Export Feature (Additional)
+
+### Phase 5: Workspace Integration
+- [x] Add ExportableFile type to export-images.ts for generic export support
+- [x] Add onExport prop to MediaSelectionToolbar component
+- [x] Add handleExport callback and isExporting state to toolbar
+- [x] Add Export button (orange themed) to expanded and floating modes
+- [x] Update workspace page to pass handleExport callback
+- [x] Build and verify TypeScript compilation
+
+### Workspace Export Testing
+- [x] Build passes with `npm run build`
+- [ ] Test export from workspace with selected images
+- [ ] Test export from workspace with selected videos
+- [ ] Test browser compatibility message on unsupported browsers
+
+## Phase 6: Delete After Export Option
+
+### Implementation (Updated - Fixed Configuration on Page)
+- [x] Create export-config-store with Zustand for persistence
+- [x] Create ExportConfiguration component (like VideoClipConfiguration)
+- [x] Add ExportConfiguration card to Media Gallery tab (always visible)
+- [x] Update handleExport in workspace page to use store value
+- [x] Simplify MediaSelectionToolbar to just trigger export
+- [x] Remove popup dialog - use fixed configuration instead
+- [x] Build and verify TypeScript compilation
+
+### Features
+- **Fixed Configuration Panel**: Located in Media Gallery tab, always visible (expandable)
+- **Checkbox Option**: "Delete original files after export" with descriptive label
+- **Warning Alert**: Red warning appears when delete is enabled (inside config card)
+- **Persistent Setting**: Choice is saved to localStorage via Zustand persist
+- **Safe Deletion**: Only deletes files after successful export
+- **Error Handling**: Shows error if export succeeds but deletion fails
+
+### Architecture
+- **ExportConfigStore**: Zustand store with persist middleware for settings
+- **ExportConfiguration Component**: Fixed panel in Media Gallery tab
+- **MediaSelectionToolbar**: Simple trigger - calls onExport callback
+- **Workspace Page**: Uses store value when executing export
+
+### Testing
+- [ ] Test export without delete option
+- [ ] Test export with delete option enabled
+- [ ] Verify setting persists across page reloads
+- [ ] Test delete with single file
+- [ ] Test delete with multiple files
+- [ ] Verify error handling when deletion fails after successful export

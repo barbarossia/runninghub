@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
@@ -70,100 +69,21 @@ export default function Home() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <span className="text-2xl">🎬</span>
-                  Video Conversion
+                  Video Gallery
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-gray-600 mb-4">
-                  Convert video files to MP4 format using FFmpeg. Supports WebM, MKV, AVI, MOV, and FLV formats.
+                  Browse and manage your video files. Select, rename, delete, and preview videos.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">FFmpeg</Badge>
-                  <Badge variant="secondary">Batch Conversion</Badge>
-                  <Badge variant="secondary">MP4 Output</Badge>
+                  <Badge variant="secondary">Grid View</Badge>
+                  <Badge variant="secondary">List View</Badge>
+                  <Badge variant="secondary">Video Preview</Badge>
                 </div>
               </CardContent>
             </Card>
           </Link>
-
-          <Link href="/videos/crop">
-            <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-green-400 border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">✂️</span>
-                  Video Cropping
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">
-                  Crop videos to specific regions using FFmpeg. Support for preset ratios and custom dimensions.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">FFmpeg</Badge>
-                  <Badge variant="secondary">Custom Crop</Badge>
-                  <Badge variant="secondary">Preset Ratios</Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/videos/clip">
-            <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-orange-400 border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span className="text-2xl">📸</span>
-                  Video Clipping
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">
-                  Extract frames from videos as images. Supports multiple extraction modes and high-quality output.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">Python</Badge>
-                  <Badge variant="secondary">Batch Extract</Badge>
-                  <Badge variant="secondary">Multi-mode</Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Card className="opacity-60 cursor-not-allowed border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">🚀</span>
-                AI Processing
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Process selected images using RunningHub AI workflows with real-time progress tracking.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Batch Processing</Badge>
-                <Badge variant="secondary">Progress Tracking</Badge>
-                <Badge variant="secondary">Real-time Updates</Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="opacity-60 cursor-not-allowed border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-2xl">📁</span>
-                File System Access
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Modern File System Access API integration for secure folder selection and browsing.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Secure Access</Badge>
-                <Badge variant="secondary">Cross-platform</Badge>
-              </div>
-            </CardContent>
-          </Card>
 
           <Link href="/workspace">
             <Card className="cursor-pointer transition-all hover:shadow-xl hover:scale-105 hover:border-indigo-400 border-2">
@@ -175,12 +95,12 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-600 mb-4">
-                  Upload images, process with AI workflows, and edit bilingual text content with translation support.
+                  Upload media, process with AI workflows, crop videos, convert FPS, and export files.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">Image Upload</Badge>
-                  <Badge variant="secondary">AI Processing</Badge>
-                  <Badge variant="secondary">Translation</Badge>
+                  <Badge variant="secondary">Video Crop</Badge>
+                  <Badge variant="secondary">FPS Convert</Badge>
+                  <Badge variant="secondary">Export</Badge>
                 </div>
               </CardContent>
             </Card>

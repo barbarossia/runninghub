@@ -11,6 +11,8 @@ import {
   Eye,
   AlertCircle,
   Scissors,
+  Download,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,6 +51,8 @@ interface MediaSelectionToolbarProps {
   onRunWorkflow?: (workflowId?: string) => void;
   onClip?: (files: MediaFile[]) => Promise<void>;
   onPreview?: (file: MediaFile) => void;
+  onExport?: (files: MediaFile[]) => Promise<void>;
+  onConvertFps?: (files: MediaFile[]) => Promise<void>;
   disabled?: boolean;
   className?: string;
 }
@@ -61,6 +65,8 @@ export function MediaSelectionToolbar({
   onRunWorkflow,
   onClip,
   onPreview,
+  onExport,
+  onConvertFps,
   disabled = false,
   className = '',
 }: MediaSelectionToolbarProps) {
@@ -203,6 +209,18 @@ export function MediaSelectionToolbar({
     onPreview(selectedFiles[0]);
   }, [onPreview, selectedFiles]);
 
+  // Handle export
+  const handleExportClick = useCallback(() => {
+    if (!onExport || selectedFiles.length === 0) return;
+    onExport(selectedFiles);
+  }, [onExport, selectedFiles]);
+
+  // Handle FPS convert
+  const handleConvertFpsClick = useCallback(() => {
+    if (!onConvertFps || selectedFiles.length === 0) return;
+    onConvertFps(selectedFiles);
+  }, [onConvertFps, selectedFiles]);
+
   const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping;
 
   // Debug: Log decode button visibility
@@ -275,6 +293,36 @@ export function MediaSelectionToolbar({
                   >
                     {isClipping ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scissors className="h-4 w-4 mr-2" />}
                     {isClipping ? 'Processing...' : 'Clip Videos'}
+                  </Button>
+                )}
+
+                {/* Export - for images and videos */}
+                {onExport && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportClick}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-orange-100 bg-orange-50/50 hover:bg-orange-100 text-orange-700"
+                    title="Export to folder"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                )}
+
+                {/* FPS Convert - for videos */}
+                {onConvertFps && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleConvertFpsClick}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+                    title="Convert video FPS"
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    FPS Convert
                   </Button>
                 )}
 
@@ -380,6 +428,36 @@ export function MediaSelectionToolbar({
                   >
                     {isClipping ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-2 text-purple-400" />}
                     <span className="text-xs">{isClipping ? '...' : 'Clip'}</span>
+                  </Button>
+                )}
+
+                {/* Export - floating mode */}
+                {onExport && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleExportClick}
+                    disabled={toolbarDisabled}
+                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+                    title="Export to folder"
+                  >
+                    <Download className="h-3.5 w-3.5 mr-2 text-orange-400" />
+                    <span className="text-xs">Export</span>
+                  </Button>
+                )}
+
+                {/* FPS Convert - floating mode */}
+                {onConvertFps && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleConvertFpsClick}
+                    disabled={toolbarDisabled}
+                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+                    title="Convert video FPS"
+                  >
+                    <Zap className="h-3.5 w-3.5 mr-2 text-blue-400" />
+                    <span className="text-xs">FPS</span>
                   </Button>
                 )}
 

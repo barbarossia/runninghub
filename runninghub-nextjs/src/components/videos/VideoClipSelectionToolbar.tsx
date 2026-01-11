@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Video, RefreshCw, Pencil, Scissors, Loader2, Eye } from 'lucide-react';
+import { Video, RefreshCw, Pencil, Scissors, Loader2, Eye, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useVideoSelectionStore, useVideoStore } from '@/store';
 // For backward compatibility, we still import stores but use props when provided
@@ -18,8 +18,10 @@ interface VideoClipSelectionToolbarProps {
   onRename?: (video: VideoFile, newName: string) => Promise<void>;
   onPreview?: (selectedPaths: string[]) => void;
   onDeselectAll?: () => void;
+  onConvertFps?: (selectedPaths: string[]) => void;
   disabled?: boolean;
   className?: string;
+  label?: string;
 }
 
 export function VideoClipSelectionToolbar({
@@ -29,8 +31,10 @@ export function VideoClipSelectionToolbar({
   onRename,
   onPreview,
   onDeselectAll,
+  onConvertFps,
   disabled = false,
   className = '',
+  label = 'Select videos to extract images',
 }: VideoClipSelectionToolbarProps) {
   // For backward compatibility with standalone clip page
   const store = useVideoSelectionStore();
@@ -98,6 +102,20 @@ export function VideoClipSelectionToolbar({
     }
   }, [onClip, selectedPaths]);
 
+  // Handle FPS convert
+  const handleConvertFps = useCallback(async () => {
+    if (!onConvertFps) return;
+
+    setIsProcessing(true);
+    try {
+      await onConvertFps(selectedPaths);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to convert video FPS');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [onConvertFps, selectedPaths]);
+
   // Handle preview
   const handlePreview = useCallback(() => {
     if (!onPreview) return;
@@ -145,7 +163,7 @@ export function VideoClipSelectionToolbar({
           if (mode === 'expanded') {
             return (
               <span className="text-sm text-muted-foreground hidden sm:inline-block">
-                Select videos to extract images
+                {label}
               </span>
             );
           }
@@ -181,16 +199,30 @@ export function VideoClipSelectionToolbar({
                   </Button>
                 )}
 
+                {onConvertFps && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleConvertFps}
+                    disabled={toolbarDisabled || selectedCount === 0}
+                    className="h-9 px-3 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+                    title="Convert video FPS"
+                  >
+                    {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
+                    Convert
+                  </Button>
+                )}
+
                 {onClip && (
                   <Button
                     variant="default"
                     size="sm"
                     onClick={handleClip}
                     disabled={toolbarDisabled || selectedCount === 0}
-                    className="h-9 px-6 bg-purple-600 hover:bg-purple-700 shadow-md"
+                    className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
                   >
                     {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scissors className="h-4 w-4 mr-2" />}
-                    {isProcessing ? 'Processing...' : 'Clip Images'}
+                    {isProcessing ? 'Processing...' : 'Crop'}
                   </Button>
                 )}
 
@@ -239,16 +271,30 @@ export function VideoClipSelectionToolbar({
                   </Button>
                 )}
 
+                {onConvertFps && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleConvertFps}
+                    disabled={toolbarDisabled || selectedCount === 0}
+                    className="h-8 bg-blue-600 hover:bg-blue-500 text-white rounded-full px-3 shadow-lg shadow-blue-900/20"
+                    title="Convert video FPS"
+                  >
+                    {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 mr-1 fill-current" />}
+                    <span className="text-xs font-bold">Convert</span>
+                  </Button>
+                )}
+
                 {onClip && (
                   <Button
                     variant="default"
                     size="sm"
                     onClick={handleClip}
                     disabled={toolbarDisabled || selectedCount === 0}
-                    className="h-8 bg-purple-600 hover:bg-purple-500 text-white rounded-full px-4 shadow-lg shadow-purple-900/20"
+                    className="h-8 bg-green-600 hover:bg-green-500 text-white rounded-full px-3 shadow-lg shadow-green-900/20"
                   >
-                    {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-1.5 fill-current" />}
-                    <span className="text-xs font-bold">{isProcessing ? '...' : 'Clip'}</span>
+                    {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-1 fill-current" />}
+                    <span className="text-xs font-bold">{isProcessing ? '...' : 'Crop'}</span>
                   </Button>
                 )}
               </>
