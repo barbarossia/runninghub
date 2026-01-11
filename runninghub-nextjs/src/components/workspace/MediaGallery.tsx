@@ -159,7 +159,8 @@ export function MediaGallery({
     const extensions = new Set<string>();
     mediaFiles.forEach((file) => {
       if (file.extension) {
-        extensions.add(file.extension);
+        // Normalize to lowercase for deduplication
+        extensions.add(file.extension.toLowerCase());
       }
     });
     return Array.from(extensions).sort();
@@ -168,8 +169,8 @@ export function MediaGallery({
   // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
     const filtered = mediaFiles.filter((file) => {
-      // Extension filter
-      if (selectedExtension && file.extension !== selectedExtension) return false;
+      // Extension filter (normalize for case-insensitive comparison)
+      if (selectedExtension && file.extension.toLowerCase() !== selectedExtension.toLowerCase()) return false;
 
       // Search filter
       if (searchQuery) {
