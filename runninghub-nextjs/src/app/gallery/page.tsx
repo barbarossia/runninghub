@@ -29,6 +29,7 @@ import { logger } from '@/utils/logger';
 import { useProcessStore } from '@/store';
 import { useFileSystem } from '@/hooks';
 import { API_ENDPOINTS, ENVIRONMENT_VARIABLES } from '@/constants';
+import { exportImagesToFolder, getCompatibilityMessage } from '@/lib/export-images';
 import type { ImageFile } from '@/types';
 
 export default function GalleryPage() {
@@ -283,6 +284,54 @@ export default function GalleryPage() {
     }
   };
 
+  const handleExport = async (selectedPaths: string[]) => {
+    // Check browser compatibility
+    const compatibilityMessage = getCompatibilityMessage();
+    if (compatibilityMessage) {
+      toast.error(compatibilityMessage);
+      return;
+    }
+
+    // Get selected images from store
+    const selectedImages = images.filter(img => selectedPaths.includes(img.path));
+
+    if (selectedImages.length === 0) {
+      toast.error('No images selected for export');
+      return;
+    }
+
+    try {
+      // Export with progress tracking
+      const result = await exportImagesToFolder(selectedImages, {
+        onProgress: (progress) => {
+          // Update with current file being exported
+          logger.info(`Exporting ${progress.current}/${progress.total}: ${progress.currentFile}`);
+        },
+      });
+
+      if (result.success) {
+        toast.success(`Exported ${result.exported} file${result.exported !== 1 ? 's' : ''}`);
+        if (result.failed > 0) {
+          toast.warning(`${result.failed} file${result.failed !== 1 ? 's' : ''} failed to export`);
+        }
+        logger.success(`Export complete: ${result.exported}/${result.total} files exported`);
+      } else {
+        toast.error('Export failed');
+        logger.error(`Export failed: ${result.failed}/${result.total} files failed`);
+      }
+
+      deselectAll();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to export images';
+      // Don't show toast for user cancellation
+      if (!errorMessage.includes('cancelled') && !errorMessage.includes('canceled')) {
+        toast.error(errorMessage);
+      }
+      logger.error(errorMessage);
+      throw err;
+    }
+  };
+
   const handleImageClick = useCallback((image: ImageFile) => {
     // Could open image preview modal here
     console.log('Image clicked:', image);
@@ -396,6 +445,7 @@ export default function GalleryPage() {
             <SelectionToolbar
               onProcess={handleProcess}
               onDelete={handleDelete}
+              onExport={handleExport}
               onDuckDecodeOpen={() => handleRefresh(true)}
               nodes={nodes}
               selectedNode={selectedNode}

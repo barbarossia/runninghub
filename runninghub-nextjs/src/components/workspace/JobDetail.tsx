@@ -127,6 +127,28 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
     }
   }, [job?.results?.textOutputs]);
 
+  // Fetch fresh job data from local job.json when jobId changes
+  useEffect(() => {
+    const fetchJobFromDisk = async () => {
+      if (!jobId) return;
+
+      try {
+        const response = await fetch(`/api/workspace/jobs/${jobId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.job) {
+            // Update store with fresh data from disk
+            updateJob(jobId, data.job);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch job from disk:', error);
+      }
+    };
+
+    fetchJobFromDisk();
+  }, [jobId]);
+
   // Initialize editable inputs when job changes
   useEffect(() => {
     if (job) {

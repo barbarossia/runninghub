@@ -38,21 +38,30 @@ import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectio
 import { VideoGallery } from '@/components/videos/VideoGallery';
 import { VideoPlayerModal } from '@/components/videos/VideoPlayerModal';
 import { ImagePreviewModal } from '@/components/workspace/ImagePreviewModal';
+import { ExportConfiguration } from '@/components/workspace/ExportConfiguration';
+import { VideoConvertConfiguration } from '@/components/workspace/VideoConvertConfiguration';
+import { CropConfiguration } from '@/components/videos/CropConfiguration';
+import { ProgressModal } from '@/components/progress/ProgressModal';
 import {
   Settings,
   FolderOpen,
   Workflow as WorkflowIcon,
   Clock,
   AlertCircle,
-  Plus,
-  Upload,
   Play,
-  Youtube,
   Scissors,
+  Youtube,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
-import { API_ENDPOINTS } from '@/constants';
+import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
+import { exportImagesToFolder, getCompatibilityMessage, type ExportableFile } from '@/lib/export-images';
+import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
+import { useExportConfigStore } from '@/store/export-config-store';
+import { useVideoConvertStore } from '@/store/video-convert-store';
+import { useCropStore } from '@/store/crop-store';
+import { useProgressStore } from '@/store';
 import type { Workflow, Job, MediaFile, FileInputAssignment } from '@/types/workspace';
 
 export default function WorkspacePage() {
@@ -87,13 +96,18 @@ export default function WorkspacePage() {
 
   // Local state
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'run-workflow' | 'workflows' | 'jobs'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'run-workflow' | 'workflows' | 'jobs'>('media');
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<MediaFile | null>(null);
   const [previewImage, setPreviewImage] = useState<MediaFile | null>(null);
+  const [convertTaskId, setConvertTaskId] = useState<string | null>(null);
+  const [isConvertProgressModalOpen, setIsConvertProgressModalOpen] = useState(false);
+
+  // Export config from store
+  const { deleteAfterExport } = useExportConfigStore();
 
   // Get selected files from store
   const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
@@ -344,6 +358,13 @@ export default function WorkspacePage() {
     }
   }, [activeTab, selectedFolder, handleRefresh]);
 
+  // Refresh folder when switching to Convert tab
+  useEffect(() => {
+    if (activeTab === 'convert' && selectedFolder) {
+      handleRefresh(true); // Silent refresh when switching to convert tab
+    }
+  }, [activeTab, selectedFolder, handleRefresh]);
+
   // Fallback: Validate duck encoding for selected images (only if not already validated on load)
   // NOTE: Most images are validated in parallel on load via validateAllImagesForDuck()
   // This is a fallback for images that weren't validated for some reason
@@ -389,6 +410,12 @@ export default function WorkspacePage() {
 
     validateSelectedImages();
   }, [selectedFiles, updateMediaFile]);
+
+  // Track progress modal state (similar to crop page)
+  const { isProgressModalOpen } = useProgressStore();
+  useEffect(() => {
+    setIsConvertProgressModalOpen(isProgressModalOpen);
+  }, [isProgressModalOpen]);
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
@@ -518,7 +545,12 @@ export default function WorkspacePage() {
         setActiveConsoleTaskId(resp.taskId);
       }
 
-      // DON'T clear inputs - Job Detail page will manage its own inputs
+      // Clear jobFiles after starting a new job (not a re-run)
+      // Re-runs from Job Detail use job's own inputs, not global jobFiles
+      if (!isReRun) {
+        clearJobInputs();
+      }
+
       // DO switch to jobs tab - go to Job Detail page to see results
       setActiveTab('jobs');
       toast.success(`Job #${runNumber} started. View results and run variations.`);
@@ -604,7 +636,7 @@ export default function WorkspacePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: file.path, newName }),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to rename file');
@@ -616,6 +648,68 @@ export default function WorkspacePage() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to rename file';
       toast.error(errorMessage);
       throw err;
+    }
+  };
+
+  const handleExport = async (files: MediaFile[]) => {
+    // Check browser compatibility
+    const compatibilityMessage = getCompatibilityMessage();
+    if (compatibilityMessage) {
+      toast.error(compatibilityMessage);
+      return;
+    }
+
+    if (files.length === 0) {
+      toast.error('No files selected for export');
+      return;
+    }
+
+    try {
+      // Convert MediaFile[] to ExportableFile[]
+      const filesToExport: ExportableFile[] = files.map(f => ({
+        path: f.path,
+        name: f.name,
+        blob_url: undefined, // Workspace files are real files, not virtual
+      }));
+
+      // Export with progress tracking
+      const result = await exportImagesToFolder(filesToExport, {
+        onProgress: (progress) => {
+          logger.info(`Exporting ${progress.current}/${progress.total}: ${progress.currentFile}`);
+        },
+      });
+
+      if (result.success) {
+        toast.success(`Exported ${result.exported} file${result.exported !== 1 ? 's' : ''}`);
+        if (result.failed > 0) {
+          toast.warning(`${result.failed} file${result.failed !== 1 ? 's' : ''} failed to export`);
+        }
+        logger.success(`Export complete: ${result.exported}/${result.total} files exported`);
+
+        // Delete original files if export was successful and deleteAfterExport is enabled
+        if (deleteAfterExport && result.exported > 0) {
+          try {
+            await handleDeleteFile(files);
+            logger.success(`Deleted ${result.exported} original file${result.exported !== 1 ? 's' : ''} after export`);
+          } catch (deleteError) {
+            const deleteErrorMsg = deleteError instanceof Error ? deleteError.message : 'Failed to delete original files';
+            toast.error(`Export successful but failed to delete originals: ${deleteErrorMsg}`);
+            logger.error(`Failed to delete originals after export: ${deleteErrorMsg}`);
+          }
+        }
+      } else {
+        toast.error('Export failed');
+        logger.error(`Export failed: ${result.failed}/${result.total} files failed`);
+      }
+
+      deselectAllMediaFiles();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to export files';
+      // Don't show toast for user cancellation
+      if (!errorMessage.includes('cancelled') && !errorMessage.includes('canceled')) {
+        toast.error(errorMessage);
+      }
+      logger.error(errorMessage);
     }
   };
 
@@ -638,6 +732,139 @@ export default function WorkspacePage() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
       toast.error(errorMessage);
       throw err;
+    }
+  };
+
+  const handleConvertFps = async (files: MediaFile[]) => {
+    // Filter to only video files
+    const videos = files.filter(f => f.type === 'video');
+
+    if (videos.length === 0) {
+      toast.error('No video files selected for FPS conversion');
+      return;
+    }
+
+    // Get convert config from store
+    const convertConfig = useVideoConvertStore.getState().convertConfig;
+    const targetFps = convertConfig.targetFps === 'custom' ? convertConfig.customFps : convertConfig.targetFps;
+    const crf = convertConfig.quality === 'custom' ? convertConfig.customCrf : convertConfig.quality === 'high' ? 18 : convertConfig.quality === 'low' ? 23 : 20;
+
+    if (!targetFps || targetFps < 1 || targetFps > 120) {
+      toast.error('Invalid target FPS. Must be between 1 and 120.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/workspace/fps-convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: videos.map(v => ({ path: v.path, name: v.name })),
+          targetFps,
+          deleteOriginal: convertConfig.deleteOriginal,
+          outputSuffix: convertConfig.outputSuffix,
+          crf,
+          preset: convertConfig.encodingPreset,
+          timeout: 3600,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setConvertTaskId(data.task_id);
+        setActiveConsoleTaskId(data.task_id);
+        toast.success(`Started converting ${videos.length} video${videos.length > 1 ? 's' : ''} to ${targetFps} FPS`);
+
+        // Refresh folder contents after conversion completes (similar to crop page)
+        setTimeout(() => {
+          if (selectedFolder) {
+            handleRefresh(true);
+          }
+        }, 2000);
+      } else {
+        toast.error(data.error || 'Failed to start FPS conversion');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to convert video FPS';
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleCropVideos = async (files: MediaFile[]) => {
+    const { cropConfig } = useCropStore();
+
+    // Validate crop configuration
+    if (cropConfig.mode === 'custom') {
+      const config = {
+        x: parseFloat(cropConfig.customX || '0') || 0,
+        y: parseFloat(cropConfig.customY || '0') || 0,
+        width: parseFloat(cropConfig.customWidth || '50') || 0,
+        height: parseFloat(cropConfig.customHeight || '100') || 0,
+      };
+
+      const validation = validateCropConfig(config);
+      if (!validation.valid) {
+        toast.error(validation.error || ERROR_MESSAGES.INVALID_CROP_CONFIG);
+        return;
+      }
+    }
+
+    try {
+      // Build crop config for API
+      const crop_config = {
+        mode: cropConfig.mode,
+      };
+
+      // Add custom dimensions if in custom mode
+      if (cropConfig.mode === 'custom') {
+        const customWidth = cropConfig.customWidth ? parseFloat(cropConfig.customWidth) : undefined;
+        const customHeight = cropConfig.customHeight ? parseFloat(cropConfig.customHeight) : undefined;
+        const customX = cropConfig.customX ? parseFloat(cropConfig.customX) : undefined;
+        const customY = cropConfig.customY ? parseFloat(cropConfig.customY) : undefined;
+
+        const params = buildCustomCropParams({
+          customWidth,
+          customHeight,
+          customX,
+          customY,
+        });
+        Object.assign(crop_config, params);
+      }
+
+      const response = await fetch(API_ENDPOINTS.VIDEOS_CROP, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: files.map(f => f.path),
+          crop_config,
+          output_suffix: cropConfig.outputSuffix || '_cropped',
+          preserve_audio: cropConfig.preserveAudio || false,
+          timeout: 3600,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        if (data.task_id) {
+          setConvertTaskId(data.task_id);
+          setActiveConsoleTaskId(data.task_id);
+        }
+        toast.success(`Started cropping ${files.length} video${files.length > 1 ? 's' : ''}`);
+
+        // Refresh folder contents after cropping completes
+        setTimeout(() => {
+          if (selectedFolder) {
+            handleRefresh(true);
+          }
+        }, 2000);
+      } else {
+        toast.error(data.error || ERROR_MESSAGES.CROP_FAILED);
+      }
+    } catch (error) {
+      console.error('Error cropping videos:', error);
+      toast.error(ERROR_MESSAGES.CROP_FAILED);
     }
   };
 
@@ -874,7 +1101,7 @@ export default function WorkspacePage() {
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="media" className="flex items-center gap-2">
                   <FolderOpen className="h-4 w-4" />
                   Media Gallery
@@ -886,6 +1113,10 @@ export default function WorkspacePage() {
                 <TabsTrigger value="clip" className="flex items-center gap-2">
                   <Scissors className="h-4 w-4" />
                   Clip
+                </TabsTrigger>
+                <TabsTrigger value="convert" className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Convert
                 </TabsTrigger>
                 <TabsTrigger value="run-workflow" className="flex items-center gap-2">
                   <Play className="h-4 w-4" />
@@ -903,6 +1134,9 @@ export default function WorkspacePage() {
 
               {/* Media Gallery Tab */}
               <TabsContent value="media" className="space-y-6 mt-6">
+                {/* Export Configuration */}
+                <ExportConfiguration />
+
                 {/* Media Selection Toolbar */}
                 {selectedFiles.length > 0 && (
                 <MediaSelectionToolbar
@@ -916,6 +1150,7 @@ export default function WorkspacePage() {
                     await handleClipVideos(videoPaths);
                   }}
                   onPreview={handlePreviewFile}
+                  onExport={handleExport}
                 />
                 )}
 
@@ -937,6 +1172,8 @@ export default function WorkspacePage() {
                   onDecode={handleDecodeFile}
                   onClipVideo={handleClipSingleVideo}
                   onPreview={handlePreviewFile}
+                  onExport={handleExport}
+                  onConvertFps={handleConvertFps}
                 />
               </TabsContent>
 
@@ -1000,6 +1237,61 @@ export default function WorkspacePage() {
                   onRefresh={() => handleRefresh(true)}
                   onRename={handleRenameVideo}
                   onDelete={handleDeleteVideo}
+                />
+              </TabsContent>
+
+              {/* Convert Tab */}
+              <TabsContent value="convert" className="space-y-6 mt-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold">Video Conversion</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Convert video FPS, crop videos, or both. Videos are automatically filtered from your workspace folder.
+                  </p>
+                </div>
+
+                {/* Configuration Grid - Crop and FPS Convert */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Crop Configuration */}
+                  <CropConfiguration />
+
+                  {/* FPS Convert Configuration */}
+                  <VideoConvertConfiguration />
+                </div>
+
+                {/* Selection Toolbar */}
+                <VideoClipSelectionToolbar
+                  selectedCount={selectedVideoCount}
+                  onRefresh={() => handleRefresh(true)}
+                  onRename={handleRenameVideo}
+                  onPreview={(selectedPaths) => {
+                    if (selectedPaths.length > 0) {
+                      const video = filteredVideos.find(v => v.path === selectedPaths[0]);
+                      if (video) {
+                        handlePreviewFile(video);
+                      }
+                    }
+                  }}
+                  onClip={async (selectedPaths) => {
+                    const selectedVideoFiles = filteredVideos.filter(v => selectedPaths.includes(v.path));
+                    await handleCropVideos(selectedVideoFiles.map(v => ({ ...v, id: v.path })));
+                  }}
+                  onConvertFps={async (selectedPaths) => {
+                    const selectedVideoFiles = filteredVideos.filter(v => selectedPaths.includes(v.path));
+                    await handleConvertFps(selectedVideoFiles.map(v => ({ ...v, id: v.path })));
+                  }}
+                  disabled={false}
+                  label="Select videos to convert"
+                />
+
+                {/* Video Gallery - filtered to videos only */}
+                <VideoGallery
+                  videos={adaptedVideos}
+                  isLoading={false}
+                  onRefresh={() => handleRefresh(true)}
+                  onRename={handleRenameVideo}
+                  onDelete={handleDeleteVideo}
+                  onCrop={(video) => handleCropVideos([{ ...video, id: video.path }])}
+                  onConvertFps={(video) => handleConvertFps([{ ...video, id: video.path }])}
                 />
               </TabsContent>
 
@@ -1111,6 +1403,14 @@ export default function WorkspacePage() {
           isOpen={!!previewImage}
           onClose={() => setPreviewImage(null)}
         />
+
+        {/* Progress Modal */}
+        {isConvertProgressModalOpen && (
+          <ProgressModal
+            open={isConvertProgressModalOpen}
+            onOpenChange={setIsConvertProgressModalOpen}
+          />
+        )}
       </div>
     </div>
   );

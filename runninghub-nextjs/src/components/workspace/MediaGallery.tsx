@@ -27,6 +27,8 @@ import {
   AlertCircle,
   PlayCircle,
   Scissors,
+  Download,
+  Zap,
 } from 'lucide-react';
 import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -109,6 +111,8 @@ export interface MediaGalleryProps {
   onDecode?: (file: MediaFile, password?: string) => Promise<void>;
   onClipVideo?: (file: MediaFile) => void;
   onPreview?: (file: MediaFile) => void;
+  onExport?: (files: MediaFile[]) => Promise<void>;
+  onConvertFps?: (files: MediaFile[]) => Promise<void>;
   className?: string;
 }
 
@@ -120,6 +124,8 @@ export function MediaGallery({
   onDecode,
   onClipVideo,
   onPreview,
+  onExport,
+  onConvertFps,
   className = '',
 }: MediaGalleryProps) {
   const {
@@ -800,6 +806,30 @@ export function MediaGallery({
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onClipVideo(file); }} className="text-purple-600 focus:text-purple-700 focus:bg-purple-50">
                                 <Scissors className="h-4 w-4 mr-2" />
                                 Clip Video
+                              </DropdownMenuItem>
+                            )}
+                            {onExport && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onExport([file]);
+                                }}
+                                className="text-orange-600 focus:text-orange-700 focus:bg-orange-50"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Export
+                              </DropdownMenuItem>
+                            )}
+                            {file.type === 'video' && onConvertFps && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onConvertFps([file]);
+                                }}
+                                className="text-blue-600 focus:text-blue-700 focus:bg-blue-50"
+                              >
+                                <Zap className="h-4 w-4 mr-2" />
+                                Convert FPS
                               </DropdownMenuItem>
                             )}
                             {onDelete && (

@@ -624,7 +624,16 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
         })),
 
       setSelectedWorkflow: (workflowId) =>
-        set({ selectedWorkflowId: workflowId, error: null }),
+        set((state) => {
+          // Clear jobFiles when switching to a different workflow
+          // This prevents previous workflow's file assignments from being used
+          const shouldClear = workflowId !== state.selectedWorkflowId;
+          return {
+            selectedWorkflowId: workflowId,
+            jobFiles: shouldClear ? [] : state.jobFiles,
+            error: null,
+          };
+        }),
 
       getWorkflowById: (id) => {
         return get().workflows.find((w) => w.id === id);

@@ -12,7 +12,8 @@ This document outlines the frontend development rules, coding standards, and des
 5. [Global Console Requirement](#global-console-requirement)
 6. [Data Refresh Policy](#data-refresh-policy)
 7. [Hydration Best Practices](#hydration-best-practices)
-8. [Styling Tokens Reference](#styling-tokens-reference)
+8. [Gallery Display Style Standard](#gallery-display-style-standard)
+9. [Styling Tokens Reference](#styling-tokens-reference)
 
 ---
 
@@ -634,6 +635,124 @@ See `src/components/theme/ThemeToggle.tsx` for the correct pattern implementatio
 
 ---
 
+## Gallery Display Style Standard
+
+**RULE 8**: **ALL gallery-style displays MUST reference `src/components/workspace/MediaGallery.tsx` as the template.**
+
+This applies to any page or component that displays items (images, videos, files) in a grid/list format:
+- Video Gallery (`src/components/videos/VideoGallery.tsx`)
+- Image Gallery (`src/components/images/ImageGallery.tsx`)
+- Any future gallery-style components
+
+### Gallery Card Structure
+
+Based on `MediaGallery.tsx`, all gallery cards must follow this structure:
+
+```tsx
+<motion.div
+  layout
+  initial={{ opacity: 0, scale: 0.9 }}
+  animate={{ opacity: 1, scale: 1 }}
+  exit={{ opacity: 0, scale: 0.9 }}
+  transition={{ duration: 0.15, delay: index * 0.02 }}
+  className="relative group"
+>
+  <Card
+    className={cn(
+      'overflow-hidden cursor-pointer transition-all',
+      isSelected
+        ? 'ring-4 ring-blue-500 ring-offset-2 bg-blue-50 shadow-lg scale-[1.02] z-10'
+        : 'hover:ring-2 hover:ring-gray-300 hover:ring-offset-2'
+    )}
+  >
+    {/* Thumbnail area - always aspect-square */}
+    <div className="relative bg-gray-100 aspect-square">
+      {/* Media element with absolute positioning */}
+      <video className="absolute inset-0 w-full h-full object-contain p-1" />
+      {/* or */}
+      <Image className="absolute inset-0 w-full h-full object-contain p-1" />
+
+      {/* Play button for videos (top-left) */}
+      <div className="absolute top-2 left-2 z-20">
+        <div className="bg-black/50 rounded-full p-1.5 backdrop-blur-sm">
+          <PlayCircle className="h-5 w-5" />
+        </div>
+      </div>
+
+      {/* Checkbox (below play button for videos, top-left for images) */}
+      <div className={cn(
+        'absolute transition-opacity pointer-events-auto',
+        'top-10 left-2',  // For videos (below play button)
+        // 'top-2 left-2',  // For images
+        isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+      )}>
+        <Checkbox checked={isSelected} />
+      </div>
+
+      {/* More menu (top-right) */}
+      <div className="absolute top-2 right-2">
+        {/* Dropdown menu */}
+      </div>
+    </div>
+
+    {/* Info section */}
+    <div className={cn(
+      'p-2 border-t',
+      isSelected ? 'bg-blue-100 border-blue-200' : 'bg-white border-gray-100'
+    )}>
+      <p className="text-xs font-bold line-clamp-1">Name</p>
+      <p className="text-xs text-gray-500">Size info</p>
+    </div>
+  </Card>
+</motion.div>
+```
+
+### Grid Configuration
+
+```tsx
+// Grid columns by view mode
+const gridCols = {
+  grid: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6',
+  large: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
+  list: 'grid-cols-1'
+};
+
+// Always use gap-3 for consistency
+<div className={cn('grid gap-3', gridCols[viewMode])}>
+```
+
+### Key Styling Requirements
+
+| Element | Requirement |
+|---------|-------------|
+| **Thumbnail** | `aspect-square`, `bg-gray-100` |
+| **Video element** | `absolute inset-0 w-full h-full object-contain p-1` |
+| **Image element** | `absolute inset-0` with `object-contain p-1` |
+| **Play button** | `top-2 left-2 z-20`, `h-5 w-5` icon, `p-1.5` padding |
+| **Checkbox** | `top-10 left-2` for videos, `top-2 left-2` for images |
+| **More menu** | `top-2 right-2`, `bg-white/90` background |
+| **Info section** | `p-2 border-t`, blue tint when selected |
+| **Grid gap** | Always `gap-3` |
+| **Card** | `overflow-hidden`, `ring-4` on selection |
+
+### File Locations
+
+- **Reference Template**: `src/components/workspace/MediaGallery.tsx`
+- **Apply To**: `src/components/videos/VideoGallery.tsx`, `src/components/images/ImageGallery.tsx`
+
+### Checklist
+
+When creating or updating gallery-style displays:
+- [ ] Thumbnail area uses `aspect-square`
+- [ ] Video/image elements use `absolute inset-0` positioning
+- [ ] Play button at `top-2 left-2` with `h-5 w-5` icon
+- [ ] Checkbox positioned correctly (below play button for videos)
+- [ ] Grid uses `gap-3` and correct column breakpoints
+- [ ] Card uses `overflow-hidden` and proper selection styling
+- [ ] Info section uses `p-2 border-t` with blue tint on selection
+
+---
+
 ## Styling Tokens Reference
 
 ### Color Palette (OKLCH)
@@ -774,6 +893,7 @@ Before committing frontend changes, verify:
 - [ ] Components follow import order pattern
 - [ ] TypeScript types properly defined
 - [ ] No hydration errors (follow [Hydration Best Practices](#hydration-best-practices))
+- [ ] Gallery-style displays follow [MediaGallery template](#gallery-display-style-standard)
 - [ ] Folder selection persists and restores (if applicable) - see [RULE 4](#folder-selection-requirements)
 
 **Note**: For Git workflow rules (branch management, commit messages), see the global [CLAUDE.md](../CLAUDE.md)

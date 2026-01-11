@@ -62,6 +62,10 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   // Local JSON import state
   const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
+  const [jsonContent, setJsonContent] = useState<string | null>(null); // Store JSON content for second call
+  const [detectedNodes, setDetectedNodes] = useState<Array<{ id: string; name: string; inputCount: number; inputType: string; description: string }>>([]);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [showNodeSelection, setShowNodeSelection] = useState(false);
 
   // Execution type state
   const [executionType, setExecutionType] = useState<'ai-app' | 'workflow' | undefined>(
@@ -91,7 +95,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       setCustomWorkflowId('');
       setTemplateLoaded(false);
     } else {
-      // Reset for new workflow
+      // Reset for new workflow - clear all previous workflow's memory
       setName('');
       setDescription('');
       setRunninghubWorkflowId('');
@@ -102,6 +106,12 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       setSelectedWorkflowId('');
       setCustomWorkflowId('');
       setTemplateLoaded(false);
+      // Reset JSON import state
+      setJsonFile(null);
+      setJsonContent(null);
+      setDetectedNodes([]);
+      setSelectedNodeIds(new Set());
+      setShowNodeSelection(false);
     }
   }, [workflow]);
 
@@ -269,7 +279,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     }
   }, [customWorkflowId, name]);
 
-  // Import local workflow JSON
+  // Import local workflow JSON - Step 1: Detect nodes
   const handleImportJson = useCallback(async () => {
     if (!jsonFile) return;
 
@@ -278,9 +288,8 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
     try {
       // Read file content
       const text = await jsonFile.text();
-      const jsonContent = JSON.parse(text);
 
-      // Call import API
+      // Call import API to detect nodes (no selectedNodes provided)
       const response = await fetch('/api/workflow/import-json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -297,23 +306,93 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
 
       const data = await response.json();
 
-      // Load the imported workflow
-      setParameters(data.workflow.inputs);
-      setName(data.workflow.name);
-      setDescription(`Workflow imported from ${jsonFile.name}`);
-      setSelectedWorkflowId(data.workflow.id);
-      setExecutionType(data.workflow.executionType);
-      setTemplateLoaded(true);
-
-      toast.success('Workflow JSON imported successfully!');
+      // Check if node selection is required
+      if (data.requiresSelection && data.nodes && data.nodes.length > 0) {
+        // Store JSON content for second call
+        setJsonContent(text);
+        // Show detected nodes for selection
+        setDetectedNodes(data.nodes);
+        setShowNodeSelection(true);
+        // Pre-select all nodes by default
+        setSelectedNodeIds(new Set(data.nodes.map((n: any) => n.id)));
+        toast.success(`Detected ${data.nodes.length} node${data.nodes.length !== 1 ? 's' : ''} from JSON. Please select which to include.`);
+      } else if (data.workflow) {
+        // No selection needed (unlikely with new API), load directly
+        setParameters(data.workflow.inputs);
+        setName(data.workflow.name);
+        setDescription(`Workflow imported from ${jsonFile.name}`);
+        setSelectedWorkflowId(data.workflow.id);
+        setExecutionType(data.workflow.executionType);
+        setTemplateLoaded(true);
+        toast.success('Workflow JSON imported successfully!');
+      }
     } catch (error) {
       console.error('Failed to import workflow JSON:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to import workflow JSON');
     } finally {
       setIsImportingJson(false);
-      setJsonFile(null);
     }
   }, [jsonFile]);
+
+  // Step 2: Confirm node selection and create workflow
+  const handleConfirmNodeSelection = useCallback(async () => {
+    if (!jsonContent || selectedNodeIds.size === 0) {
+      toast.error('Please select at least one node');
+      return;
+    }
+
+    setIsImportingJson(true);
+
+    try {
+      // Call import API with selected nodes
+      const response = await fetch('/api/workflow/import-json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonContent,
+          selectedNodes: Array.from(selectedNodeIds),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create workflow');
+      }
+
+      const data = await response.json();
+
+      // Load the created workflow
+      setParameters(data.workflow.inputs);
+      setName(data.workflow.name);
+      setDescription(data.workflow.description);
+      setSelectedWorkflowId(data.workflow.id);
+      setExecutionType(data.workflow.executionType);
+      setTemplateLoaded(true);
+
+      // Reset selection state
+      setShowNodeSelection(false);
+      setJsonContent(null);
+      setDetectedNodes([]);
+      setSelectedNodeIds(new Set());
+
+      toast.success('Workflow created successfully!');
+    } catch (error) {
+      console.error('Failed to create workflow:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create workflow');
+    } finally {
+      setIsImportingJson(false);
+      setJsonFile(null);
+    }
+  }, [jsonContent, selectedNodeIds]);
+
+  // Cancel node selection
+  const handleCancelNodeSelection = useCallback(() => {
+    setShowNodeSelection(false);
+    setJsonContent(null);
+    setDetectedNodes([]);
+    setSelectedNodeIds(new Set());
+    setJsonFile(null);
+  }, []);
 
   // Handle save
   const handleSave = useCallback(async () => {
@@ -665,6 +744,106 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Node Selection Dialog */}
+      {showNodeSelection && (
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select Nodes to Import</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Select which nodes from the JSON to include in your workflow:
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedNodeIds(new Set(detectedNodes.map(n => n.id)))}
+                  disabled={isImportingJson}
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedNodeIds(new Set())}
+                  disabled={isImportingJson}
+                >
+                  Clear All
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {detectedNodes.map((node) => (
+                <div
+                  key={node.id}
+                  className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Checkbox
+                    id={`node-${node.id}`}
+                    checked={selectedNodeIds.has(node.id)}
+                    onCheckedChange={(checked) => {
+                      const newSelected = new Set(selectedNodeIds);
+                      if (checked) {
+                        newSelected.add(node.id);
+                      } else {
+                        newSelected.delete(node.id);
+                      }
+                      setSelectedNodeIds(newSelected);
+                    }}
+                    disabled={isImportingJson}
+                  />
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`node-${node.id}`}
+                      className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                    >
+                      <span className="font-mono text-xs">{node.id}</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">
+                        {node.inputType}
+                      </span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">{node.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
+              Selected: {selectedNodeIds.size} node{selectedNodeIds.size !== 1 ? 's' : ''}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelNodeSelection}
+              disabled={isImportingJson}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmNodeSelection}
+              disabled={selectedNodeIds.size === 0 || isImportingJson}
+            >
+              {isImportingJson ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  Create Workflow with {selectedNodeIds.size} Node{selectedNodeIds.size !== 1 ? 's' : ''}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      )}
     </Dialog>
   );
 }
