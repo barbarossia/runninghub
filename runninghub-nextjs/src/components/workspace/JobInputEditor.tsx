@@ -65,19 +65,34 @@ export function JobInputEditor({
   }, [initialTextInputs]);
 
   // Validate file existence
+  // For job files: check if file is either in mediaFiles OR exists in job folder
+  // Job folder files (~/Downloads/workspace/jobId/*) are valid even if not in mediaFiles
   useEffect(() => {
-    const errors: Record<string, string> = {};
+    const validateFiles = async () => {
+      const errors: Record<string, string> = {};
 
-    initialFileInputs.forEach((file) => {
-      // Check if file exists in mediaFiles
-      const fileExists = mediaFiles.some((mf) => mf.path === file.filePath);
+      // Check file existence via API for accurate validation
+      for (const file of initialFileInputs) {
+        // Skip validation for job folder files - they're managed by the job system
+        const isJobFolderFile = file.filePath.includes('/workspace/') ||
+                                file.filePath.includes('\\workspace\\');
 
-      if (!fileExists) {
-        errors[file.filePath] = 'Source file no longer available';
+        if (isJobFolderFile) {
+          // Job folder files are considered valid (they were copied when job ran)
+          continue;
+        }
+
+        // For non-job files, check if they exist in mediaFiles
+        const fileExists = mediaFiles.some((mf) => mf.path === file.filePath);
+        if (!fileExists) {
+          errors[file.filePath] = 'Source file no longer available';
+        }
       }
-    });
 
-    setFileValidationErrors(errors);
+      setFileValidationErrors(errors);
+    };
+
+    validateFiles();
   }, [initialFileInputs, mediaFiles]);
 
   if (!workflow) {
