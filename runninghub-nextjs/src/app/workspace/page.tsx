@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore, useWorkspaceFolder } from '@/store/folder-store';
 import { useVideoClipStore } from '@/store/video-clip-store';
+import { useVideoSplitStore } from '@/store/video-split-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
@@ -35,6 +36,7 @@ import { JobDetail } from '@/components/workspace/JobDetail';
 import { YoutubeDownloader } from '@/components/workspace/YoutubeDownloader';
 import { VideoClipConfiguration } from '@/components/videos/VideoClipConfiguration';
 import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectionToolbar';
+import { VideoSplitConfiguration } from '@/components/workspace/VideoSplitConfiguration';
 import { VideoGallery } from '@/components/videos/VideoGallery';
 import { VideoPlayerModal } from '@/components/videos/VideoPlayerModal';
 import { ImagePreviewModal } from '@/components/workspace/ImagePreviewModal';
@@ -50,6 +52,7 @@ import {
   AlertCircle,
   Play,
   Scissors,
+  Minimize2,
   Youtube,
   Zap,
 } from 'lucide-react';
@@ -96,7 +99,7 @@ export default function WorkspacePage() {
 
   // Local state
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'run-workflow' | 'workflows' | 'jobs'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'split' | 'convert' | 'run-workflow' | 'workflows' | 'jobs'>('media');
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
@@ -209,7 +212,7 @@ export default function WorkspacePage() {
         name: file.name,
         path: file.path,
         type: 'image' as const,
-        extension: file.name.split('.').pop() || '',
+        extension: '.' + (file.name.split('.').pop() || '').toLowerCase(),
         size: file.size || 0,
         width: file.width,
         height: file.height,
@@ -230,7 +233,7 @@ export default function WorkspacePage() {
       name: file.name,
       path: file.path,
       type: 'video' as const,
-      extension: file.name.split('.').pop() || '',
+      extension: '.' + (file.name.split('.').pop() || '').toLowerCase(),
       size: file.size || 0,
       width: file.width,
       height: file.height,
@@ -937,6 +940,38 @@ export default function WorkspacePage() {
     handleClipVideos([video.path]);
   }, []);
 
+  const handleSplitVideos = async (selectedPaths: string[]) => {
+    const { splitOptions } = useVideoSplitStore.getState();
+
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_SPLIT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: selectedPaths,
+          options: splitOptions,
+          timeout: 3600,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setActiveConsoleTaskId(data.task_id);
+        toast.success(`Started splitting ${selectedPaths.length} video(s)`);
+      } else {
+        toast.error(data.error || 'Failed to start splitting');
+      }
+    } catch (error) {
+      console.error('Error splitting videos:', error);
+      toast.error('Failed to start splitting');
+    }
+  };
+
+  const handleSplitSingleVideo = useCallback((video: MediaFile) => {
+    handleSplitVideos([video.path]);
+  }, []);
+
   const handleVideoSelectionChange = useCallback((videoPath: string, selected: boolean) => {
     updateMediaFile(videoPath, { selected });
   }, [updateMediaFile]);
@@ -987,6 +1022,31 @@ export default function WorkspacePage() {
     } catch (error) {
       console.error('Error deleting video:', error);
       toast.error('Failed to delete video');
+    }
+  };
+
+  // Handle delete multiple videos by paths (for split tab toolbar)
+  const handleDeleteVideosByPath = async (selectedPaths: string[]) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_DELETE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: selectedPaths,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Deleted ${selectedPaths.length} video(s)`);
+        await handleRefresh(true);
+      } else {
+        toast.error(data.error || 'Failed to delete videos');
+      }
+    } catch (error) {
+      console.error('Error deleting videos:', error);
+      toast.error('Failed to delete videos');
     }
   };
 
@@ -1114,6 +1174,10 @@ export default function WorkspacePage() {
                   <Scissors className="h-4 w-4" />
                   Clip
                 </TabsTrigger>
+                <TabsTrigger value="split" className="flex items-center gap-2">
+                  <Minimize2 className="h-4 w-4" />
+                  Split
+                </TabsTrigger>
                 <TabsTrigger value="convert" className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
                   Convert
@@ -1151,6 +1215,7 @@ export default function WorkspacePage() {
                   }}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
+                  onDeselectAll={deselectAllMediaFiles}
                 />
                 )}
 
@@ -1171,6 +1236,7 @@ export default function WorkspacePage() {
                   onDelete={handleDeleteFile}
                   onDecode={handleDecodeFile}
                   onClipVideo={handleClipSingleVideo}
+                  onSplitVideo={handleSplitSingleVideo}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
                   onConvertFps={handleConvertFps}
@@ -1228,6 +1294,48 @@ export default function WorkspacePage() {
                     }
                   }}
                   disabled={false}
+                  clipButtonText="Clip"
+                />
+
+                {/* Video Gallery - filtered to videos only */}
+                <VideoGallery
+                  videos={adaptedVideos}
+                  isLoading={false}
+                  onRefresh={() => handleRefresh(true)}
+                  onRename={handleRenameVideo}
+                  onDelete={handleDeleteVideo}
+                />
+              </TabsContent>
+
+              {/* Split Tab */}
+              <TabsContent value="split" className="space-y-6 mt-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold">Video Splitting</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Split videos into smaller segments by duration or count. Videos are automatically filtered from your workspace folder.
+                  </p>
+                </div>
+
+                {/* Split Configuration */}
+                <VideoSplitConfiguration />
+
+                {/* Selection Toolbar */}
+                <VideoClipSelectionToolbar
+                  selectedCount={selectedVideoCount}
+                  onClip={(selectedPaths) => handleSplitVideos(selectedPaths)}
+                  onDelete={handleDeleteVideosByPath}
+                  onRefresh={() => handleRefresh(true)}
+                  onRename={handleRenameVideo}
+                  onPreview={(selectedPaths) => {
+                    if (selectedPaths.length > 0) {
+                      const video = filteredVideos.find(v => v.path === selectedPaths[0]);
+                      if (video) {
+                        handlePreviewFile(video);
+                      }
+                    }
+                  }}
+                  disabled={false}
+                  clipButtonText="Split"
                 />
 
                 {/* Video Gallery - filtered to videos only */}

@@ -15,6 +15,7 @@ export interface BaseToolbarProps {
   badgeText?: string;
   children: (mode: 'expanded' | 'floating' | 'expanded-actions') => ReactNode;
   onDeselectAll: () => void;
+  showCancelButton?: boolean;
 }
 
 export function BaseSelectionToolbar({
@@ -24,6 +25,7 @@ export function BaseSelectionToolbar({
   badgeText = undefined,
   children,
   onDeselectAll,
+  showCancelButton = false,
 }: BaseToolbarProps) {
   const [mode, setMode] = useToolbarMode();
   const hasSelection = selectedCount > 0;
@@ -44,18 +46,32 @@ export function BaseSelectionToolbar({
               className
             )}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Badge variant="default" className={cn("text-sm px-3 py-1", badgeColor)}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <Badge variant="default" className={cn("text-sm px-3 py-1 shrink-0", badgeColor)}>
                   {badgeText || `${selectedCount} selected`}
                 </Badge>
-                {children('expanded')}
+                <div className="text-sm text-muted-foreground truncate hidden sm:block">
+                  {children('expanded')}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
                 {children('expanded-actions')}
 
                 <div className="w-px h-6 bg-gray-200 mx-1" />
+
+                {showCancelButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-4 border-gray-300 hover:bg-gray-100 text-gray-700"
+                    onClick={onDeselectAll}
+                    title="Cancel selection"
+                  >
+                    Cancel
+                  </Button>
+                )}
 
                 <Button
                   variant="outline"
@@ -101,6 +117,18 @@ export function BaseSelectionToolbar({
             {children('floating')}
 
             <div className="w-px h-4 bg-gray-700 mx-1" />
+
+            {showCancelButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDeselectAll}
+                className="h-8 px-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+                title="Cancel selection"
+              >
+                <span className="text-xs">Cancel</span>
+              </Button>
+            )}
 
             <Button
               variant="ghost"

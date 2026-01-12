@@ -29,6 +29,7 @@ import {
   Scissors,
   Download,
   Zap,
+  Minimize2,
 } from 'lucide-react';
 import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -110,6 +111,7 @@ export interface MediaGalleryProps {
   onDelete?: (files: MediaFile[]) => Promise<void>;
   onDecode?: (file: MediaFile, password?: string) => Promise<void>;
   onClipVideo?: (file: MediaFile) => void;
+  onSplitVideo?: (file: MediaFile) => void;
   onPreview?: (file: MediaFile) => void;
   onExport?: (files: MediaFile[]) => Promise<void>;
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
@@ -123,6 +125,7 @@ export function MediaGallery({
   onDelete,
   onDecode,
   onClipVideo,
+  onSplitVideo,
   onPreview,
   onExport,
   onConvertFps,
@@ -159,7 +162,8 @@ export function MediaGallery({
     const extensions = new Set<string>();
     mediaFiles.forEach((file) => {
       if (file.extension) {
-        extensions.add(file.extension);
+        // Normalize to lowercase for deduplication
+        extensions.add(file.extension.toLowerCase());
       }
     });
     return Array.from(extensions).sort();
@@ -168,8 +172,8 @@ export function MediaGallery({
   // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
     const filtered = mediaFiles.filter((file) => {
-      // Extension filter
-      if (selectedExtension && file.extension !== selectedExtension) return false;
+      // Extension filter (normalize for case-insensitive comparison)
+      if (selectedExtension && file.extension.toLowerCase() !== selectedExtension.toLowerCase()) return false;
 
       // Search filter
       if (searchQuery) {
@@ -805,7 +809,13 @@ export function MediaGallery({
                             {file.type === 'video' && onClipVideo && (
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onClipVideo(file); }} className="text-purple-600 focus:text-purple-700 focus:bg-purple-50">
                                 <Scissors className="h-4 w-4 mr-2" />
-                                Clip Video
+                                Clip
+                              </DropdownMenuItem>
+                            )}
+                            {file.type === 'video' && onSplitVideo && (
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSplitVideo(file); }} className="text-indigo-600 focus:text-indigo-700 focus:bg-indigo-50">
+                                <Minimize2 className="h-4 w-4 mr-2" />
+                                Split
                               </DropdownMenuItem>
                             )}
                             {onExport && (
@@ -829,7 +839,7 @@ export function MediaGallery({
                                 className="text-blue-600 focus:text-blue-700 focus:bg-blue-50"
                               >
                                 <Zap className="h-4 w-4 mr-2" />
-                                Convert FPS
+                                Convert
                               </DropdownMenuItem>
                             )}
                             {onDelete && (

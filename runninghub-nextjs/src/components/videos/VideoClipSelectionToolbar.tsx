@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Video, RefreshCw, Pencil, Scissors, Loader2, Eye, Zap } from 'lucide-react';
+import { Video, RefreshCw, Pencil, Scissors, Loader2, Eye, Zap, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useVideoSelectionStore, useVideoStore } from '@/store';
 // For backward compatibility, we still import stores but use props when provided
@@ -19,9 +19,12 @@ interface VideoClipSelectionToolbarProps {
   onPreview?: (selectedPaths: string[]) => void;
   onDeselectAll?: () => void;
   onConvertFps?: (selectedPaths: string[]) => void;
+  onDelete?: (selectedPaths: string[]) => void;
   disabled?: boolean;
   className?: string;
   label?: string;
+  clipButtonText?: string;
+  showCancelButton?: boolean;
 }
 
 export function VideoClipSelectionToolbar({
@@ -32,9 +35,12 @@ export function VideoClipSelectionToolbar({
   onPreview,
   onDeselectAll,
   onConvertFps,
+  onDelete,
   disabled = false,
   className = '',
   label = 'Select videos to extract images',
+  clipButtonText = 'Crop',
+  showCancelButton = true,
 }: VideoClipSelectionToolbarProps) {
   // For backward compatibility with standalone clip page
   const store = useVideoSelectionStore();
@@ -116,6 +122,20 @@ export function VideoClipSelectionToolbar({
     }
   }, [onConvertFps, selectedPaths]);
 
+  // Handle delete
+  const handleDelete = useCallback(async () => {
+    if (!onDelete) return;
+
+    setIsProcessing(true);
+    try {
+      await onDelete(selectedPaths);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete videos');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [onDelete, selectedPaths]);
+
   // Handle preview
   const handlePreview = useCallback(() => {
     if (!onPreview) return;
@@ -158,6 +178,7 @@ export function VideoClipSelectionToolbar({
         selectedCount={selectedCount}
         className={className}
         onDeselectAll={handleDeselectAllCallback}
+        showCancelButton={showCancelButton}
       >
         {(mode) => {
           if (mode === 'expanded') {
@@ -213,6 +234,20 @@ export function VideoClipSelectionToolbar({
                   </Button>
                 )}
 
+                {onDelete && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDelete}
+                    disabled={toolbarDisabled || selectedCount === 0}
+                    className="h-9 px-3 border-red-100 bg-red-50/50 hover:bg-red-100 text-red-700"
+                    title="Delete videos"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                )}
+
                 {onClip && (
                   <Button
                     variant="default"
@@ -222,7 +257,7 @@ export function VideoClipSelectionToolbar({
                     className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
                   >
                     {isProcessing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scissors className="h-4 w-4 mr-2" />}
-                    {isProcessing ? 'Processing...' : 'Crop'}
+                    {isProcessing ? 'Processing...' : clipButtonText}
                   </Button>
                 )}
 
@@ -285,6 +320,20 @@ export function VideoClipSelectionToolbar({
                   </Button>
                 )}
 
+                {onDelete && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleDelete}
+                    disabled={toolbarDisabled || selectedCount === 0}
+                    className="h-8 bg-red-600 hover:bg-red-500 text-white rounded-full px-3 shadow-lg shadow-red-900/20"
+                    title="Delete videos"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1 fill-current" />
+                    <span className="text-xs font-bold">Delete</span>
+                  </Button>
+                )}
+
                 {onClip && (
                   <Button
                     variant="default"
@@ -294,7 +343,7 @@ export function VideoClipSelectionToolbar({
                     className="h-8 bg-green-600 hover:bg-green-500 text-white rounded-full px-3 shadow-lg shadow-green-900/20"
                   >
                     {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-1 fill-current" />}
-                    <span className="text-xs font-bold">{isProcessing ? '...' : 'Crop'}</span>
+                    <span className="text-xs font-bold">{isProcessing ? '...' : clipButtonText}</span>
                   </Button>
                 )}
               </>
