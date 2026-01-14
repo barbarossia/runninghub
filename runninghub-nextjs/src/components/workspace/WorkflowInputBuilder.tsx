@@ -342,8 +342,8 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                             const img = e.currentTarget;
                             if (img.naturalWidth && img.naturalHeight) {
                               // Check if we need to update dimensions (if missing or different)
-                              if (!assignment.width || !assignment.height || 
-                                  assignment.width !== img.naturalWidth || 
+                              if (!assignment.width || !assignment.height ||
+                                  assignment.width !== img.naturalWidth ||
                                   assignment.height !== img.naturalHeight) {
                                 console.log(`[Auto-Detect] Updating dimensions for ${assignment.fileName}: ${img.naturalWidth}x${img.naturalHeight}`);
                                 updateMediaFile(assignment.filePath, {
@@ -354,9 +354,27 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                             }
                           }}
                         />
-                      ) : (
+                      ) : assignment.fileType === 'video' && assignment.thumbnail ? (
+                        <>
+                          <img
+                            src={assignment.thumbnail}
+                            alt={assignment.fileName}
+                            className="h-full w-full object-contain"
+                          />
+                          {/* Play button overlay for videos */}
+                          <div className="absolute top-2 left-2 z-10">
+                            <div className="bg-black/50 rounded-full p-1.5 backdrop-blur-sm">
+                              <Video className="h-5 w-5 text-white" fill="white" />
+                            </div>
+                          </div>
+                        </>
+                      ) : assignment.fileType === 'video' ? (
                         <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400">
                           <Video className="h-12 w-12" />
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400">
+                          <FileText className="h-12 w-12" />
                         </div>
                       )}
                     </div>

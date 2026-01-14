@@ -47,11 +47,11 @@ export function BaseSelectionToolbar({
             )}
           >
             <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex items-center gap-3 min-w-0">
                 <Badge variant="default" className={cn("text-sm px-3 py-1 shrink-0", badgeColor)}>
                   {badgeText || `${selectedCount} selected`}
                 </Badge>
-                <div className="text-sm text-muted-foreground truncate hidden sm:block">
+                <div className="text-sm text-muted-foreground truncate hidden sm:block min-w-0">
                   {children('expanded')}
                 </div>
               </div>

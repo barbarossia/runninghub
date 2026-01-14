@@ -49,7 +49,8 @@ class RunningHubClient:
 
         data = response.json()
         if data.get("code") != 0:
-            raise Exception(f"API returned error: {data.get('message', 'Unknown error')}")
+            # Include more details from the API response
+            raise Exception(f"API returned error: {data.get('message', 'Unknown error')}. Response: {data}")
 
         # RunningHub API returns nodeInfoList inside data object
         return data.get("data", {}).get("nodeInfoList", [])

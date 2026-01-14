@@ -317,6 +317,7 @@ export interface FileInputAssignment {
   validationError?: string;
   width?: number; // Image width in pixels
   height?: number; // Image height in pixels
+  thumbnail?: string; // Thumbnail URL for preview
 }
 
 /**

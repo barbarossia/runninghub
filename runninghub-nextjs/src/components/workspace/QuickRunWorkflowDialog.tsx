@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Play, AlertCircle } from 'lucide-react';
+import { Play, AlertCircle, Video, ImageIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -116,7 +116,7 @@ export function QuickRunWorkflowDialog({
             {selectedFiles.slice(0, 5).map((file) => (
               <div
                 key={file.id}
-                className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-gray-100"
+                className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-gray-100 relative"
               >
                 {file.thumbnail || file.blobUrl ? (
                   <img
@@ -124,6 +124,15 @@ export function QuickRunWorkflowDialog({
                     alt={file.name}
                     className="w-full h-full object-contain"
                   />
+                ) : file.type === 'video' ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
+                    <Video className="h-6 w-6" />
+                    <span className="text-[10px] mt-1 uppercase">{file.extension?.replace('.', '')}</span>
+                  </div>
+                ) : file.type === 'image' ? (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-100">
+                    <ImageIcon className="h-8 w-8" />
+                  </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
                     {file.extension}
