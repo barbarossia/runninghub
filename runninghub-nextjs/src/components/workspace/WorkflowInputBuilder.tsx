@@ -358,7 +358,8 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                       ) : assignment.fileType === 'video' ? (
                         <>
                           <VideoPreview
-                            src={assignment.thumbnail || `/api/videos/serve?path=${encodeURIComponent(assignment.filePath)}`}
+                            src={`/api/videos/serve?path=${encodeURIComponent(assignment.filePath)}`}
+                            poster={assignment.thumbnail}
                             className="h-full w-full object-contain"
                           />
                           {/* Play button overlay for videos */}
