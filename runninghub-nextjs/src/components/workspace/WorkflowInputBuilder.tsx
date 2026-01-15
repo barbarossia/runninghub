@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { validateFileForParameter, filterValidFilesForParameter, formatFileSize } from '@/utils/workspace-validation';
 import type { Workflow, WorkflowInputParameter, MediaFile, FileInputAssignment } from '@/types/workspace';
 import { toast } from 'sonner';
+import { VideoPreview } from './VideoPreview';
 
 export interface WorkflowInputBuilderProps {
   workflow: Workflow;
@@ -354,24 +355,19 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                             }
                           }}
                         />
-                      ) : assignment.fileType === 'video' && assignment.thumbnail ? (
+                      ) : assignment.fileType === 'video' ? (
                         <>
-                          <img
-                            src={assignment.thumbnail}
-                            alt={assignment.fileName}
+                          <VideoPreview
+                            src={assignment.thumbnail || `/api/videos/serve?path=${encodeURIComponent(assignment.filePath)}`}
                             className="h-full w-full object-contain"
                           />
                           {/* Play button overlay for videos */}
-                          <div className="absolute top-2 left-2 z-10">
+                          <div className="absolute top-2 left-2 z-10 pointer-events-none">
                             <div className="bg-black/50 rounded-full p-1.5 backdrop-blur-sm">
                               <Video className="h-5 w-5 text-white" fill="white" />
                             </div>
                           </div>
                         </>
-                      ) : assignment.fileType === 'video' ? (
-                        <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400">
-                          <Video className="h-12 w-12" />
-                        </div>
                       ) : (
                         <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400">
                           <FileText className="h-12 w-12" />
