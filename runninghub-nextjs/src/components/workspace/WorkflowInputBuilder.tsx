@@ -198,7 +198,9 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
             width: uploadedFile.width,
             height: uploadedFile.height,
             selected: false,
-            thumbnail: `/api/images/serve?path=${encodeURIComponent(uploadedFile.workspacePath)}`,
+            thumbnail: file.type.startsWith('image') 
+              ? `/api/images/serve?path=${encodeURIComponent(uploadedFile.workspacePath)}`
+              : undefined,
           };
 
           console.log(`[Direct Upload] ${uploadedFile.name} uploaded to ${uploadPath}`);
