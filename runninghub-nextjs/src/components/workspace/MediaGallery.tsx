@@ -233,6 +233,13 @@ export function MediaGallery({
     return Array.from(extensions).sort();
   }, [files]);
 
+  // Auto-clear selected extension if it no longer exists in available extensions
+  useEffect(() => {
+    if (selectedExtension && !uniqueExtensions.includes(selectedExtension.toLowerCase())) {
+      setSelectedExtension(null);
+    }
+  }, [selectedExtension, uniqueExtensions, setSelectedExtension]);
+
   // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
     const filtered = files.filter((file) => {
