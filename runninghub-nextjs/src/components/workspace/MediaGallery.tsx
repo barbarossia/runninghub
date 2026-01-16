@@ -29,6 +29,7 @@ import {
   Scissors,
   Download,
   Zap,
+  Expand,
 } from 'lucide-react';
 import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -117,6 +118,7 @@ export interface MediaGalleryProps {
   onExport?: (files: MediaFile[]) => Promise<void>;
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
   onExportToDataset?: (file: MediaFile) => void;
+  onResize?: (file: MediaFile) => void;
   className?: string;
 }
 
@@ -132,6 +134,7 @@ export function MediaGallery({
   onExport,
   onConvertFps,
   onExportToDataset,
+  onResize,
   className = '',
 }: MediaGalleryProps) {
   const {
@@ -356,10 +359,10 @@ export function MediaGallery({
   // Handle file click
   const handleFileClick = useCallback(
     (file: MediaFile, event: React.MouseEvent) => {
-      toggleMediaFileSelection(file.id);
+      toggleSelection(file.id);
       onFileClick?.(file);
     },
-    [toggleMediaFileSelection, onFileClick]
+    [toggleSelection, onFileClick]
   );
 
   // Handle file double click
@@ -605,7 +608,7 @@ export function MediaGallery({
                     <div className="flex items-center gap-3">
                       {/* Checkbox */}
                       <div onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={isSelected} onCheckedChange={() => toggleMediaFileSelection(file.id)} />
+                        <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection(file.id)} />
                       </div>
 
                       {/* Thumbnail/Icon */}
@@ -837,7 +840,7 @@ export function MediaGallery({
                         )}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Checkbox checked={isSelected} onCheckedChange={() => toggleMediaFileSelection(file.id)} />
+                        <Checkbox checked={isSelected} onCheckedChange={() => toggleSelection(file.id)} />
                       </div>
 
                       {/* Duck-encoded indicator with animation */}
@@ -962,6 +965,19 @@ export function MediaGallery({
                               >
                                 <Zap className="h-4 w-4 mr-2" />
                                 Convert FPS
+                              </DropdownMenuItem>
+                            )}
+                            {/* Resize - only in dataset mode */}
+                            {mode === 'dataset' && onResize && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onResize(file);
+                                }}
+                                className="text-indigo-600 focus:text-indigo-700 focus:bg-indigo-50"
+                              >
+                                <Maximize2 className="h-4 w-4 mr-2" />
+                                Resize
                               </DropdownMenuItem>
                             )}
                             {onDelete && (

@@ -22,6 +22,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { MediaGallery } from '@/components/workspace/MediaGallery';
 import { MediaSelectionToolbar } from '@/components/workspace/MediaSelectionToolbar';
 import { MediaSortControls } from '@/components/images';
@@ -39,6 +50,7 @@ import { VideoGallery } from '@/components/videos/VideoGallery';
 import { VideoPlayerModal } from '@/components/videos/VideoPlayerModal';
 import { ImagePreviewModal } from '@/components/workspace/ImagePreviewModal';
 import { ExportConfiguration } from '@/components/workspace/ExportConfiguration';
+import { ResizeConfiguration } from '@/components/workspace/ResizeConfiguration';
 import { VideoConvertConfiguration } from '@/components/workspace/VideoConvertConfiguration';
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
 import { ProgressModal } from '@/components/progress/ProgressModal';
@@ -58,6 +70,7 @@ import {
   Zap,
   Database,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -66,6 +79,7 @@ import { cn } from '@/lib/utils';
 import { exportImagesToFolder, getCompatibilityMessage, type ExportableFile } from '@/lib/export-images';
 import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
 import { useExportConfigStore } from '@/store/export-config-store';
+import { useResizeConfigStore } from '@/store/resize-config-store';
 import { useVideoConvertStore } from '@/store/video-convert-store';
 import { useCropStore } from '@/store/crop-store';
 import { useProgressStore } from '@/store';
@@ -138,6 +152,10 @@ export default function WorkspacePage() {
   const [isLoadingDatasets, setIsLoadingDatasets] = useState(false);
   const [showSelectDatasetDialog, setShowSelectDatasetDialog] = useState(false);
   const [fileToExportToDataset, setFileToExportToDataset] = useState<MediaFile | null>(null);
+
+  // Resize dialog state
+  const [showResizeDialog, setShowResizeDialog] = useState(false);
+  const [resizeFile, setResizeFile] = useState<MediaFile | null>(null);
 
   // Export config from store
   const { deleteAfterExport } = useExportConfigStore();
@@ -1323,6 +1341,57 @@ export default function WorkspacePage() {
     }
   }, [selectedDataset, removeDatasetFile]);
 
+  // Handle dataset file resize (from toolbar - uses config from store)
+  const handleDatasetResize = useCallback(async (files: MediaFile[], longestEdge?: number, deleteOriginal?: boolean) => {
+    if (!selectedDataset) return;
+
+    // Use config from store if not provided
+    const resizeConfig = useResizeConfigStore.getState();
+    const edge = longestEdge ?? parseInt(resizeConfig.longestEdge);
+    const deleteOrig = deleteOriginal ?? resizeConfig.deleteOriginal;
+    const suffix = resizeConfig.outputSuffix;
+
+    try {
+      const response = await fetch('/api/media/resize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: files.map(f => ({
+            path: f.path,
+            type: f.type,
+            width: f.width || 0,
+            height: f.height || 0,
+          })),
+          longestEdge: edge,
+          outputSuffix: suffix,
+          deleteOriginal: deleteOrig,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const msg = deleteOrig
+          ? `Resized and deleted ${data.processed} original file${data.processed !== 1 ? 's' : ''}`
+          : `Resized ${data.processed} file${data.processed !== 1 ? 's' : ''}`;
+        toast.success(msg);
+        // Refresh dataset to show resized files
+        await selectDataset(selectedDataset);
+      } else {
+        toast.error(data.error || 'Failed to resize files');
+      }
+    } catch (err) {
+      console.error('Failed to resize files:', err);
+      toast.error('Failed to resize files');
+    }
+  }, [selectedDataset, selectDataset]);
+
+  // Handle single file resize from context menu
+  const handleResizeFromContextMenu = useCallback((file: MediaFile) => {
+    setResizeFile(file);
+    setShowResizeDialog(true);
+  }, []);
+
   const handleSortChange = useCallback((field: typeof mediaSortField, direction: typeof mediaSortDirection) => {
     setMediaSorting(field, direction);
   }, [setMediaSorting]);
@@ -1736,13 +1805,19 @@ export default function WorkspacePage() {
                       </Button>
                     </div>
 
+                    {/* Resize Configuration */}
+                    <ResizeConfiguration />
+
                     {/* Dataset Selection Toolbar */}
                     {datasetMediaFiles.filter(f => f.selected).length > 0 && (
                       <MediaSelectionToolbar
                         selectedFiles={datasetMediaFiles.filter(f => f.selected)}
                         onRename={handleDatasetRename}
                         onDelete={handleDatasetDelete}
+                        onResize={handleDatasetResize}
                         onPreview={handlePreviewFile}
+                        onDeselectAll={() => deselectAllDatasetFiles()}
+                        skipResizeDialog={true}
                       />
                     )}
 
@@ -1752,6 +1827,7 @@ export default function WorkspacePage() {
                       onFileDoubleClick={handlePreviewFile}
                       onRename={handleDatasetRename}
                       onDelete={handleDatasetDelete}
+                      onResize={handleResizeFromContextMenu}
                       onPreview={handlePreviewFile}
                     />
                   </>
@@ -1891,7 +1967,124 @@ export default function WorkspacePage() {
           parentPath={selectedFolder?.folder_path || ''}
           onSuccess={handleDatasetSelectedForExport}
         />
+
+        {/* Single File Resize Dialog */}
+        <SingleFileResizeDialog
+          open={showResizeDialog}
+          onOpenChange={setShowResizeDialog}
+          file={resizeFile}
+          onResize={async (longestEdge, deleteOriginal) => {
+            if (resizeFile) {
+              await handleDatasetResize([resizeFile], longestEdge, deleteOriginal);
+            }
+          }}
+        />
       </div>
     </div>
+  );
+}
+
+// Single File Resize Dialog component
+function SingleFileResizeDialog({
+  open,
+  onOpenChange,
+  file,
+  onResize,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  file: MediaFile | null;
+  onResize: (longestEdge: number, deleteOriginal: boolean) => Promise<void>;
+}) {
+  const [longestEdge, setLongestEdge] = useState('768');
+  const [deleteOriginal, setDeleteOriginal] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResize = async () => {
+    const edge = parseInt(longestEdge);
+    if (isNaN(edge) || edge <= 0) {
+      toast.error('Please enter a valid longest edge value');
+      return;
+    }
+
+    setIsResizing(true);
+    try {
+      await onResize(edge, deleteOriginal);
+      onOpenChange(false);
+      setLongestEdge('768');
+      setDeleteOriginal(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to resize file');
+    } finally {
+      setIsResizing(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Resize {file?.name || 'File'}</DialogTitle>
+          <DialogDescription>
+            Scale by specifying the longest edge. The aspect ratio will be preserved.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 space-y-4">
+          <div>
+            <Label htmlFor="longest-edge-single">Longest Edge (pixels)</Label>
+            <Input
+              id="longest-edge-single"
+              type="number"
+              min="1"
+              placeholder="e.g., 768"
+              value={longestEdge}
+              onChange={(e) => setLongestEdge(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleResize()}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Current: {file?.width}×{file?.height}
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="delete-original-single"
+              checked={deleteOriginal}
+              onCheckedChange={(checked) => setDeleteOriginal(checked === true)}
+            />
+            <Label
+              htmlFor="delete-original-single"
+              className="text-sm font-normal cursor-pointer"
+            >
+              Delete original file after resize
+            </Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isResizing}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleResize}
+            disabled={isResizing || !longestEdge.trim()}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            {isResizing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Resizing...
+              </>
+            ) : (
+              'Resize'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

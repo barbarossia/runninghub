@@ -13,6 +13,7 @@ import {
   Scissors,
   Download,
   Zap,
+  Maximize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -53,10 +55,12 @@ interface MediaSelectionToolbarProps {
   onPreview?: (file: MediaFile) => void;
   onExport?: (files: MediaFile[]) => Promise<void>;
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
+  onResize?: (files: MediaFile[], longestEdge?: number, deleteOriginal?: boolean) => Promise<void>;
   onDeselectAll?: () => void;
   disabled?: boolean;
   className?: string;
   showCancelButton?: boolean;
+  skipResizeDialog?: boolean; // If true, resize directly without showing dialog
 }
 
 export function MediaSelectionToolbar({
@@ -69,10 +73,12 @@ export function MediaSelectionToolbar({
   onPreview,
   onExport,
   onConvertFps,
+  onResize,
   onDeselectAll,
   disabled = false,
   className = '',
   showCancelButton = true,
+  skipResizeDialog = false,
 }: MediaSelectionToolbarProps) {
   const selectedCount = selectedFiles.length;
   const isSingleSelection = selectedCount === 1;
@@ -91,12 +97,16 @@ export function MediaSelectionToolbar({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDecodeDialog, setShowDecodeDialog] = useState(false);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
+  const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [decodePassword, setDecodePassword] = useState('');
+  const [longestEdge, setLongestEdge] = useState('768');
+  const [deleteOriginalOnResize, setDeleteOriginalOnResize] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDecoding, setIsDecoding] = useState(false);
   const [isClipping, setIsClipping] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [decodeProgress, setDecodeProgress] = useState({ current: 0, total: 0 });
 
   // Get workflows from store
@@ -226,7 +236,45 @@ export function MediaSelectionToolbar({
     onConvertFps(selectedFiles);
   }, [onConvertFps, selectedFiles]);
 
-  const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping;
+  // Open resize dialog (or call directly if skipping dialog)
+  const openResizeDialog = useCallback(() => {
+    if (selectedFiles.length === 0) {
+      toast.error('No files selected');
+      return;
+    }
+
+    if (skipResizeDialog) {
+      // Call resize directly using page config (undefined means use config from store)
+      onResize?.(selectedFiles, undefined, undefined);
+      toast.success(`Resizing ${selectedFiles.length} file(s)...`);
+    } else {
+      setShowResizeDialog(true);
+    }
+  }, [selectedFiles, skipResizeDialog, onResize]);
+
+  // Handle resize
+  const handleResize = useCallback(async () => {
+    if (!onResize) return;
+
+    const edge = parseInt(longestEdge);
+    if (isNaN(edge) || edge <= 0) {
+      toast.error('Please enter a valid longest edge value');
+      return;
+    }
+
+    setIsResizing(true);
+    try {
+      await onResize(selectedFiles, edge, deleteOriginalOnResize);
+      setShowResizeDialog(false);
+      toast.success(`Resized ${selectedFiles.length} file(s)`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to resize files');
+    } finally {
+      setIsResizing(false);
+    }
+  }, [onResize, selectedFiles, longestEdge, deleteOriginalOnResize]);
+
+  const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping || isResizing;
 
   // Debug: Log decode button visibility
   console.log('[MediaSelectionToolbar] Decode button should show:', hasDuckEncodedImages && onDecode, {
@@ -329,6 +377,21 @@ export function MediaSelectionToolbar({
                   >
                     <Zap className="h-4 w-4 mr-2" />
                     FPS Convert
+                  </Button>
+                )}
+
+                {/* Resize - for images and videos */}
+                {onResize && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openResizeDialog}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-100 text-indigo-700"
+                    title="Resize by longest edge"
+                  >
+                    <Maximize2 className="h-4 w-4 mr-2" />
+                    Resize
                   </Button>
                 )}
 
@@ -733,6 +796,81 @@ export function MediaSelectionToolbar({
                   </>
                 ) : (
                   duckEncodedCount === 1 ? 'Decode' : `Decode ${duckEncodedCount} Images`
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Resize Dialog */}
+      {onResize && (
+        <Dialog open={showResizeDialog} onOpenChange={setShowResizeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Resize {selectedCount === 1 ? 'File' : `${selectedCount} Files`}</DialogTitle>
+              <DialogDescription>
+                Scale images and videos by specifying the longest edge. The aspect ratio will be preserved.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div>
+                <Label htmlFor="longest-edge">Longest Edge (pixels)</Label>
+                <Input
+                  id="longest-edge"
+                  type="number"
+                  min="1"
+                  placeholder="e.g., 768"
+                  value={longestEdge}
+                  onChange={(e) => setLongestEdge(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleResize()}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Example: A 720×1280 video with longest edge 768 will be resized to 432×768
+                </p>
+              </div>
+
+              {/* Delete original option */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="delete-original-resize"
+                  checked={deleteOriginalOnResize}
+                  onCheckedChange={(checked) => setDeleteOriginalOnResize(checked === true)}
+                />
+                <Label
+                  htmlFor="delete-original-resize"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Delete original files after resize
+                </Label>
+              </div>
+
+              {/* Show selected files info */}
+              <div className="text-sm text-muted-foreground">
+                {selectedCount} file(s) will be processed
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowResizeDialog(false)}
+                disabled={isResizing}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleResize}
+                disabled={isResizing || !longestEdge.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                {isResizing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Resizing...
+                  </>
+                ) : (
+                  'Resize'
                 )}
               </Button>
             </DialogFooter>
