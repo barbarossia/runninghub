@@ -55,11 +55,12 @@ class RunningHubClient:
         # RunningHub API returns nodeInfoList inside data object
         return data.get("data", {}).get("nodeInfoList", [])
 
-    def upload_file(self, file_path: Union[str, Path]) -> str:
+    def upload_file(self, file_path: Union[str, Path], silent: bool = False) -> str:
         """Upload a file to RunningHub.
 
         Args:
             file_path: Path to the file to upload.
+            silent: If True, suppress upload progress output (default: False).
 
         Returns:
             The file ID returned by the API.
@@ -86,7 +87,8 @@ class RunningHubClient:
                 "fileType": "input"
             }
 
-            print(f"Uploading {file_path.name}...")
+            if not silent:
+                print(f"Uploading {file_path.name}...")
             response = self.session.post(url, files=files, data=data)
 
         response.raise_for_status()
@@ -207,7 +209,8 @@ class RunningHubClient:
         self,
         task_id: str,
         poll_interval: int = 5,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        silent: bool = False
     ) -> Dict[str, Any]:
         """Wait for a task to complete.
 
@@ -215,6 +218,7 @@ class RunningHubClient:
             task_id: The task ID.
             poll_interval: Seconds between status checks (default: 5).
             timeout: Maximum time to wait in seconds (None for no timeout).
+            silent: If True, suppress progress bar output (default: False).
 
         Returns:
             Final task status dictionary.
@@ -225,7 +229,14 @@ class RunningHubClient:
         """
         start_time = time.time()
 
-        with tqdm(desc="Waiting for completion", unit="s") as pbar:
+        # Use a dummy file object to suppress tqdm output when silent
+        class DummyFile:
+            def write(self, x): pass
+            def flush(self): pass
+
+        pbar_file = DummyFile() if silent else None
+        pbar = tqdm(desc="Waiting for completion", unit="s", file=pbar_file)
+        try:
             while True:
                 status = self.get_task_status(task_id)
                 status_code = status.get("code")
@@ -251,6 +262,8 @@ class RunningHubClient:
                 # Update progress bar and wait
                 pbar.update(poll_interval)
                 time.sleep(poll_interval)
+        finally:
+            pbar.close()
 
     def download_file(self, file_url: str, download_path: Path) -> Path:
         """Download a file from RunningHub to local path.

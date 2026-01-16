@@ -1386,6 +1386,47 @@ export default function WorkspacePage() {
     }
   }, [selectedDataset, selectDataset]);
 
+  // Handle dataset video caption (AI video description)
+  const handleDatasetCaption = useCallback(async (files: MediaFile[]) => {
+    if (!selectedDataset) return;
+
+    // Filter for video files only
+    const videoFiles = files.filter(f => f.type === 'video');
+    if (videoFiles.length === 0) {
+      toast.error('No video files selected');
+      return;
+    }
+
+    const videoFile = videoFiles[0]; // Caption one at a time for now
+
+    try {
+      toast.info(`Generating caption for ${videoFile.name}...`);
+
+      const response = await fetch('/api/dataset/caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoPath: videoFile.path,
+          videoName: videoFile.name,
+          datasetPath: selectedDataset.path,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Caption saved: ${videoFile.name.replace(/\.[^/.]+$/, '')}.txt`);
+        // Refresh dataset to show the new caption file
+        await selectDataset(selectedDataset);
+      } else {
+        toast.error(data.message || 'Failed to generate caption');
+      }
+    } catch (err) {
+      console.error('Failed to generate caption:', err);
+      toast.error('Failed to generate caption');
+    }
+  }, [selectedDataset, selectDataset]);
+
   // Handle single file resize from context menu
   const handleResizeFromContextMenu = useCallback((file: MediaFile) => {
     setResizeFile(file);
@@ -1548,6 +1589,10 @@ export default function WorkspacePage() {
                   onRunWorkflow={handleQuickRunWorkflow}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
+                  onExportToDataset={() => {
+                    setFileToExportToDataset(null); // null means use selectedFiles
+                    setShowSelectDatasetDialog(true);
+                  }}
                   onDeselectAll={deselectAllMediaFiles}
                 />
                 )}
@@ -1579,6 +1624,7 @@ export default function WorkspacePage() {
                   onDecode={handleDecodeFile}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
+                  onExportToDataset={handleExportFileToDataset}
                 />
               </TabsContent>
 
@@ -1816,9 +1862,11 @@ export default function WorkspacePage() {
                         onRename={handleDatasetRename}
                         onDelete={handleDatasetDelete}
                         onResize={handleDatasetResize}
+                        onCaption={handleDatasetCaption}
                         onPreview={handlePreviewFile}
                         onDeselectAll={() => deselectAllDatasetFiles()}
                         skipResizeDialog={true}
+                        showCaptionButton={true}
                       />
                     )}
 
