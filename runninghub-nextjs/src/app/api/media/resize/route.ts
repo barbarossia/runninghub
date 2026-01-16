@@ -36,9 +36,13 @@ function calculateDimensions(originalWidth: number, originalHeight: number, long
   }
 
   const scale = longestEdge / maxDimension;
+  // Ensure dimensions are even numbers (required by many codecs like h264)
+  const width = Math.round(originalWidth * scale);
+  const height = Math.round(originalHeight * scale);
+  
   return {
-    width: Math.round(originalWidth * scale),
-    height: Math.round(originalHeight * scale),
+    width: width % 2 === 0 ? width : width + 1,
+    height: height % 2 === 0 ? height : height + 1,
   };
 }
 
