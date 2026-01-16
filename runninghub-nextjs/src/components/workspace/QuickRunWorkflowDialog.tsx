@@ -118,17 +118,12 @@ export function QuickRunWorkflowDialog({
                 key={file.id}
                 className="flex-shrink-0 w-16 h-16 rounded border overflow-hidden bg-gray-50 relative group"
               >
-                {file.type === 'video' && file.thumbnail ? (
-                  <img
-                    src={file.thumbnail}
-                    alt={file.name}
-                    className="w-full h-full object-contain"
+                {file.type === 'video' ? (
+                  <video
+                    src={file.thumbnail || file.blobUrl || `/api/videos/serve?path=${encodeURIComponent(file.path)}`}
+                    muted
+                    className="w-full h-full object-cover"
                   />
-                ) : file.type === 'video' ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
-                    <Video className="h-6 w-6" />
-                    <span className="text-[10px] mt-1 uppercase font-medium">{file.extension?.replace('.', '') || 'VID'}</span>
-                  </div>
                 ) : file.type === 'image' ? (
                   <img
                     src={file.thumbnail || `/api/images/serve?path=${encodeURIComponent(file.path)}`}
@@ -136,7 +131,7 @@ export function QuickRunWorkflowDialog({
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       // Fallback if serving fails
-                      e.currentTarget.src = ""; // Clear src
+                      e.currentTarget.src = "";
                       e.currentTarget.className = "hidden";
                     }}
                   />
@@ -145,7 +140,7 @@ export function QuickRunWorkflowDialog({
                     {file.extension || 'FILE'}
                   </div>
                 )}
-                
+
                 {/* Type icon overlay */}
                 <div className="absolute top-0.5 right-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
                   {file.type === 'video' ? (
