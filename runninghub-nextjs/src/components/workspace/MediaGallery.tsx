@@ -29,6 +29,7 @@ import {
   Download,
   Zap,
   Expand,
+  Database,
 } from 'lucide-react';
 import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -232,6 +233,13 @@ export function MediaGallery({
     });
     return Array.from(extensions).sort();
   }, [files]);
+
+  // Auto-clear selected extension if it no longer exists in available extensions
+  useEffect(() => {
+    if (selectedExtension && !uniqueExtensions.includes(selectedExtension.toLowerCase())) {
+      setSelectedExtension(null);
+    }
+  }, [selectedExtension, uniqueExtensions, setSelectedExtension]);
 
   // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
@@ -948,6 +956,19 @@ export function MediaGallery({
                               >
                                 <Download className="h-4 w-4 mr-2" />
                                 Export
+                              </DropdownMenuItem>
+                            )}
+                            {/* Export to Dataset - only in workspace mode, not dataset mode */}
+                            {mode === 'workspace' && onExportToDataset && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onExportToDataset(file);
+                                }}
+                                className="text-purple-600 focus:text-purple-700 focus:bg-purple-50"
+                              >
+                                <Database className="h-4 w-4 mr-2" />
+                                Database
                               </DropdownMenuItem>
                             )}
                             {file.type === 'video' && onConvertFps && (

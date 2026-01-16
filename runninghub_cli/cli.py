@@ -21,6 +21,117 @@ from .utils import (
 )
 
 
+# ============================================================================
+# Workflow Field Name Detection from JSON
+# ============================================================================
+
+def extract_field_name_from_param_id(param_id: str) -> tuple[str, str]:
+    """Extract node ID and field name from a workflow parameter ID.
+
+    Parameter IDs in workflow JSON follow the pattern: param_<nodeId>_<fieldName>
+    Examples:
+        - "param_77_video" → ("77", "video")
+        - "param_10_image" → ("10", "image")
+        - "param_5_audio" → ("5", "audio")
+
+    Args:
+        param_id: The parameter ID from workflow JSON.
+
+    Returns:
+        Tuple of (node_id, field_name).
+
+    Raises:
+        ValueError: If the param_id doesn't match the expected pattern.
+    """
+    import re
+    pattern = r'^param_(\d+)_(\w+)$'
+    match = re.match(pattern, param_id)
+    if match:
+        return match.group(1), match.group(2)
+    raise ValueError(f"Invalid parameter ID format: '{param_id}'. Expected 'param_<nodeId>_<fieldName>'")
+
+
+def build_field_name_mapping(workflow_path: str) -> dict[str, str]:
+    """Build a mapping of node ID to field name from workflow JSON.
+
+    Args:
+        workflow_path: Path to the workflow JSON file.
+
+    Returns:
+        Dictionary mapping node_id to field_name.
+        Example: {"77": "video", "10": "image"}
+    """
+    workflow_file = Path(workflow_path)
+    if not workflow_file.exists():
+        # Try in the workflows directory
+        workflows_dir = Path.home() / "Downloads" / "workspace" / "workflows"
+        workflow_file = workflows_dir / workflow_path
+        if not workflow_file.exists():
+            # Try with .json extension
+            workflow_file = workflows_dir / f"{workflow_path}.json"
+            if not workflow_file.exists():
+                raise FileNotFoundError(f"Workflow file not found: {workflow_path}")
+
+    with open(workflow_file, 'r') as f:
+        workflow = json.load(f)
+
+    mapping = {}
+    for param in workflow.get('inputs', []):
+        param_id = param.get('id', '')
+        if param_id.startswith('param_'):
+            node_id, field_name = extract_field_name_from_param_id(param_id)
+            mapping[node_id] = field_name
+
+    return mapping
+
+
+def parse_file_param(param: str, field_mapping: dict[str, str] | None = None) -> tuple[str, str, str]:
+    """Parse file parameter with support for extended format.
+
+    Supports three formats:
+    1. With field mapping from workflow JSON: <node_id>:<file_path>
+       - Uses field name from workflow JSON
+       - Example: "77:/path/to/video.mp4" → ("77", "video", "/path/to/video.mp4")
+
+    2. Old format (fallback): <node_id>:<file_path>
+       - Falls back to "image" if no mapping provided
+       - Example: "10:/path/to/image.jpg" → ("10", "image", "/path/to/image.jpg")
+
+    3. Explicit format: <node_id>:<field_name>:<file_path>
+       - Explicitly specifies the field name (overrides mapping)
+       - Example: "77:video:/path/to/file.mp4" → ("77", "video", "/path/to/file.mp4")
+
+    Args:
+        param: The parameter string to parse.
+        field_mapping: Optional dict mapping node_id to field_name from workflow JSON.
+
+    Returns:
+        Tuple of (node_id, field_name, file_path).
+
+    Raises:
+        ValueError: If the format is invalid.
+    """
+    parts = param.split(':')
+    if len(parts) == 2:
+        # Format: node_id:file_path
+        node_id, file_path = parts
+        # Use mapping if available, otherwise default to "image"
+        field_name = field_mapping.get(node_id, 'image') if field_mapping else 'image'
+    elif len(parts) == 3:
+        # Format: node_id:field_name:file_path (explicit override)
+        node_id, field_name, file_path = parts
+    else:
+        raise ValueError(
+            f"Invalid format: '{param}'. "
+            "Expected '<node_id>:<file_path>' or '<node_id>:<field_name>:<file_path>'"
+        )
+    return node_id, field_name, file_path
+
+
+# ============================================================================
+# CLI Commands
+# ============================================================================
+
 @click.group()
 @click.option("--env-file", default=None, help="Path to .env file (defaults to .env.local or .env)")
 @click.pass_context
@@ -348,20 +459,54 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
 
 
 @cli.command("process-multiple")
-@click.option("--image", "images", multiple=True, required=True, help="Image input in format <node_id>:<file_path>")
-@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
+@click.option("--image", "images", multiple=True, required=True,
+              help="Media input in format <node_id>:<file_path> or <node_id>:<field_name>:<file_path>")
+@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:field_name:value)")
+@click.option("--workflow", "workflow_json", help="Path to workflow JSON file (auto-detects field names from param IDs)")
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
     "--no-download", is_flag=True, help="Skip automatic download of output files"
 )
 @click.option(
-    "--workflow-id", help="Override workflow ID from configuration"
+    "--workflow-id", help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)"
 )
 @click.pass_context
-def process_multiple(ctx, images, params, timeout, output_json, no_download, workflow_id):
+def process_multiple(ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id):
     """Process multiple files in one workflow."""
     cfg = ctx.obj["config"]
+    field_mapping = None
+
+    # Load workflow JSON to build field name mapping
+    if workflow_json:
+        try:
+            if not output_json:
+                print_info(f"Loading workflow JSON: {workflow_json}")
+            field_mapping = build_field_name_mapping(workflow_json)
+            if not output_json:
+                print_success(f"Loaded field mapping: {field_mapping}")
+
+            # Extract workflow ID from JSON if not explicitly provided
+            workflow_file = Path(workflow_json)
+            if not workflow_file.exists():
+                workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / workflow_json
+                if not workflow_file.exists():
+                    workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / f"{workflow_json}.json"
+
+            with open(workflow_file, 'r') as f:
+                workflow_data = json.load(f)
+
+            # Use sourceWorkflowId from JSON if available and workflow_id not provided
+            if not workflow_id and 'sourceWorkflowId' in workflow_data:
+                workflow_id = workflow_data['sourceWorkflowId']
+                print_info(f"Using workflow ID from JSON: {workflow_id}")
+        except FileNotFoundError as e:
+            print_error(f"{e}")
+            return
+        except Exception as e:
+            print_error(f"Failed to load workflow JSON: {e}")
+            return
+
     # Use provided workflow_id or fall back to config
     active_workflow_id = workflow_id if workflow_id else cfg.workflow_id
 
@@ -369,26 +514,27 @@ def process_multiple(ctx, images, params, timeout, output_json, no_download, wor
     node_configs = []
 
     try:
-        # Step 1: Upload all image files and create node configs
+        # Step 1: Upload all media files and create node configs
         for image_param in images:
             try:
-                node_id, file_path = image_param.split(':', 1)
+                node_id, field_name, file_path = parse_file_param(image_param, field_mapping)
                 if not Path(file_path).exists():
-                    print_error(f"Image file not found: {file_path}")
+                    print_error(f"File not found: {file_path}")
                     return
 
-                print_info(f"Uploading image: {file_path}")
+                print_info(f"Uploading {field_name}: {file_path}")
                 file_id = client.upload_file(file_path)
                 print_success(f"File uploaded successfully! File ID: {file_id}")
-                
+
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "image",
+                    "fieldName": field_name,
                     "fieldValue": file_id,
-                    "description": "image",
+                    "description": field_name,
                 })
-            except ValueError:
-                print_error(f"Invalid image format: {image_param}. Expected <node_id>:<file_path>")
+                print_info(f"  Configured node {node_id} with fieldName '{field_name}'")
+            except ValueError as e:
+                print_error(f"{e}")
                 return
             except Exception as e:
                 print_error(f"Failed to upload {image_param}: {e}")
@@ -399,7 +545,7 @@ def process_multiple(ctx, images, params, timeout, output_json, no_download, wor
             try:
                 parts = param.split(':', 2)
                 if len(parts) != 3:
-                    print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                    print_error(f"Invalid parameter format: {param}. Expected format: nodeId:field_name:value")
                     continue
 
                 node_id, field_name, value = parts
@@ -435,20 +581,70 @@ def process_multiple(ctx, images, params, timeout, output_json, no_download, wor
 
 
 @cli.command("run-workflow")
-@click.option("--image", "images", multiple=True, required=True, help="Image input in format <node_id>:<file_path>")
-@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
+@click.option("--image", "images", multiple=True, required=True,
+              help="Media input in format <node_id>:<file_path> or <node_id>:<field_name>:<file_path>")
+@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:field_name:value)")
+@click.option("--workflow", "workflow_json", help="Path to workflow JSON file (auto-detects field names from param IDs)")
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
     "--no-download", is_flag=True, help="Skip automatic download of output files"
 )
 @click.option(
-    "--workflow-id", help="Override workflow ID from configuration"
+    "--workflow-id", help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)"
 )
 @click.pass_context
-def run_workflow(ctx, images, params, timeout, output_json, no_download, workflow_id):
-    """Run a workflow using /task/openapi/create endpoint."""
+def run_workflow(ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id):
+    """Run a workflow using /task/openapi/create endpoint.
+
+    Automatically detects field names from workflow JSON parameter IDs:
+        - param_77_video → nodeId "77" uses fieldName "video"
+        - param_10_image → nodeId "10" uses fieldName "image"
+
+    Examples:
+        # Auto-detect field names from workflow JSON
+        runninghub run-workflow --workflow workflow_xxx.json --image "77:/path/to/video.mp4"
+
+        # Explicit field name override
+        runninghub run-workflow --image "77:video:/path/to/video.mp4"
+
+        # Multiple files with auto-detection
+        runninghub run-workflow --workflow workflow_xxx.json --image "10:/img.jpg" --image "77:/vid.mp4"
+    """
     cfg = ctx.obj["config"]
+    field_mapping = None
+
+    # Load workflow JSON to build field name mapping
+    if workflow_json:
+        try:
+            if not output_json:
+                print_info(f"Loading workflow JSON: {workflow_json}")
+            field_mapping = build_field_name_mapping(workflow_json)
+            if not output_json:
+                print_success(f"Loaded field mapping: {field_mapping}")
+
+            # Extract workflow ID from JSON if not explicitly provided
+            workflow_file = Path(workflow_json)
+            if not workflow_file.exists():
+                workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / workflow_json
+                if not workflow_file.exists():
+                    workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / f"{workflow_json}.json"
+
+            with open(workflow_file, 'r') as f:
+                workflow_data = json.load(f)
+
+            # Use sourceWorkflowId from JSON if available and workflow_id not provided
+            if not workflow_id and 'sourceWorkflowId' in workflow_data:
+                workflow_id = workflow_data['sourceWorkflowId']
+                if not output_json:
+                    print_info(f"Using workflow ID from JSON: {workflow_id}")
+        except FileNotFoundError as e:
+            print_error(f"{e}")
+            return
+        except Exception as e:
+            print_error(f"Failed to load workflow JSON: {e}")
+            return
+
     # Use provided workflow_id or fall back to config
     active_workflow_id = workflow_id if workflow_id else cfg.workflow_id
 
@@ -456,25 +652,29 @@ def run_workflow(ctx, images, params, timeout, output_json, no_download, workflo
     node_configs = []
 
     try:
-        # Step 1: Upload all image files and create node configs
+        # Step 1: Upload all media files and create node configs
         for image_param in images:
             try:
-                node_id, file_path = image_param.split(':', 1)
+                node_id, field_name, file_path = parse_file_param(image_param, field_mapping)
                 if not Path(file_path).exists():
-                    print_error(f"Image file not found: {file_path}")
+                    print_error(f"File not found: {file_path}")
                     return
 
-                print_info(f"Uploading image: {file_path}")
-                file_id = client.upload_file(file_path)
-                print_success(f"File uploaded successfully! File ID: {file_id}")
+                if not output_json:
+                    print_info(f"Uploading {field_name}: {file_path}")
+                file_id = client.upload_file(file_path, silent=output_json)
+                if not output_json:
+                    print_success(f"File uploaded successfully! File ID: {file_id}")
 
                 node_configs.append({
                     "nodeId": node_id,
-                    "fieldName": "image",
+                    "fieldName": field_name,
                     "fieldValue": file_id,
                 })
-            except ValueError:
-                print_error(f"Invalid image format: {image_param}. Expected <node_id>:<file_path>")
+                if not output_json:
+                    print_info(f"  Configured node {node_id} with fieldName '{field_name}'")
+            except ValueError as e:
+                print_error(f"{e}")
                 return
             except Exception as e:
                 print_error(f"Failed to upload {image_param}: {e}")
@@ -494,19 +694,24 @@ def run_workflow(ctx, images, params, timeout, output_json, no_download, workflo
                     "fieldName": field_name,
                     "fieldValue": value,
                 })
-                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
+                if not output_json:
+                    print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
         # Step 3: Submit task using workflow endpoint
-        print_info(f"Submitting task to workflow {active_workflow_id} with multiple inputs...")
+        if not output_json:
+            print_info(f"Submitting task to workflow {active_workflow_id} with multiple inputs...")
         task_id = client.submit_workflow_task(active_workflow_id, node_configs)
-        print_success(f"Task submitted successfully! Task ID: {task_id}")
+        if not output_json:
+            print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 4: Wait for completion
-        print_info("Waiting for task completion...")
-        final_status = client.wait_for_completion(task_id, timeout=timeout)
-        print_success("Processing completed!")
+        if not output_json:
+            print_info("Waiting for task completion...")
+        final_status = client.wait_for_completion(task_id, timeout=timeout, silent=output_json)
+        if not output_json:
+            print_success("Processing completed!")
 
         if output_json:
             print(format_json(final_status))
