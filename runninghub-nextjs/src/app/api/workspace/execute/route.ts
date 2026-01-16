@@ -593,7 +593,8 @@ async function processWorkflowInBackground(
       }
     }
 
-    let args: string[] = ["-m", "runninghub_cli.cli"];
+    // Force unbuffered output (-u) so logs appear in real-time
+    let args: string[] = ["-u", "-m", "runninghub_cli.cli"];
 
     // Helper to extract node ID from parameter ID (e.g., "param_203" -> "203", "param_69_image" -> "69")
     const getNodeId = (paramId: string) => {
