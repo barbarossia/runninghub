@@ -700,21 +700,51 @@ async function processWorkflowInBackground(
 
         
 
-            // DECISION: Use execution type to determine CLI command
-
-            if (executionType === 'workflow') {
-
-                // Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
-
-                if (jobFileInputs.length > 0) {
-
-                    // Has file inputs -> use 'run-workflow' command
-
-                    args.push("run-workflow");
+                // DECISION: Use execution type to determine CLI command
 
         
 
-                    // Add file inputs
+                if (executionType === 'workflow') {
+
+        
+
+                    // Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
+
+        
+
+                    if (jobFileInputs.length > 0) {
+
+        
+
+                        // Has file inputs -> use 'run-workflow' command
+
+        
+
+                        args.push("run-workflow");
+
+        
+
+                        
+
+        
+
+                        // Pass local workflow ID to allow CLI to load field mappings from JSON
+
+        
+
+                        // The CLI will use this to map node IDs (e.g. 22) to field names (e.g. 'video')
+
+        
+
+                        args.push("--workflow", workflowId);
+
+        
+
+            
+
+        
+
+                        // Add file inputs
 
                     for (const input of jobFileInputs) {
 
@@ -800,6 +830,9 @@ async function processWorkflowInBackground(
         } else {
             // Multiple files (or 0 files with just params) -> use 'process-multiple' command
             args.push("process-multiple");
+            
+            // Pass local workflow ID to allow CLI to load field mappings from JSON
+            args.push("--workflow", workflowId);
 
             // Add file inputs
             for (const input of jobFileInputs) {
