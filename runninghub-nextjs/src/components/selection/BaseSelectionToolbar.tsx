@@ -42,56 +42,60 @@ export function BaseSelectionToolbar({
             exit={{ opacity: 0, y: -20, x: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
             className={cn(
-              "sticky top-4 z-30 bg-white/95 backdrop-blur-md border border-blue-100 rounded-xl shadow-lg p-3 mb-6 flex flex-col gap-3 w-full max-w-4xl mx-auto",
+              "sticky top-4 z-30 bg-white/95 backdrop-blur-md border border-blue-100 rounded-xl shadow-lg p-3 mb-6 w-full max-w-4xl mx-auto",
               className
             )}
           >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
                 <Badge variant="default" className={cn("text-sm px-3 py-1 shrink-0", badgeColor)}>
                   {badgeText || `${selectedCount} selected`}
                 </Badge>
-                <div className="text-sm text-muted-foreground truncate hidden sm:block">
+                <div className="text-sm text-muted-foreground truncate hidden md:block min-w-0">
                   {children('expanded')}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {children('expanded-actions')}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {children('expanded-actions')}
+                </div>
 
-                <div className="w-px h-6 bg-gray-200 mx-1" />
+                <div className="hidden sm:block w-px h-6 bg-gray-200 mx-1" />
 
-                {showCancelButton && (
+                <div className="flex items-center gap-2">
+                  {showCancelButton && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 px-4 border-gray-300 hover:bg-gray-100 text-gray-700"
+                      onClick={onDeselectAll}
+                      title="Cancel selection"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="h-9 px-4 border-gray-300 hover:bg-gray-100 text-gray-700"
-                    onClick={onDeselectAll}
-                    title="Cancel selection"
+                    size="icon"
+                    className="h-9 w-9 border-gray-200 hover:bg-gray-100"
+                    onClick={() => setMode('floating')}
+                    title="Minimize to floating bar"
                   >
-                    Cancel
+                    <Minimize2 className="h-4 w-4 text-gray-600" />
                   </Button>
-                )}
 
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9 border-gray-200 hover:bg-gray-100"
-                  onClick={() => setMode('floating')}
-                  title="Minimize to floating bar"
-                >
-                  <Minimize2 className="h-4 w-4 text-gray-600" />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 text-gray-400 hover:text-gray-900"
-                  onClick={onDeselectAll}
-                  title="Clear selection"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-gray-400 hover:text-gray-900"
+                    onClick={onDeselectAll}
+                    title="Clear selection"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </motion.div>

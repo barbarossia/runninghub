@@ -257,6 +257,19 @@ function convertSelectedNodesToParameters(
         continue;
       }
 
+      // Skip widget label/description fields (ComfyUI convention)
+      // These are fields like "choose video file to upload": "Video" that describe the input type
+      const lowerFieldName = fieldName.toLowerCase();
+      if (lowerFieldName.includes('choose') ||
+          lowerFieldName.includes('select') ||
+          lowerFieldName.includes('upload')) {
+        const upperFieldValue = String(fieldValue).toUpperCase();
+        // If the value is a simple type indicator (VIDEO, IMAGE, STRING, INT, etc.), skip it
+        if (['VIDEO', 'IMAGE', 'AUDIO', 'STRING', 'INT', 'FLOAT', 'BOOL', 'BOOLEAN'].includes(upperFieldValue)) {
+          continue;
+        }
+      }
+
       const paramType = detectParameterType(fieldName, fieldValue);
       const mediaType = paramType === 'file' ? detectMediaType(fieldName, String(fieldValue)) : undefined;
 

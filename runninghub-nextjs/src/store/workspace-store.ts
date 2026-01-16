@@ -55,6 +55,10 @@ interface WorkspaceState {
   // Media sort state
   mediaSortField: 'name' | 'date' | 'size' | 'type';
   mediaSortDirection: 'asc' | 'desc';
+  // Currently selected dataset (for dataset detail view)
+  selectedDataset: { name: string; path: string } | null;
+  // Dataset files (for dataset detail view)
+  datasetMediaFiles: MediaFile[];
 
   // ============================================================
   // NEW STATE - Workflows
@@ -160,6 +164,18 @@ interface WorkspaceActions extends WorkspaceState {
   setMediaSorting: (field: 'name' | 'date' | 'size' | 'type', direction: 'asc' | 'desc') => void;
 
   // ============================================================
+  // NEW ACTIONS - Dataset File Management
+  // ============================================================
+  setSelectedDataset: (dataset: { name: string; path: string } | null) => void;
+  setDatasetMediaFiles: (files: MediaFile[]) => void;
+  toggleDatasetFileSelection: (fileId: string) => void;
+  selectAllDatasetFiles: () => void;
+  deselectAllDatasetFiles: () => void;
+  removeDatasetFile: (fileId: string) => void;
+  updateDatasetFile: (fileId: string, updates: Partial<MediaFile>) => void;
+  getSelectedDatasetFiles: () => MediaFile[];
+
+  // ============================================================
   // NEW ACTIONS - Workflow Management
   // ============================================================
   setWorkflows: (workflows: Workflow[]) => void;
@@ -238,6 +254,10 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       mediaFiles: [],
       mediaSortField: 'date',
       mediaSortDirection: 'desc',
+
+      // New state - Dataset
+      selectedDataset: null,
+      datasetMediaFiles: [],
 
       // New state - Workflows
       workflows: [],
@@ -670,6 +690,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
             valid: true, // Will be validated by WorkflowInputBuilder
             width: mediaFile.width,
             height: mediaFile.height,
+            thumbnail: mediaFile.thumbnail,
           };
 
           // DEBUG: Log assignment dimensions
@@ -888,6 +909,48 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       setLoading: (loading) =>
         set({ isLoading: loading }),
+
+      // ============================================================
+      // NEW ACTIONS - Dataset File Management
+      // ============================================================
+      setSelectedDataset: (dataset) =>
+        set({ selectedDataset: dataset, error: null }),
+
+      setDatasetMediaFiles: (files) =>
+        set({ datasetMediaFiles: files, error: null }),
+
+      toggleDatasetFileSelection: (fileId) =>
+        set((state) => ({
+          datasetMediaFiles: state.datasetMediaFiles.map((f) =>
+            f.id === fileId ? { ...f, selected: !f.selected } : f
+          ),
+        })),
+
+      selectAllDatasetFiles: () =>
+        set((state) => ({
+          datasetMediaFiles: state.datasetMediaFiles.map((f) => ({ ...f, selected: true })),
+        })),
+
+      deselectAllDatasetFiles: () =>
+        set((state) => ({
+          datasetMediaFiles: state.datasetMediaFiles.map((f) => ({ ...f, selected: false })),
+        })),
+
+      removeDatasetFile: (fileId) =>
+        set((state) => ({
+          datasetMediaFiles: state.datasetMediaFiles.filter((f) => f.id !== fileId),
+        })),
+
+      updateDatasetFile: (fileId, updates) =>
+        set((state) => ({
+          datasetMediaFiles: state.datasetMediaFiles.map((f) =>
+            f.id === fileId ? { ...f, ...updates } : f
+          ),
+        })),
+
+      getSelectedDatasetFiles: () => {
+        return get().datasetMediaFiles.filter((f) => f.selected);
+      },
     }),
     {
       name: 'runninghub-workspace-storage',

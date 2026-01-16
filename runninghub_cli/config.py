@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from typing import Optional
-from typing import Union
 
 
 class Config:
@@ -14,16 +13,40 @@ class Config:
         """Initialize configuration.
 
         Args:
-            env_file: Path to .env file. If None, looks for .env in current directory.
+            env_file: Path to .env file. If None, looks for .env.local or .env in current directory.
         """
-        self.env_file = env_file or ".env"
+        # Determine env file path
+        if env_file:
+            self.env_file = env_file
+        else:
+            # Check for .env.local first (Next.js convention), then .env
+            if Path(".env.local").exists():
+                self.env_file = ".env.local"
+            elif Path(".env").exists():
+                self.env_file = ".env"
+            else:
+                self.env_file = ".env.local"  # Default to .env.local even if it doesn't exist
         self._load_env()
+        self._map_nextjs_env_vars()
 
     def _load_env(self) -> None:
         """Load environment variables from .env file."""
         env_path = Path(self.env_file)
         if env_path.exists():
             load_dotenv(self.env_file)
+
+    def _map_nextjs_env_vars(self) -> None:
+        """Map Next.js environment variables to CLI format."""
+        # Map NEXT_PUBLIC_* variables to RUNNINGHUB_* variables
+        if not os.getenv("RUNNINGHUB_API_KEY"):
+            next_public_key = os.getenv("NEXT_PUBLIC_RUNNINGHUB_API_KEY")
+            if next_public_key:
+                os.environ["RUNNINGHUB_API_KEY"] = next_public_key
+
+        if not os.getenv("RUNNINGHUB_API_HOST"):
+            next_public_host = os.getenv("NEXT_PUBLIC_RUNNINGHUB_API_HOST")
+            if next_public_host:
+                os.environ["RUNNINGHUB_API_HOST"] = next_public_host
 
     @property
     def api_key(self) -> str:

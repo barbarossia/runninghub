@@ -1,125 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
-import type { CliNode } from '@/types/workspace';
 
-/**
- * Parse CLI nodes output into structured data
- * Expected format:
- * ✓ Found 4 nodes:
- * 1. LoadImage (203)
- *    Type: Unknown
- *    Description: image
- */
-function parseNodesOutput(output: string): CliNode[] {
-  const lines = output.split('\n');
-  const nodes: CliNode[] = [];
-  let currentNode: Partial<CliNode> | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Match node header: "1. LoadImage (203)" or "1. Text Multiline (10)"
-    // Updated regex to handle multi-word node names
-    const nodeHeaderMatch = trimmed.match(/^(\d+)\.\s+(.+?)\s+\((\d+)\)\s*$/);
-    if (nodeHeaderMatch) {
-      // Save previous node if exists
-      if (currentNode && currentNode.id && currentNode.name) {
-        nodes.push(currentNode as CliNode);
-      }
-
-      // Start new node
-      currentNode = {
-        id: parseInt(nodeHeaderMatch[3], 10),
-        name: nodeHeaderMatch[2],
-        type: 'Unknown',
-        description: '',
-      };
-      continue;
-    }
-
-    // Match field: "Type: Unknown" or "Description: image"
-    const fieldMatch = trimmed.match(/^(\w+):\s*(.+)$/);
-    if (fieldMatch && currentNode) {
-      const [, fieldName, fieldValue] = fieldMatch;
-
-      switch (fieldName.toLowerCase()) {
-        case 'type':
-          currentNode.type = fieldValue;
-          break;
-        case 'description':
-          currentNode.description = fieldValue;
-
-          // Try to infer input type from description
-          const descLower = fieldValue.toLowerCase();
-          if (descLower.includes('image')) {
-            currentNode.inputType = 'image';
-          } else if (descLower.includes('video')) {
-            currentNode.inputType = 'video';
-          } else if (descLower.includes('text')) {
-            currentNode.inputType = 'text';
-          } else if (descLower.includes('int') || descLower.includes('number')) {
-            currentNode.inputType = 'number';
-          } else if (descLower.includes('bool')) {
-            currentNode.inputType = 'boolean';
-          }
-          break;
-      }
-    }
-  }
-
-  // Save last node
-  if (currentNode && currentNode.id && currentNode.name) {
-    nodes.push(currentNode as CliNode);
-  }
-
-  return nodes;
+interface RunningHubNode {
+  nodeId: string;
+  nodeName: string;
+  fieldType: string;
+  description?: string;
 }
 
 /**
- * Convert CLI nodes to workflow input parameters
- */
-function convertNodesToInputs(nodes: CliNode[]) {
-  return nodes.map((node, index) => {
-    // Determine parameter type from inputType or description
-    let type: 'text' | 'file' | 'number' | 'boolean' = 'text';
-    let mediaType: 'image' | 'video' | undefined;
-
-    if (node.inputType === 'image') {
-      type = 'file';
-      mediaType = 'image';
-    } else if (node.inputType === 'video') {
-      type = 'file';
-      mediaType = 'video';
-    } else if (node.inputType === 'number') {
-      type = 'number';
-    } else if (node.inputType === 'boolean') {
-      type = 'boolean';
-    }
-
-    return {
-      id: `param_${node.id}`,
-      name: node.name,
-      type,
-      required: index === 0, // First parameter is required by default
-      description: node.description,
-      validation: type === 'file' ? {
-        mediaType,
-        fileType: mediaType ? [`${mediaType}/*`] : undefined,
-      } : undefined,
-    };
-  });
-}
-
-/**
- * Fetch nodes from RunningHub CLI
+ * Fetch nodes from RunningHub CLI using JSON output
  */
 function fetchNodesFromCLI(
   workflowId: string,
   apiKey: string,
   apiHost: string
-): Promise<CliNode[]> {
+): Promise<RunningHubNode[]> {
   return new Promise((resolve, reject) => {
-    const python = spawn('python3', ['-m', 'runninghub_cli.cli', 'nodes'], {
+    const python = spawn('python3', ['-m', 'runninghub_cli.cli', 'nodes', '--json'], {
+      cwd: process.cwd(), // Run from current directory to find .env.local
       env: {
         ...process.env,
         RUNNINGHUB_API_KEY: apiKey,
@@ -146,10 +45,10 @@ function fetchNodesFromCLI(
       }
 
       try {
-        const nodes = parseNodesOutput(output);
+        const nodes: RunningHubNode[] = JSON.parse(output);
         resolve(nodes);
       } catch (error) {
-        reject(error);
+        reject(new Error(`Failed to parse CLI output: ${output}`));
       }
     });
 
@@ -158,6 +57,44 @@ function fetchNodesFromCLI(
       python.kill();
       reject(new Error('CLI nodes command timed out'));
     }, 30000);
+  });
+}
+
+/**
+ * Convert CLI nodes to workflow input parameters
+ */
+function convertNodesToInputs(nodes: RunningHubNode[]) {
+  return nodes.map((node, index) => {
+    // Determine parameter type from fieldType
+    let type: 'text' | 'file' | 'number' | 'boolean' = 'text';
+    let mediaType: 'image' | 'video' | undefined;
+
+    const fieldType = (node.fieldType || '').toLowerCase();
+
+    // Map RunningHub field types to our types
+    if (fieldType === 'image') {
+      type = 'file';
+      mediaType = 'image';
+    } else if (fieldType === 'video') {
+      type = 'file';
+      mediaType = 'video';
+    } else if (fieldType === 'int' || fieldType === 'number' || fieldType === 'float') {
+      type = 'number';
+    } else if (fieldType === 'bool' || fieldType === 'boolean') {
+      type = 'boolean';
+    }
+
+    return {
+      id: `param_${node.nodeId}`,
+      name: node.nodeName,
+      type,
+      required: index === 0, // First parameter is required by default
+      description: node.description || node.nodeName,
+      validation: type === 'file' ? {
+        mediaType,
+        fileType: mediaType ? [`${mediaType}/*`] : undefined,
+      } : undefined,
+    };
   });
 }
 

@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Play, AlertCircle } from 'lucide-react';
+import { Play, AlertCircle, Video, ImageIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { VideoPreview } from './VideoPreview';
 import type { MediaFile, Workflow } from '@/types/workspace';
 import { validateFileForParameter } from '@/utils/workspace-validation';
 
@@ -116,19 +117,43 @@ export function QuickRunWorkflowDialog({
             {selectedFiles.slice(0, 5).map((file) => (
               <div
                 key={file.id}
-                className="flex-shrink-0 w-16 h-16 rounded overflow-hidden bg-gray-100"
+                className="flex-shrink-0 w-16 h-16 rounded border overflow-hidden bg-gray-50 relative group"
               >
-                {file.thumbnail || file.blobUrl ? (
-                  <img
-                    src={file.thumbnail || file.blobUrl}
-                    alt={file.name}
+                {file.type === 'video' ? (
+                  <VideoPreview
+                    src={file.blobUrl || `/api/videos/serve?path=${encodeURIComponent(file.path)}`}
+                    poster={file.thumbnail}
                     className="w-full h-full object-contain"
                   />
+                ) : file.type === 'image' ? (
+                  <img
+                    src={file.thumbnail || `/api/images/serve?path=${encodeURIComponent(file.path)}`}
+                    alt={file.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback if serving fails
+                      e.currentTarget.src = ""; // Clear src
+                      e.currentTarget.className = "hidden";
+                    }}
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">
-                    {file.extension}
+                  <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 bg-gray-100">
+                    {file.extension || 'FILE'}
                   </div>
                 )}
+                
+                {/* Type icon overlay */}
+                <div className="absolute top-0.5 right-0.5 opacity-70 group-hover:opacity-100 transition-opacity">
+                  {file.type === 'video' ? (
+                    <div className="bg-black/50 rounded-full p-0.5">
+                      <Video className="h-2.5 w-2.5 text-white" />
+                    </div>
+                  ) : (
+                    <div className="bg-blue-500/50 rounded-full p-0.5">
+                      <ImageIcon className="h-2.5 w-2.5 text-white" />
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {selectedFiles.length > 5 && (
