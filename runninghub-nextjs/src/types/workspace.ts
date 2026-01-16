@@ -263,6 +263,10 @@ export interface MediaFile {
   isDuckEncoded?: boolean; // True if image contains duck-encoded hidden data
   duckRequiresPassword?: boolean; // True if duck-encoded image requires password
   duckValidationPending?: boolean; // True while validation is in progress
+
+  // Caption from associated txt file (dataset page only)
+  caption?: string; // Text content from associated txt file
+  captionPath?: string; // Path to the txt file
 }
 
 /**

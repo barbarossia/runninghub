@@ -9,7 +9,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore, useWorkspaceFolder } from '@/store/folder-store';
 import { useVideoClipStore } from '@/store/video-clip-store';
-import { useVideoSplitStore } from '@/store/video-split-store';
 import { useVideoSelectionStore } from '@/store/video-selection-store';
 import { useFolderSelection } from '@/hooks/useFolderSelection';
 import { useAutoLoadFolder } from '@/hooks/useAutoLoadFolder';
@@ -23,6 +22,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { MediaGallery } from '@/components/workspace/MediaGallery';
 import { MediaSelectionToolbar } from '@/components/workspace/MediaSelectionToolbar';
 import { MediaSortControls } from '@/components/images';
@@ -36,11 +46,11 @@ import { JobDetail } from '@/components/workspace/JobDetail';
 import { YoutubeDownloader } from '@/components/workspace/YoutubeDownloader';
 import { VideoClipConfiguration } from '@/components/videos/VideoClipConfiguration';
 import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectionToolbar';
-import { VideoSplitConfiguration } from '@/components/workspace/VideoSplitConfiguration';
 import { VideoGallery } from '@/components/videos/VideoGallery';
 import { VideoPlayerModal } from '@/components/videos/VideoPlayerModal';
 import { ImagePreviewModal } from '@/components/workspace/ImagePreviewModal';
 import { ExportConfiguration } from '@/components/workspace/ExportConfiguration';
+import { ResizeConfiguration } from '@/components/workspace/ResizeConfiguration';
 import { VideoConvertConfiguration } from '@/components/workspace/VideoConvertConfiguration';
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
 import { ProgressModal } from '@/components/progress/ProgressModal';
@@ -56,11 +66,11 @@ import {
   AlertCircle,
   Play,
   Scissors,
-  Minimize2,
   Youtube,
   Zap,
   Database,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -69,6 +79,7 @@ import { cn } from '@/lib/utils';
 import { exportImagesToFolder, getCompatibilityMessage, type ExportableFile } from '@/lib/export-images';
 import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
 import { useExportConfigStore } from '@/store/export-config-store';
+import { useResizeConfigStore } from '@/store/resize-config-store';
 import { useVideoConvertStore } from '@/store/video-convert-store';
 import { useCropStore } from '@/store/crop-store';
 import { useProgressStore } from '@/store';
@@ -117,7 +128,14 @@ export default function WorkspacePage() {
 
   // Local state
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'split' | 'convert' | 'dataset' | 'run-workflow' | 'workflows' | 'jobs'>('media');
+  // Persist active tab to localStorage
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'dataset' | 'run-workflow' | 'workflows' | 'jobs'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('workspace-active-tab');
+      return (saved as any) || 'media';
+    }
+    return 'media';
+  });
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
@@ -134,6 +152,10 @@ export default function WorkspacePage() {
   const [isLoadingDatasets, setIsLoadingDatasets] = useState(false);
   const [showSelectDatasetDialog, setShowSelectDatasetDialog] = useState(false);
   const [fileToExportToDataset, setFileToExportToDataset] = useState<MediaFile | null>(null);
+
+  // Resize dialog state
+  const [showResizeDialog, setShowResizeDialog] = useState(false);
+  const [resizeFile, setResizeFile] = useState<MediaFile | null>(null);
 
   // Export config from store
   const { deleteAfterExport } = useExportConfigStore();
@@ -250,6 +272,9 @@ export default function WorkspacePage() {
         isDuckEncoded: undefined,
         duckRequiresPassword: undefined,
         duckValidationPending: false,
+        // Caption from associated txt file
+        caption: file.caption,
+        captionPath: file.captionPath,
       };
     });
 
@@ -270,6 +295,9 @@ export default function WorkspacePage() {
       thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
       blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
       selected: false,
+      // Caption from associated txt file
+      caption: file.caption,
+      captionPath: file.captionPath,
     }));
 
     // Combine both types and deduplicate by ID (path)
@@ -966,38 +994,6 @@ export default function WorkspacePage() {
     handleClipVideos([video.path]);
   }, []);
 
-  const handleSplitVideos = async (selectedPaths: string[]) => {
-    const { splitOptions } = useVideoSplitStore.getState();
-
-    try {
-      const response = await fetch(API_ENDPOINTS.VIDEOS_SPLIT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videos: selectedPaths,
-          options: splitOptions,
-          timeout: 3600,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setActiveConsoleTaskId(data.task_id);
-        toast.success(`Started splitting ${selectedPaths.length} video(s)`);
-      } else {
-        toast.error(data.error || 'Failed to start splitting');
-      }
-    } catch (error) {
-      console.error('Error splitting videos:', error);
-      toast.error('Failed to start splitting');
-    }
-  };
-
-  const handleSplitSingleVideo = useCallback((video: MediaFile) => {
-    handleSplitVideos([video.path]);
-  }, []);
-
   const handleVideoSelectionChange = useCallback((videoPath: string, selected: boolean) => {
     updateMediaFile(videoPath, { selected });
   }, [updateMediaFile]);
@@ -1204,6 +1200,8 @@ export default function WorkspacePage() {
           created_at: file.created_at,
           modified_at: file.modified_at,
           thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
+          caption: file.caption,
+          captionPath: file.captionPath,
           selected: false,
         }));
 
@@ -1222,6 +1220,8 @@ export default function WorkspacePage() {
           modified_at: file.modified_at,
           thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
           blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
+          caption: file.caption,
+          captionPath: file.captionPath,
           selected: false,
         }));
 
@@ -1341,6 +1341,57 @@ export default function WorkspacePage() {
     }
   }, [selectedDataset, removeDatasetFile]);
 
+  // Handle dataset file resize (from toolbar - uses config from store)
+  const handleDatasetResize = useCallback(async (files: MediaFile[], longestEdge?: number, deleteOriginal?: boolean) => {
+    if (!selectedDataset) return;
+
+    // Use config from store if not provided
+    const resizeConfig = useResizeConfigStore.getState();
+    const edge = longestEdge ?? parseInt(resizeConfig.longestEdge);
+    const deleteOrig = deleteOriginal ?? resizeConfig.deleteOriginal;
+    const suffix = resizeConfig.outputSuffix;
+
+    try {
+      const response = await fetch('/api/media/resize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: files.map(f => ({
+            path: f.path,
+            type: f.type,
+            width: f.width || 0,
+            height: f.height || 0,
+          })),
+          longestEdge: edge,
+          outputSuffix: suffix,
+          deleteOriginal: deleteOrig,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const msg = deleteOrig
+          ? `Resized and deleted ${data.processed} original file${data.processed !== 1 ? 's' : ''}`
+          : `Resized ${data.processed} file${data.processed !== 1 ? 's' : ''}`;
+        toast.success(msg);
+        // Refresh dataset to show resized files
+        await selectDataset(selectedDataset);
+      } else {
+        toast.error(data.error || 'Failed to resize files');
+      }
+    } catch (err) {
+      console.error('Failed to resize files:', err);
+      toast.error('Failed to resize files');
+    }
+  }, [selectedDataset, selectDataset]);
+
+  // Handle single file resize from context menu
+  const handleResizeFromContextMenu = useCallback((file: MediaFile) => {
+    setResizeFile(file);
+    setShowResizeDialog(true);
+  }, []);
+
   const handleSortChange = useCallback((field: typeof mediaSortField, direction: typeof mediaSortDirection) => {
     setMediaSorting(field, direction);
   }, [setMediaSorting]);
@@ -1441,8 +1492,13 @@ export default function WorkspacePage() {
             />
 
             {/* Tab Navigation */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-              <TabsList className="grid w-full grid-cols-8">
+            <Tabs value={activeTab} onValueChange={(v) => {
+              setActiveTab(v as any);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('workspace-active-tab', v);
+              }
+            }}>
+              <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="media" className="flex items-center gap-2">
                   <FolderOpen className="h-4 w-4" />
                   Media Gallery
@@ -1454,10 +1510,6 @@ export default function WorkspacePage() {
                 <TabsTrigger value="clip" className="flex items-center gap-2">
                   <Scissors className="h-4 w-4" />
                   Clip
-                </TabsTrigger>
-                <TabsTrigger value="split" className="flex items-center gap-2">
-                  <Minimize2 className="h-4 w-4" />
-                  Split
                 </TabsTrigger>
                 <TabsTrigger value="convert" className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
@@ -1496,8 +1548,6 @@ export default function WorkspacePage() {
                   onRunWorkflow={handleQuickRunWorkflow}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
-                  onExportToDataset={handleExportToDataset}
-                  onDeselectAll={deselectAllMediaFiles}
                 />
                 )}
 
@@ -1528,7 +1578,6 @@ export default function WorkspacePage() {
                   onDecode={handleDecodeFile}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
-                  onExportToDataset={handleExportFileToDataset}
                 />
               </TabsContent>
 
@@ -1583,48 +1632,6 @@ export default function WorkspacePage() {
                     }
                   }}
                   disabled={false}
-                  clipButtonText="Clip"
-                />
-
-                {/* Video Gallery - filtered to videos only */}
-                <VideoGallery
-                  videos={adaptedVideos}
-                  isLoading={false}
-                  onRefresh={() => handleRefresh(true)}
-                  onRename={handleRenameVideo}
-                  onDelete={handleDeleteVideo}
-                />
-              </TabsContent>
-
-              {/* Split Tab */}
-              <TabsContent value="split" className="space-y-6 mt-6">
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold">Video Splitting</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Split videos into smaller segments by duration or count. Videos are automatically filtered from your workspace folder.
-                  </p>
-                </div>
-
-                {/* Split Configuration */}
-                <VideoSplitConfiguration />
-
-                {/* Selection Toolbar */}
-                <VideoClipSelectionToolbar
-                  selectedCount={selectedVideoCount}
-                  onClip={(selectedPaths) => handleSplitVideos(selectedPaths)}
-                  onDelete={handleDeleteVideosByPath}
-                  onRefresh={() => handleRefresh(true)}
-                  onRename={handleRenameVideo}
-                  onPreview={(selectedPaths) => {
-                    if (selectedPaths.length > 0) {
-                      const video = filteredVideos.find(v => v.path === selectedPaths[0]);
-                      if (video) {
-                        handlePreviewFile(video);
-                      }
-                    }
-                  }}
-                  disabled={false}
-                  clipButtonText="Split"
                 />
 
                 {/* Video Gallery - filtered to videos only */}
@@ -1798,14 +1805,19 @@ export default function WorkspacePage() {
                       </Button>
                     </div>
 
+                    {/* Resize Configuration */}
+                    <ResizeConfiguration />
+
                     {/* Dataset Selection Toolbar */}
                     {datasetMediaFiles.filter(f => f.selected).length > 0 && (
                       <MediaSelectionToolbar
                         selectedFiles={datasetMediaFiles.filter(f => f.selected)}
                         onRename={handleDatasetRename}
                         onDelete={handleDatasetDelete}
-                        onDeselectAll={deselectAllDatasetFiles}
+                        onResize={handleDatasetResize}
                         onPreview={handlePreviewFile}
+                        onDeselectAll={() => deselectAllDatasetFiles()}
+                        skipResizeDialog={true}
                       />
                     )}
 
@@ -1815,6 +1827,7 @@ export default function WorkspacePage() {
                       onFileDoubleClick={handlePreviewFile}
                       onRename={handleDatasetRename}
                       onDelete={handleDatasetDelete}
+                      onResize={handleResizeFromContextMenu}
                       onPreview={handlePreviewFile}
                     />
                   </>
@@ -1954,7 +1967,124 @@ export default function WorkspacePage() {
           parentPath={selectedFolder?.folder_path || ''}
           onSuccess={handleDatasetSelectedForExport}
         />
+
+        {/* Single File Resize Dialog */}
+        <SingleFileResizeDialog
+          open={showResizeDialog}
+          onOpenChange={setShowResizeDialog}
+          file={resizeFile}
+          onResize={async (longestEdge, deleteOriginal) => {
+            if (resizeFile) {
+              await handleDatasetResize([resizeFile], longestEdge, deleteOriginal);
+            }
+          }}
+        />
       </div>
     </div>
+  );
+}
+
+// Single File Resize Dialog component
+function SingleFileResizeDialog({
+  open,
+  onOpenChange,
+  file,
+  onResize,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  file: MediaFile | null;
+  onResize: (longestEdge: number, deleteOriginal: boolean) => Promise<void>;
+}) {
+  const [longestEdge, setLongestEdge] = useState('768');
+  const [deleteOriginal, setDeleteOriginal] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResize = async () => {
+    const edge = parseInt(longestEdge);
+    if (isNaN(edge) || edge <= 0) {
+      toast.error('Please enter a valid longest edge value');
+      return;
+    }
+
+    setIsResizing(true);
+    try {
+      await onResize(edge, deleteOriginal);
+      onOpenChange(false);
+      setLongestEdge('768');
+      setDeleteOriginal(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to resize file');
+    } finally {
+      setIsResizing(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Resize {file?.name || 'File'}</DialogTitle>
+          <DialogDescription>
+            Scale by specifying the longest edge. The aspect ratio will be preserved.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 space-y-4">
+          <div>
+            <Label htmlFor="longest-edge-single">Longest Edge (pixels)</Label>
+            <Input
+              id="longest-edge-single"
+              type="number"
+              min="1"
+              placeholder="e.g., 768"
+              value={longestEdge}
+              onChange={(e) => setLongestEdge(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleResize()}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Current: {file?.width}×{file?.height}
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="delete-original-single"
+              checked={deleteOriginal}
+              onCheckedChange={(checked) => setDeleteOriginal(checked === true)}
+            />
+            <Label
+              htmlFor="delete-original-single"
+              className="text-sm font-normal cursor-pointer"
+            >
+              Delete original file after resize
+            </Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isResizing}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleResize}
+            disabled={isResizing || !longestEdge.trim()}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            {isResizing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Resizing...
+              </>
+            ) : (
+              'Resize'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -62,7 +62,6 @@ export function CaptionSelectionToolbar({
         className={className}
         badgeColor="bg-purple-600"
         onDeselectAll={onDeselectAll}
-        showCancelButton={showCancelButton}
       >
         {(mode) => {
           if (mode === 'expanded') {

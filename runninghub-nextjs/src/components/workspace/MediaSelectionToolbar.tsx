@@ -10,8 +10,10 @@ import {
   Play,
   Eye,
   AlertCircle,
+  Scissors,
   Download,
-  Database,
+  Zap,
+  Maximize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +36,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -48,13 +51,16 @@ interface MediaSelectionToolbarProps {
   onDelete?: (files: MediaFile[]) => Promise<void>;
   onDecode?: (file: MediaFile, password?: string, progress?: { current: number; total: number }) => Promise<void>;
   onRunWorkflow?: (workflowId?: string) => void;
+  onClip?: (files: MediaFile[]) => Promise<void>;
   onPreview?: (file: MediaFile) => void;
   onExport?: (files: MediaFile[]) => Promise<void>;
-  onExportToDataset?: () => void;
+  onConvertFps?: (files: MediaFile[]) => Promise<void>;
+  onResize?: (files: MediaFile[], longestEdge?: number, deleteOriginal?: boolean) => Promise<void>;
   onDeselectAll?: () => void;
   disabled?: boolean;
   className?: string;
   showCancelButton?: boolean;
+  skipResizeDialog?: boolean; // If true, resize directly without showing dialog
 }
 
 export function MediaSelectionToolbar({
@@ -63,13 +69,16 @@ export function MediaSelectionToolbar({
   onDelete,
   onDecode,
   onRunWorkflow,
+  onClip,
   onPreview,
   onExport,
-  onExportToDataset,
+  onConvertFps,
+  onResize,
   onDeselectAll,
   disabled = false,
   className = '',
   showCancelButton = true,
+  skipResizeDialog = false,
 }: MediaSelectionToolbarProps) {
   const selectedCount = selectedFiles.length;
   const isSingleSelection = selectedCount === 1;
@@ -88,11 +97,16 @@ export function MediaSelectionToolbar({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDecodeDialog, setShowDecodeDialog] = useState(false);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
+  const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [decodePassword, setDecodePassword] = useState('');
+  const [longestEdge, setLongestEdge] = useState('768');
+  const [deleteOriginalOnResize, setDeleteOriginalOnResize] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDecoding, setIsDecoding] = useState(false);
+  const [isClipping, setIsClipping] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [decodeProgress, setDecodeProgress] = useState({ current: 0, total: 0 });
 
   // Get workflows from store
@@ -182,6 +196,21 @@ export function MediaSelectionToolbar({
     }
   }, [onRunWorkflow]);
 
+  // Handle clip
+  const handleClip = useCallback(async () => {
+    if (!onClip) return;
+
+    setIsClipping(true);
+    try {
+      const videoFiles = selectedFiles.filter(f => f.type === 'video');
+      await onClip(videoFiles);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
+    } finally {
+      setIsClipping(false);
+    }
+  }, [onClip, selectedFiles]);
+
   // Handle preview
   const handlePreview = useCallback(() => {
     if (!onPreview) return;
@@ -201,7 +230,51 @@ export function MediaSelectionToolbar({
     onExport(selectedFiles);
   }, [onExport, selectedFiles]);
 
-  const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding;
+  // Handle FPS convert
+  const handleConvertFpsClick = useCallback(() => {
+    if (!onConvertFps || selectedFiles.length === 0) return;
+    onConvertFps(selectedFiles);
+  }, [onConvertFps, selectedFiles]);
+
+  // Open resize dialog (or call directly if skipping dialog)
+  const openResizeDialog = useCallback(() => {
+    if (selectedFiles.length === 0) {
+      toast.error('No files selected');
+      return;
+    }
+
+    if (skipResizeDialog) {
+      // Call resize directly using page config (undefined means use config from store)
+      onResize?.(selectedFiles, undefined, undefined);
+      toast.success(`Resizing ${selectedFiles.length} file(s)...`);
+    } else {
+      setShowResizeDialog(true);
+    }
+  }, [selectedFiles, skipResizeDialog, onResize]);
+
+  // Handle resize
+  const handleResize = useCallback(async () => {
+    if (!onResize) return;
+
+    const edge = parseInt(longestEdge);
+    if (isNaN(edge) || edge <= 0) {
+      toast.error('Please enter a valid longest edge value');
+      return;
+    }
+
+    setIsResizing(true);
+    try {
+      await onResize(selectedFiles, edge, deleteOriginalOnResize);
+      setShowResizeDialog(false);
+      toast.success(`Resized ${selectedFiles.length} file(s)`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to resize files');
+    } finally {
+      setIsResizing(false);
+    }
+  }, [onResize, selectedFiles, longestEdge, deleteOriginalOnResize]);
+
+  const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping || isResizing;
 
   // Debug: Log decode button visibility
   console.log('[MediaSelectionToolbar] Decode button should show:', hasDuckEncodedImages && onDecode, {
@@ -263,6 +336,20 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
+                {/* Clip - only when videos are selected */}
+                {onClip && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleClip}
+                    disabled={toolbarDisabled}
+                    className="h-9 bg-purple-600 hover:bg-purple-700"
+                  >
+                    {isClipping ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scissors className="h-4 w-4 mr-2" />}
+                    {isClipping ? 'Processing...' : 'Clip Videos'}
+                  </Button>
+                )}
+
                 {/* Export - for images and videos */}
                 {onExport && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
                   <Button
@@ -278,18 +365,33 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
-                {/* Dataset */}
-                {onExportToDataset && (
+                {/* FPS Convert - for videos */}
+                {onConvertFps && selectedFiles.some(f => f.type === 'video') && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={onExportToDataset}
+                    onClick={handleConvertFpsClick}
                     disabled={toolbarDisabled}
-                    className="h-9 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
-                    title="Export to dataset folder"
+                    className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+                    title="Convert video FPS"
                   >
-                    <Database className="h-4 w-4 mr-2" />
-                    Dataset
+                    <Zap className="h-4 w-4 mr-2" />
+                    FPS Convert
+                  </Button>
+                )}
+
+                {/* Resize - for images and videos */}
+                {onResize && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openResizeDialog}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-100 text-indigo-700"
+                    title="Resize by longest edge"
+                  >
+                    <Maximize2 className="h-4 w-4 mr-2" />
+                    Resize
                   </Button>
                 )}
 
@@ -383,6 +485,21 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
+                {/* Clip - floating mode */}
+                {onClip && selectedFiles.some(f => f.type === 'video') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClip}
+                    disabled={toolbarDisabled}
+                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+                    title="Clip Videos"
+                  >
+                    {isClipping ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-2 text-purple-400" />}
+                    <span className="text-xs">{isClipping ? '...' : 'Clip'}</span>
+                  </Button>
+                )}
+
                 {/* Export - floating mode */}
                 {onExport && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
                   <Button
@@ -398,18 +515,18 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
-                {/* Export to Dataset - floating mode */}
-                {onExportToDataset && (
+                {/* FPS Convert - floating mode */}
+                {onConvertFps && selectedFiles.some(f => f.type === 'video') && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={onExportToDataset}
+                    onClick={handleConvertFpsClick}
                     disabled={toolbarDisabled}
                     className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-                    title="Export to dataset folder"
+                    title="Convert video FPS"
                   >
-                    <Database className="h-3.5 w-3.5 mr-2 text-purple-400" />
-                    <span className="text-xs">Dataset</span>
+                    <Zap className="h-3.5 w-3.5 mr-2 text-blue-400" />
+                    <span className="text-xs">FPS</span>
                   </Button>
                 )}
 
@@ -679,6 +796,81 @@ export function MediaSelectionToolbar({
                   </>
                 ) : (
                   duckEncodedCount === 1 ? 'Decode' : `Decode ${duckEncodedCount} Images`
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Resize Dialog */}
+      {onResize && (
+        <Dialog open={showResizeDialog} onOpenChange={setShowResizeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Resize {selectedCount === 1 ? 'File' : `${selectedCount} Files`}</DialogTitle>
+              <DialogDescription>
+                Scale images and videos by specifying the longest edge. The aspect ratio will be preserved.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div>
+                <Label htmlFor="longest-edge">Longest Edge (pixels)</Label>
+                <Input
+                  id="longest-edge"
+                  type="number"
+                  min="1"
+                  placeholder="e.g., 768"
+                  value={longestEdge}
+                  onChange={(e) => setLongestEdge(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleResize()}
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Example: A 720×1280 video with longest edge 768 will be resized to 432×768
+                </p>
+              </div>
+
+              {/* Delete original option */}
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="delete-original-resize"
+                  checked={deleteOriginalOnResize}
+                  onCheckedChange={(checked) => setDeleteOriginalOnResize(checked === true)}
+                />
+                <Label
+                  htmlFor="delete-original-resize"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Delete original files after resize
+                </Label>
+              </div>
+
+              {/* Show selected files info */}
+              <div className="text-sm text-muted-foreground">
+                {selectedCount} file(s) will be processed
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowResizeDialog(false)}
+                disabled={isResizing}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleResize}
+                disabled={isResizing || !longestEdge.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                {isResizing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Resizing...
+                  </>
+                ) : (
+                  'Resize'
                 )}
               </Button>
             </DialogFooter>

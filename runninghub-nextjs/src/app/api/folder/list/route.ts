@@ -4,43 +4,30 @@ import path from 'path';
 import { getFileMetadata } from '@/lib/metadata';
 
 /**
- * Process items with concurrency limit
+ * Read caption from a txt file with the same basename
+ * @param filePath - Path to the media file
+ * @returns Object with caption content and path, or undefined if no txt file exists
  */
-async function processWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  processor: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = [];
-  const executing: Promise<void>[] = [];
+async function readCaptionFile(filePath: string): Promise<{ caption: string; captionPath: string } | undefined> {
+  try {
+    const dir = path.dirname(filePath);
+    const basename = path.basename(filePath, path.extname(filePath));
+    const txtPath = path.join(dir, `${basename}.txt`);
 
-  for (const item of items) {
-    const promise = processor(item).then((result) => {
-      results.push(result);
-      const idx = executing.indexOf(promise as any);
-      if (idx > -1) executing.splice(idx, 1);
-    });
+    // Check if txt file exists
+    await fs.access(txtPath);
 
-    executing.push(promise);
+    // Read the txt file content
+    const caption = await fs.readFile(txtPath, 'utf-8');
 
-    // When limit is reached, wait for one to finish
-    if (executing.length >= limit) {
-      await Promise.race(executing);
-    }
+    return {
+      caption,
+      captionPath: txtPath,
+    };
+  } catch {
+    // No txt file exists or error reading it
+    return undefined;
   }
-
-  await Promise.all(executing);
-  return results;
-}
-
-interface FileItem {
-  name: string;
-  path: string;
-  size: number;
-  extension: string;
-  createdAt: number;
-  modifiedAt: number;
-  mediaType: 'image' | 'video';
 }
 
 async function handleFolderList(folderPath: string, sessionId?: string) {
@@ -85,6 +72,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         height?: number;
         created_at?: number;
         modified_at?: number;
+        caption?: string;
+        captionPath?: string;
       }>,
       videos: [] as Array<{
         name: string;
@@ -99,21 +88,16 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         thumbnail?: string;
         created_at?: number;
         modified_at?: number;
+        caption?: string;
+        captionPath?: string;
       }>,
       current_path: folder,
       parent_path: path.dirname(folder) !== folder ? path.dirname(folder) : null,
       is_direct_access: false,
     };
 
-    const supportedImageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
-    const supportedVideoExtensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv'];
-
     try {
       const items = await fs.readdir(folder);
-
-      // First pass: collect all items and categorize them (fast operations only)
-      const folders: Array<{ name: string; path: string; type: 'folder' }> = [];
-      const files: FileItem[] = [];
 
       for (const item of items) {
         const itemPath = path.join(folder, item);
@@ -127,116 +111,72 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
           const itemStats = await fs.stat(itemPath);
 
           if (itemStats.isDirectory()) {
-            folders.push({
+            contents.folders.push({
               name: item,
               path: itemPath,
               type: 'folder',
             });
           } else if (itemStats.isFile()) {
             const extension = path.extname(item).toLowerCase();
+            const supportedImageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+            const supportedVideoExtensions = ['.mp4', '.webm', '.mkv', '.avi', '.mov', '.flv'];
 
             if (supportedImageExtensions.includes(extension)) {
-              files.push({
+              // Extract image metadata
+              const metadata = await getFileMetadata(itemPath, 'image');
+
+              // Extract file timestamps (convert to milliseconds)
+              const createdAt = itemStats.birthtime?.getTime();
+              const modifiedAt = itemStats.mtime?.getTime();
+
+              // Check for associated txt file (caption)
+              const captionData = await readCaptionFile(itemPath);
+
+              contents.images.push({
                 name: item,
                 path: itemPath,
                 size: itemStats.size,
+                type: 'image',
                 extension,
-                createdAt: itemStats.birthtime?.getTime() || 0,
-                modifiedAt: itemStats.mtime?.getTime() || 0,
-                mediaType: 'image',
+                width: metadata?.width,
+                height: metadata?.height,
+                created_at: createdAt,
+                modified_at: modifiedAt,
+                caption: captionData?.caption,
+                captionPath: captionData?.captionPath,
               });
             } else if (supportedVideoExtensions.includes(extension)) {
-              files.push({
+              // Extract video metadata
+              const metadata = await getFileMetadata(itemPath, 'video') as any;
+              console.log(`[API] Video metadata for ${item}:`, metadata);
+
+              // Extract file timestamps (convert to milliseconds)
+              const createdAt = itemStats.birthtime?.getTime();
+              const modifiedAt = itemStats.mtime?.getTime();
+
+              // Check for associated txt file (caption)
+              const captionData = await readCaptionFile(itemPath);
+
+              contents.videos.push({
                 name: item,
                 path: itemPath,
                 size: itemStats.size,
+                type: 'video',
                 extension,
-                createdAt: itemStats.birthtime?.getTime() || 0,
-                modifiedAt: itemStats.mtime?.getTime() || 0,
-                mediaType: 'video',
+                width: metadata?.width,
+                height: metadata?.height,
+                fps: metadata?.fps,
+                duration: metadata?.duration,
+                created_at: createdAt,
+                modified_at: modifiedAt,
+                caption: captionData?.caption,
+                captionPath: captionData?.captionPath,
               });
             }
           }
         } catch (itemError) {
           // Skip items we can't access
           console.warn(`Skipping ${item}:`, itemError);
-        }
-      }
-
-      // Add folders immediately (no metadata needed)
-      contents.folders.push(...folders);
-
-      // Second pass: extract metadata in parallel with concurrency limit
-      // Process up to 8 files concurrently for better performance
-      const processedFiles = await processWithConcurrency(
-        files,
-        8,
-        async (file: FileItem) => {
-          try {
-            const metadata = await getFileMetadata(file.path, file.mediaType);
-
-            if (file.mediaType === 'image') {
-              return {
-                name: file.name,
-                path: file.path,
-                size: file.size,
-                type: 'image' as const,
-                extension: file.extension,
-                width: metadata?.width,
-                height: metadata?.height,
-                created_at: file.createdAt,
-                modified_at: file.modifiedAt,
-              };
-            } else {
-              const videoMetadata = metadata as any;
-              return {
-                name: file.name,
-                path: file.path,
-                size: file.size,
-                type: 'video' as const,
-                extension: file.extension,
-                width: videoMetadata?.width,
-                height: videoMetadata?.height,
-                fps: videoMetadata?.fps,
-                duration: videoMetadata?.duration,
-                created_at: file.createdAt,
-                modified_at: file.modifiedAt,
-              };
-            }
-          } catch (error) {
-            // If metadata extraction fails, still include the file without metadata
-            console.warn(`Failed to extract metadata for ${file.name}:`, error);
-            if (file.mediaType === 'image') {
-              return {
-                name: file.name,
-                path: file.path,
-                size: file.size,
-                type: 'image' as const,
-                extension: file.extension,
-                created_at: file.createdAt,
-                modified_at: file.modifiedAt,
-              };
-            } else {
-              return {
-                name: file.name,
-                path: file.path,
-                size: file.size,
-                type: 'video' as const,
-                extension: file.extension,
-                created_at: file.createdAt,
-                modified_at: file.modifiedAt,
-              };
-            }
-          }
-        }
-      );
-
-      // Separate images and videos
-      for (const file of processedFiles) {
-        if (file.type === 'image') {
-          contents.images.push(file);
-        } else {
-          contents.videos.push(file);
         }
       }
 

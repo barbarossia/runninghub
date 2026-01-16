@@ -55,10 +55,6 @@ interface WorkspaceState {
   // Media sort state
   mediaSortField: 'name' | 'date' | 'size' | 'type';
   mediaSortDirection: 'asc' | 'desc';
-  // Currently selected dataset (for dataset detail view)
-  selectedDataset: { name: string; path: string } | null;
-  // Dataset files (for dataset detail view)
-  datasetMediaFiles: MediaFile[];
 
   // ============================================================
   // NEW STATE - Workflows
@@ -95,6 +91,14 @@ interface WorkspaceState {
   selectedExtension: string | null;
   // General loading state
   isLoading: boolean;
+
+  // ============================================================
+  // NEW STATE - Dataset
+  // ============================================================
+  // Currently selected dataset (for dataset detail view)
+  selectedDataset: { name: string; path: string } | null;
+  // Dataset files (for dataset detail view)
+  datasetMediaFiles: MediaFile[];
 
   // ============================================================
   // Error State
@@ -164,18 +168,6 @@ interface WorkspaceActions extends WorkspaceState {
   setMediaSorting: (field: 'name' | 'date' | 'size' | 'type', direction: 'asc' | 'desc') => void;
 
   // ============================================================
-  // NEW ACTIONS - Dataset File Management
-  // ============================================================
-  setSelectedDataset: (dataset: { name: string; path: string } | null) => void;
-  setDatasetMediaFiles: (files: MediaFile[]) => void;
-  toggleDatasetFileSelection: (fileId: string) => void;
-  selectAllDatasetFiles: () => void;
-  deselectAllDatasetFiles: () => void;
-  removeDatasetFile: (fileId: string) => void;
-  updateDatasetFile: (fileId: string, updates: Partial<MediaFile>) => void;
-  getSelectedDatasetFiles: () => MediaFile[];
-
-  // ============================================================
   // NEW ACTIONS - Workflow Management
   // ============================================================
   setWorkflows: (workflows: Workflow[]) => void;
@@ -205,6 +197,18 @@ interface WorkspaceActions extends WorkspaceState {
   getJobById: (id: string) => Job | undefined;
   getSelectedJob: () => Job | undefined;
   reRunJob: (jobId: string) => Job;
+
+  // ============================================================
+  // NEW ACTIONS - Dataset File Management
+  // ============================================================
+  setSelectedDataset: (dataset: { name: string; path: string } | null) => void;
+  setDatasetMediaFiles: (files: MediaFile[]) => void;
+  toggleDatasetFileSelection: (fileId: string) => void;
+  selectAllDatasetFiles: () => void;
+  deselectAllDatasetFiles: () => void;
+  removeDatasetFile: (fileId: string) => void;
+  updateDatasetFile: (fileId: string, updates: Partial<MediaFile>) => void;
+  getSelectedDatasetFiles: () => MediaFile[];
   deleteJob: (jobId: string) => void;
   clearJobs: () => void;
   getJobsByWorkflow: (workflowId: string) => Job[];
@@ -255,10 +259,6 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       mediaSortField: 'date',
       mediaSortDirection: 'desc',
 
-      // New state - Dataset
-      selectedDataset: null,
-      datasetMediaFiles: [],
-
       // New state - Workflows
       workflows: [],
       selectedWorkflowId: null,
@@ -276,6 +276,10 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       viewMode: 'grid',
       selectedExtension: null,
       isLoading: false,
+
+      // New state - Dataset
+      selectedDataset: null,
+      datasetMediaFiles: [],
 
       // Error state
       error: null,
@@ -690,7 +694,6 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
             valid: true, // Will be validated by WorkflowInputBuilder
             width: mediaFile.width,
             height: mediaFile.height,
-            thumbnail: mediaFile.thumbnail,
           };
 
           // DEBUG: Log assignment dimensions
@@ -949,7 +952,8 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
         })),
 
       getSelectedDatasetFiles: () => {
-        return get().datasetMediaFiles.filter((f) => f.selected);
+        const state = get();
+        return state.datasetMediaFiles.filter((f) => f.selected);
       },
     }),
     {
@@ -969,6 +973,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
         // UI state
         viewMode: state.viewMode,
         selectedExtension: state.selectedExtension,
+        selectedDataset: state.selectedDataset,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
