@@ -1548,6 +1548,7 @@ export default function WorkspacePage() {
                   onRunWorkflow={handleQuickRunWorkflow}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
+                  onDeselectAll={deselectAllMediaFiles}
                 />
                 )}
 
