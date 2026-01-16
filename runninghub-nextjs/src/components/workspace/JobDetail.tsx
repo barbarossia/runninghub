@@ -43,6 +43,7 @@ import type { Job, JobResult } from '@/types/workspace';
 import { DuckDecodeButton } from './DuckDecodeButton';
 import { JobInputEditor } from './JobInputEditor';
 import { JobSeriesNav } from './JobSeriesNav';
+import { VideoPreview } from './VideoPreview';
 import type { FileInputAssignment } from '@/types/workspace';
 
 // Helper to get filename from path (client-side safe)
@@ -808,9 +809,16 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                           alt={input.fileName}
                           className="object-contain w-full h-full"
                         />
+                      ) : input.fileType === 'video' ? (
+                        <VideoPreview
+                          src={`/api/videos/serve?path=${encodeURIComponent(
+                            input.filePath
+                          )}`}
+                          className="object-contain w-full h-full"
+                        />
                       ) : (
                         <div className="flex items-center justify-center w-full h-full text-gray-400">
-                          <Video className="h-8 w-8" />
+                          <FileText className="h-8 w-8" />
                         </div>
                       )}
                       <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 text-white text-xs truncate">

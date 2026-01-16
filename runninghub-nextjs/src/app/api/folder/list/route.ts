@@ -3,6 +3,33 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getFileMetadata } from '@/lib/metadata';
 
+/**
+ * Read caption from a txt file with the same basename
+ * @param filePath - Path to the media file
+ * @returns Object with caption content and path, or undefined if no txt file exists
+ */
+async function readCaptionFile(filePath: string): Promise<{ caption: string; captionPath: string } | undefined> {
+  try {
+    const dir = path.dirname(filePath);
+    const basename = path.basename(filePath, path.extname(filePath));
+    const txtPath = path.join(dir, `${basename}.txt`);
+
+    // Check if txt file exists
+    await fs.access(txtPath);
+
+    // Read the txt file content
+    const caption = await fs.readFile(txtPath, 'utf-8');
+
+    return {
+      caption,
+      captionPath: txtPath,
+    };
+  } catch {
+    // No txt file exists or error reading it
+    return undefined;
+  }
+}
+
 async function handleFolderList(folderPath: string, sessionId?: string) {
   try {
     if (!folderPath) {
@@ -45,6 +72,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         height?: number;
         created_at?: number;
         modified_at?: number;
+        caption?: string;
+        captionPath?: string;
       }>,
       videos: [] as Array<{
         name: string;
@@ -59,6 +88,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
         thumbnail?: string;
         created_at?: number;
         modified_at?: number;
+        caption?: string;
+        captionPath?: string;
       }>,
       current_path: folder,
       parent_path: path.dirname(folder) !== folder ? path.dirname(folder) : null,
@@ -98,6 +129,9 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
               const createdAt = itemStats.birthtime?.getTime();
               const modifiedAt = itemStats.mtime?.getTime();
 
+              // Check for associated txt file (caption)
+              const captionData = await readCaptionFile(itemPath);
+
               contents.images.push({
                 name: item,
                 path: itemPath,
@@ -108,6 +142,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
                 height: metadata?.height,
                 created_at: createdAt,
                 modified_at: modifiedAt,
+                caption: captionData?.caption,
+                captionPath: captionData?.captionPath,
               });
             } else if (supportedVideoExtensions.includes(extension)) {
               // Extract video metadata
@@ -117,6 +153,9 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
               // Extract file timestamps (convert to milliseconds)
               const createdAt = itemStats.birthtime?.getTime();
               const modifiedAt = itemStats.mtime?.getTime();
+
+              // Check for associated txt file (caption)
+              const captionData = await readCaptionFile(itemPath);
 
               contents.videos.push({
                 name: item,
@@ -130,6 +169,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
                 duration: metadata?.duration,
                 created_at: createdAt,
                 modified_at: modifiedAt,
+                caption: captionData?.caption,
+                captionPath: captionData?.captionPath,
               });
             }
           }

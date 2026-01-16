@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, FileEdit } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import {
@@ -103,7 +103,10 @@ function getAspectRatio(width: number, height: number): string {
   return closestRatio[2];
 }
 
+export type MediaGalleryMode = 'workspace' | 'dataset';
+
 export interface MediaGalleryProps {
+  mode?: MediaGalleryMode;
   onFileClick?: (file: MediaFile) => void;
   onFileDoubleClick?: (file: MediaFile) => void;
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
@@ -113,10 +116,12 @@ export interface MediaGalleryProps {
   onPreview?: (file: MediaFile) => void;
   onExport?: (files: MediaFile[]) => Promise<void>;
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
+  onExportToDataset?: (file: MediaFile) => void;
   className?: string;
 }
 
 export function MediaGallery({
+  mode = 'workspace',
   onFileClick,
   onFileDoubleClick,
   onRename,
@@ -126,21 +131,36 @@ export function MediaGallery({
   onPreview,
   onExport,
   onConvertFps,
+  onExportToDataset,
   className = '',
 }: MediaGalleryProps) {
   const {
     mediaFiles,
+    datasetMediaFiles,
     viewMode,
     selectedExtension,
     jobFiles,
     toggleMediaFileSelection,
     selectAllMediaFiles,
     deselectAllMediaFiles,
+    toggleDatasetFileSelection,
+    selectAllDatasetFiles,
+    deselectAllDatasetFiles,
     getSelectedMediaFiles,
+    getSelectedDatasetFiles,
     setViewMode,
     setSelectedExtension,
     updateMediaFile,
+    updateDatasetFile,
   } = useWorkspaceStore();
+
+  // Use the appropriate files based on mode
+  const files = mode === 'dataset' ? datasetMediaFiles : mediaFiles;
+  const toggleSelection = mode === 'dataset' ? toggleDatasetFileSelection : toggleMediaFileSelection;
+  const selectAll = mode === 'dataset' ? selectAllDatasetFiles : selectAllMediaFiles;
+  const deselectAll = mode === 'dataset' ? deselectAllDatasetFiles : deselectAllMediaFiles;
+  const getSelected = mode === 'dataset' ? getSelectedDatasetFiles : getSelectedMediaFiles;
+  const updateFile = mode === 'dataset' ? updateDatasetFile : updateMediaFile;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [renameDialogFile, setRenameDialogFile] = useState<MediaFile | null>(null);
@@ -154,20 +174,67 @@ export function MediaGallery({
   const [copiedPath, setCopiedPath] = useState(false);
   const [validatingFileIds, setValidatingFileIds] = useState<Set<string>>(new Set());
 
+  // Caption editing state
+  const [editedCaptions, setEditedCaptions] = useState<Record<string, string>>({});
+  const [savingCaptions, setSavingCaptions] = useState<Set<string>>(new Set());
+
+  // Handle caption save
+  const handleSaveCaption = useCallback(async (file: MediaFile, newContent: string) => {
+    if (!file.captionPath) return;
+
+    setSavingCaptions(prev => new Set(prev).add(file.id));
+
+    try {
+      const response = await fetch('/api/files/write-txt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: file.captionPath,
+          content: newContent,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update the file in store with new caption
+        updateFile(file.id, { caption: newContent });
+        // Clear the edited caption since it's now saved
+        setEditedCaptions(prev => {
+          const newEdited = { ...prev };
+          delete newEdited[file.id];
+          return newEdited;
+        });
+        toast.success('Caption saved');
+      } else {
+        toast.error(data.error || 'Failed to save caption');
+      }
+    } catch (error) {
+      console.error('Failed to save caption:', error);
+      toast.error('Failed to save caption');
+    } finally {
+      setSavingCaptions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(file.id);
+        return newSet;
+      });
+    }
+  }, [updateMediaFile]);
+
   // Get unique extensions for filter
   const uniqueExtensions = useMemo(() => {
     const extensions = new Set<string>();
-    mediaFiles.forEach((file) => {
+    files.forEach((file) => {
       if (file.extension) {
         extensions.add(file.extension);
       }
     });
     return Array.from(extensions).sort();
-  }, [mediaFiles]);
+  }, [files]);
 
   // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
-    const filtered = mediaFiles.filter((file) => {
+    const filtered = files.filter((file) => {
       // Extension filter
       if (selectedExtension && file.extension !== selectedExtension) return false;
 
@@ -190,20 +257,20 @@ export function MediaGallery({
         uniqueMap.set(file.id, file);
       }
     });
-    
+
     return Array.from(uniqueMap.values());
-  }, [mediaFiles, searchQuery, selectedExtension]);
+  }, [files, searchQuery, selectedExtension]);
 
   // Get selected files count
   const selectedCount = useMemo(() => {
-    return mediaFiles.filter((f) => f.selected).length;
-  }, [mediaFiles]);
+    return files.filter((f) => f.selected).length;
+  }, [files]);
 
   const isAllSelected = selectedCount > 0 && selectedCount === filteredFiles.length;
 
   // Lazy validation: Validate selected images that haven't been validated yet
   useEffect(() => {
-    const selectedImages = mediaFiles.filter(
+    const selectedImages = files.filter(
       f => f.selected && f.type === 'image' && f.isDuckEncoded === undefined && !validatingFileIds.has(f.id)
     );
 
@@ -601,7 +668,72 @@ export function MediaGallery({
                           <>VID {file.extension?.replace('.', '').toUpperCase()}</>
                         )}
                       </Badge>
+
+                      {/* Caption in list view - show as truncated with expand option (Dataset mode only) */}
+                      {mode === 'dataset' && file.caption && file.captionPath && (
+                        <div className="flex items-center gap-1.5 ml-auto pl-3">
+                          <FileEdit className="h-3 w-3 text-yellow-600 flex-shrink-0" />
+                          <span className="text-xs text-gray-600 line-clamp-1 max-w-[200px]" title={file.caption}>
+                            {file.caption.slice(0, 50)}{file.caption.length > 50 ? '...' : ''}
+                          </span>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Full caption in list view - shown on card click (Dataset mode only) */}
+                    {mode === 'dataset' && file.caption && file.captionPath && isSelected && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <div className="flex items-start gap-1.5">
+                          <FileEdit className="h-3 w-3 text-yellow-700 mt-1 flex-shrink-0" />
+                          {editedCaptions[file.id] !== undefined ? (
+                            <textarea
+                              ref={(el) => {
+                                if (el) {
+                                  el.style.height = 'auto';
+                                  el.style.height = el.scrollHeight + 'px';
+                                }
+                              }}
+                              value={editedCaptions[file.id]}
+                              onChange={(e) => {
+                                setEditedCaptions(prev => ({ ...prev, [file.id]: e.target.value }));
+                                e.target.style.height = 'auto';
+                                e.target.style.height = e.target.scrollHeight + 'px';
+                              }}
+                              onBlur={() => {
+                                const newContent = editedCaptions[file.id];
+                                if (newContent !== undefined && newContent !== file.caption) {
+                                  handleSaveCaption(file, newContent);
+                                }
+                                setEditedCaptions(prev => {
+                                  const newEdited = { ...prev };
+                                  delete newEdited[file.id];
+                                  return newEdited;
+                                });
+                              }}
+                              className={cn(
+                                'flex-1 text-xs p-2 border rounded bg-white',
+                                'focus:outline-none focus:ring-1 focus:ring-yellow-400 overflow-hidden'
+                              )}
+                              style={{ height: 'auto' }}
+                              autoFocus
+                            />
+                          ) : (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditedCaptions(prev => ({ ...prev, [file.id]: file.caption }));
+                              }}
+                              className="flex-1 text-xs text-gray-700 whitespace-pre-wrap cursor-text hover:bg-white/50 p-2 rounded"
+                            >
+                              {file.caption}
+                            </div>
+                          )}
+                          {savingCaptions.has(file.id) && (
+                            <Loader2 className="h-4 w-4 text-yellow-600 animate-spin mt-1 flex-shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </Card>
                 </motion.div>
               );
@@ -858,6 +990,75 @@ export function MediaGallery({
                       {(file.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
+
+                  {/* Caption section - only show in Dataset mode */}
+                  {mode === 'dataset' && file.caption && file.captionPath && (
+                    <div
+                      className={cn(
+                        'p-2 border-t transition-colors bg-yellow-50/80',
+                        isSelected ? 'border-blue-200' : 'border-yellow-100'
+                      )}
+                    >
+                      <div className="flex items-start gap-1.5">
+                        <FileEdit className="h-3 w-3 text-yellow-700 mt-0.5 flex-shrink-0" />
+                        {editedCaptions[file.id] !== undefined ? (
+                          <textarea
+                            ref={(el) => {
+                              if (el) {
+                                // Auto-resize textarea to fit content
+                                el.style.height = 'auto';
+                                el.style.height = el.scrollHeight + 'px';
+                              }
+                            }}
+                            value={editedCaptions[file.id]}
+                            onChange={(e) => {
+                              setEditedCaptions(prev => ({ ...prev, [file.id]: e.target.value }));
+                              // Auto-resize as user types
+                              e.target.style.height = 'auto';
+                              e.target.style.height = e.target.scrollHeight + 'px';
+                            }}
+                            onBlur={() => {
+                              const newContent = editedCaptions[file.id];
+                              if (newContent !== undefined && newContent !== file.caption) {
+                                handleSaveCaption(file, newContent);
+                              }
+                              setEditedCaptions(prev => {
+                                const newEdited = { ...prev };
+                                delete newEdited[file.id];
+                                return newEdited;
+                              });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setEditedCaptions(prev => {
+                                  const newEdited = { ...prev };
+                                  delete newEdited[file.id];
+                                  return newEdited;
+                                });
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            className={cn(
+                              'flex-1 text-xs p-2 border rounded bg-white/80',
+                              'focus:outline-none focus:ring-1 focus:ring-yellow-400 overflow-hidden'
+                            )}
+                            style={{ height: 'auto' }}
+                            autoFocus
+                          />
+                        ) : (
+                          <div
+                            onClick={() => setEditedCaptions(prev => ({ ...prev, [file.id]: file.caption }))}
+                            className="flex-1 text-xs text-gray-700 whitespace-pre-wrap cursor-text hover:bg-white/50 p-2 rounded"
+                          >
+                            {file.caption}
+                          </div>
+                        )}
+                        {savingCaptions.has(file.id) && (
+                          <Loader2 className="h-3 w-3 text-yellow-600 animate-spin mt-1.5 flex-shrink-0" />
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </Card>
               </motion.div>
             );

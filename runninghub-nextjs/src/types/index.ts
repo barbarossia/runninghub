@@ -22,6 +22,10 @@ export interface ImageFile {
   isDuckEncoded?: boolean; // True if image contains duck-encoded hidden data
   duckRequiresPassword?: boolean; // True if duck-encoded image requires password
   duckValidationPending?: boolean; // True while validation is in progress
+
+  // Caption from associated txt file (dataset page only)
+  caption?: string; // Text content from associated txt file
+  captionPath?: string; // Path to the txt file
 }
 
 export interface VideoFile {
@@ -40,6 +44,10 @@ export interface VideoFile {
   blob_url?: string;
   created_at?: number; // File creation timestamp (Unix timestamp in ms)
   modified_at?: number; // File modification timestamp (Unix timestamp in ms)
+
+  // Caption from associated txt file (dataset page only)
+  caption?: string; // Text content from associated txt file
+  captionPath?: string; // Path to the txt file
 }
 
 export type MediaFile = ImageFile | VideoFile;

@@ -53,8 +53,10 @@ interface MediaSelectionToolbarProps {
   onPreview?: (file: MediaFile) => void;
   onExport?: (files: MediaFile[]) => Promise<void>;
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
+  onDeselectAll?: () => void;
   disabled?: boolean;
   className?: string;
+  showCancelButton?: boolean;
 }
 
 export function MediaSelectionToolbar({
@@ -67,8 +69,10 @@ export function MediaSelectionToolbar({
   onPreview,
   onExport,
   onConvertFps,
+  onDeselectAll,
   disabled = false,
   className = '',
+  showCancelButton = true,
 }: MediaSelectionToolbarProps) {
   const selectedCount = selectedFiles.length;
   const isSingleSelection = selectedCount === 1;
@@ -170,9 +174,10 @@ export function MediaSelectionToolbar({
 
   // Handle deselect all
   const handleDeselectAll = useCallback(() => {
-    // This will be handled by the parent component
-    // The toolbar just emits an event
-  }, []);
+    if (onDeselectAll) {
+      onDeselectAll();
+    }
+  }, [onDeselectAll]);
 
   // Handle quick run workflow
   const handleQuickRunConfirm = useCallback((workflowId: string) => {
@@ -237,6 +242,7 @@ export function MediaSelectionToolbar({
         className={className}
         badgeColor="bg-purple-600"
         onDeselectAll={handleDeselectAll}
+        showCancelButton={showCancelButton}
       >
         {(mode) => {
           if (mode === 'expanded') {

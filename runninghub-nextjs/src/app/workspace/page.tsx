@@ -43,6 +43,10 @@ import { VideoConvertConfiguration } from '@/components/workspace/VideoConvertCo
 import { CropConfiguration } from '@/components/videos/CropConfiguration';
 import { ProgressModal } from '@/components/progress/ProgressModal';
 import {
+  CreateDatasetDialog,
+  SelectDatasetDialog,
+} from '@/components/workspace/caption';
+import {
   Settings,
   FolderOpen,
   Workflow as WorkflowIcon,
@@ -52,10 +56,13 @@ import {
   Scissors,
   Youtube,
   Zap,
+  Database,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import { API_ENDPOINTS, ERROR_MESSAGES } from '@/constants';
+import { cn } from '@/lib/utils';
 import { exportImagesToFolder, getCompatibilityMessage, type ExportableFile } from '@/lib/export-images';
 import { buildCustomCropParams, validateCropConfig } from '@/lib/ffmpeg-crop';
 import { useExportConfigStore } from '@/store/export-config-store';
@@ -77,8 +84,11 @@ export default function WorkspacePage() {
     selectedJobId,
     mediaSortField,
     mediaSortDirection,
+    selectedDataset,
+    datasetMediaFiles,
     setMediaFiles,
     setSelectedWorkflow,
+    setSelectedDataset,
     addWorkflow,
     updateWorkflow,
     deleteWorkflow,
@@ -88,15 +98,30 @@ export default function WorkspacePage() {
     clearJobInputs,
     getSelectedMediaFiles,
     deselectAllMediaFiles,
+    removeMediaFile,
     autoAssignSelectedFilesToWorkflow,
     updateMediaFile,
     fetchJobs,
     setMediaSorting,
+    setDatasetMediaFiles,
+    toggleDatasetFileSelection,
+    selectAllDatasetFiles,
+    deselectAllDatasetFiles,
+    removeDatasetFile,
+    updateDatasetFile,
+    getSelectedDatasetFiles,
   } = useWorkspaceStore();
 
   // Local state
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'run-workflow' | 'workflows' | 'jobs'>('media');
+  // Persist active tab to localStorage
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'dataset' | 'run-workflow' | 'workflows' | 'jobs'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('workspace-active-tab');
+      return (saved as any) || 'media';
+    }
+    return 'media';
+  });
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
@@ -105,6 +130,14 @@ export default function WorkspacePage() {
   const [previewImage, setPreviewImage] = useState<MediaFile | null>(null);
   const [convertTaskId, setConvertTaskId] = useState<string | null>(null);
   const [isConvertProgressModalOpen, setIsConvertProgressModalOpen] = useState(false);
+
+  // Dataset-related state
+  const [datasets, setDatasets] = useState<Array<{ name: string; path: string; fileCount: number }>>([]);
+  const [showCreateDatasetDialog, setShowCreateDatasetDialog] = useState(false);
+  const [datasetFilesToCopy, setDatasetFilesToCopy] = useState<string[]>([]);
+  const [isLoadingDatasets, setIsLoadingDatasets] = useState(false);
+  const [showSelectDatasetDialog, setShowSelectDatasetDialog] = useState(false);
+  const [fileToExportToDataset, setFileToExportToDataset] = useState<MediaFile | null>(null);
 
   // Export config from store
   const { deleteAfterExport } = useExportConfigStore();
@@ -209,7 +242,7 @@ export default function WorkspacePage() {
         name: file.name,
         path: file.path,
         type: 'image' as const,
-        extension: file.name.split('.').pop() || '',
+        extension: '.' + (file.name.split('.').pop() || '').toLowerCase(),
         size: file.size || 0,
         width: file.width,
         height: file.height,
@@ -221,6 +254,9 @@ export default function WorkspacePage() {
         isDuckEncoded: undefined,
         duckRequiresPassword: undefined,
         duckValidationPending: false,
+        // Caption from associated txt file
+        caption: file.caption,
+        captionPath: file.captionPath,
       };
     });
 
@@ -230,7 +266,7 @@ export default function WorkspacePage() {
       name: file.name,
       path: file.path,
       type: 'video' as const,
-      extension: file.name.split('.').pop() || '',
+      extension: '.' + (file.name.split('.').pop() || '').toLowerCase(),
       size: file.size || 0,
       width: file.width,
       height: file.height,
@@ -241,6 +277,9 @@ export default function WorkspacePage() {
       thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
       blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
       selected: false,
+      // Caption from associated txt file
+      caption: file.caption,
+      captionPath: file.captionPath,
     }));
 
     // Combine both types and deduplicate by ID (path)
@@ -990,6 +1029,219 @@ export default function WorkspacePage() {
     }
   };
 
+  // Handle delete multiple videos by paths (for split tab toolbar)
+  const handleDeleteVideosByPath = async (selectedPaths: string[]) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VIDEOS_DELETE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videos: selectedPaths,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`Deleted ${selectedPaths.length} video(s)`);
+        await handleRefresh(true);
+      } else {
+        toast.error(data.error || 'Failed to delete videos');
+      }
+    } catch (error) {
+      console.error('Error deleting videos:', error);
+      toast.error('Failed to delete videos');
+    }
+  };
+
+  const handleCreateDataset = (filesToCopy?: string[]) => {
+    // If no files specified, create empty dataset
+    setDatasetFilesToCopy(filesToCopy || []);
+    setShowCreateDatasetDialog(true);
+  };
+
+  const handleDatasetCreated = async (dataset: { name: string; path: string }) => {
+    await handleRefresh(true);
+    await loadDatasets();
+    toast.success(`Dataset "${dataset.name}" created successfully`);
+  };
+
+  // Handle export to dataset from toolbar
+  const handleExportToDataset = () => {
+    setFileToExportToDataset(null); // Export all selected files
+    setShowSelectDatasetDialog(true);
+  };
+
+  // Handle export to dataset from context menu (single file)
+  const handleExportFileToDataset = (file: MediaFile) => {
+    setFileToExportToDataset(file);
+    setShowSelectDatasetDialog(true);
+  };
+
+  // Handle dataset selected for export
+  const handleDatasetSelectedForExport = async (dataset: { name: string; path: string }) => {
+    // Copy files to the selected dataset folder
+    const filesToExport = fileToExportToDataset
+      ? [fileToExportToDataset]
+      : selectedFiles;
+
+    if (filesToExport.length === 0) {
+      toast.error('No files to export');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/dataset/copy-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          datasetPath: dataset.path,
+          files: filesToExport.map(f => f.path),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Immediately remove moved files from store for instant UI update
+        filesToExport.forEach(file => {
+          removeMediaFile(file.id);
+        });
+        // Deselect files after export
+        deselectAllMediaFiles();
+        toast.success(`Moved ${filesToExport.length} file${filesToExport.length !== 1 ? 's' : ''} to "${dataset.name}"`);
+        // Refresh the workspace to ensure data consistency
+        await handleRefresh(true);
+        // Refresh the dataset view
+        if (selectedDataset && selectedDataset.path === dataset.path) {
+          await selectDataset(selectedDataset);
+        }
+      } else {
+        toast.error(data.error || 'Failed to export to dataset');
+      }
+    } catch (err) {
+      toast.error('Failed to export to dataset');
+    }
+  };
+
+  // Load datasets (subfolders) from current folder
+  const loadDatasets = useCallback(async () => {
+    if (!selectedFolder) {
+      setDatasets([]);
+      return;
+    }
+
+    setIsLoadingDatasets(true);
+    try {
+      const response = await fetch('/api/dataset/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath: selectedFolder.folder_path }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setDatasets(data.datasets || []);
+      } else {
+        setDatasets([]);
+      }
+    } catch (err) {
+      console.error('Failed to load datasets:', err);
+      setDatasets([]);
+    } finally {
+      setIsLoadingDatasets(false);
+    }
+  }, [selectedFolder]);
+
+  // Select a dataset and load its files
+  const selectDataset = useCallback(async (dataset: { name: string; path: string }) => {
+    setSelectedDataset(dataset);
+    setIsLoadingDatasets(true);
+
+    try {
+      const response = await fetch('/api/dataset/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datasetPath: dataset.path }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Convert files to MediaFile format
+        const imageFiles = (data.images || []).map((file: any) => ({
+          id: file.path,
+          name: file.name,
+          path: file.path,
+          type: 'image' as const,
+          extension: '.' + (file.name.split('.').pop() || '').toLowerCase(),
+          size: file.size || 0,
+          width: file.width,
+          height: file.height,
+          created_at: file.created_at,
+          modified_at: file.modified_at,
+          thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
+          caption: file.caption,
+          captionPath: file.captionPath,
+          selected: false,
+        }));
+
+        const videoFiles = (data.videos || []).map((file: any) => ({
+          id: file.path,
+          name: file.name,
+          path: file.path,
+          type: 'video' as const,
+          extension: '.' + (file.name.split('.').pop() || '').toLowerCase(),
+          size: file.size || 0,
+          width: file.width,
+          height: file.height,
+          fps: file.fps,
+          duration: file.duration,
+          created_at: file.created_at,
+          modified_at: file.modified_at,
+          thumbnail: file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
+          blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
+          caption: file.caption,
+          captionPath: file.captionPath,
+          selected: false,
+        }));
+
+        setDatasetMediaFiles([...imageFiles, ...videoFiles]);
+      } else {
+        setDatasetMediaFiles([]);
+        toast.error(data.error || 'Failed to load dataset files');
+      }
+    } catch (err) {
+      console.error('Failed to load dataset files:', err);
+      setDatasetMediaFiles([]);
+      toast.error('Failed to load dataset files');
+    } finally {
+      setIsLoadingDatasets(false);
+    }
+  }, [setDatasetMediaFiles]);
+
+  // Go back to dataset list
+  const backToDatasetList = useCallback(() => {
+    setSelectedDataset(null);
+    setDatasetMediaFiles([]);
+  }, [setDatasetMediaFiles]);
+
+  // Load datasets when switching to dataset tab
+  useEffect(() => {
+    if (activeTab === 'dataset') {
+      loadDatasets();
+    }
+  }, [activeTab, loadDatasets]);
+
+  // Auto-load last selected dataset when switching to dataset tab
+  useEffect(() => {
+    if (activeTab === 'dataset' && selectedDataset) {
+      // Load the files for the persisted selected dataset
+      selectDataset(selectedDataset);
+    }
+  }, [activeTab, selectedDataset, selectDataset]);
+
   const handlePreviewFile = useCallback((file: MediaFile) => {
     if (file.type === 'video') {
       setPreviewVideo(file);
@@ -999,6 +1251,77 @@ export default function WorkspacePage() {
       toast.error('Preview is only available for image and video files');
     }
   }, []);
+
+  // Handle dataset file rename
+  const handleDatasetRename = useCallback(async (file: MediaFile, newName: string) => {
+    if (!selectedDataset) return;
+
+    try {
+      const extension = file.name.includes('.') ? '.' + file.name.split('.').pop() : '';
+      const fullPath = file.path;
+      const directory = fullPath.substring(0, fullPath.lastIndexOf('/'));
+      const newPath = `${directory}/${newName}${extension}`;
+
+      const response = await fetch('/api/workspace/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          oldPath: fullPath,
+          newName: newName + extension,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update the file in the store
+        updateDatasetFile(file.id, {
+          name: newName + extension,
+          path: newPath,
+          thumbnail: file.type === 'image'
+            ? `/api/images/serve?path=${encodeURIComponent(newPath)}`
+            : file.thumbnail,
+          blobUrl: file.type === 'video'
+            ? `/api/videos/serve?path=${encodeURIComponent(newPath)}`
+            : file.blobUrl,
+        });
+        toast.success(`Renamed to ${newName}${extension}`);
+      } else {
+        toast.error(data.error || 'Failed to rename file');
+      }
+    } catch (err) {
+      console.error('Failed to rename file:', err);
+      toast.error('Failed to rename file');
+    }
+  }, [selectedDataset, updateDatasetFile]);
+
+  // Handle dataset file delete
+  const handleDatasetDelete = useCallback(async (files: MediaFile[]) => {
+    if (!selectedDataset) return;
+
+    const filePaths = files.map(f => f.path);
+
+    try {
+      const response = await fetch('/api/workspace/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths: filePaths }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Remove files from the store
+        files.forEach(f => removeDatasetFile(f.id));
+        toast.success(`Deleted ${files.length} file${files.length !== 1 ? 's' : ''}`);
+      } else {
+        toast.error(data.error || 'Failed to delete files');
+      }
+    } catch (err) {
+      console.error('Failed to delete files:', err);
+      toast.error('Failed to delete files');
+    }
+  }, [selectedDataset, removeDatasetFile]);
 
   const handleSortChange = useCallback((field: typeof mediaSortField, direction: typeof mediaSortDirection) => {
     setMediaSorting(field, direction);
@@ -1100,7 +1423,12 @@ export default function WorkspacePage() {
             />
 
             {/* Tab Navigation */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+            <Tabs value={activeTab} onValueChange={(v) => {
+              setActiveTab(v as any);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('workspace-active-tab', v);
+              }
+            }}>
               <TabsList className="grid w-full grid-cols-7">
                 <TabsTrigger value="media" className="flex items-center gap-2">
                   <FolderOpen className="h-4 w-4" />
@@ -1117,6 +1445,10 @@ export default function WorkspacePage() {
                 <TabsTrigger value="convert" className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
                   Convert
+                </TabsTrigger>
+                <TabsTrigger value="dataset" className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  Dataset
                 </TabsTrigger>
                 <TabsTrigger value="run-workflow" className="flex items-center gap-2">
                   <Play className="h-4 w-4" />
@@ -1145,10 +1477,6 @@ export default function WorkspacePage() {
                   onDelete={handleDeleteFile}
                   onDecode={handleDecodeFile}
                   onRunWorkflow={handleQuickRunWorkflow}
-                  onClip={async (files) => {
-                    const videoPaths = files.map(f => f.path);
-                    await handleClipVideos(videoPaths);
-                  }}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
                 />
@@ -1163,6 +1491,15 @@ export default function WorkspacePage() {
                       onSortChange={handleSortChange}
                     />
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRefresh(false)}
+                    className="gap-2"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                  </Button>
                 </div>
 
                 {/* Media Gallery */}
@@ -1170,10 +1507,8 @@ export default function WorkspacePage() {
                   onRename={handleRenameFile}
                   onDelete={handleDeleteFile}
                   onDecode={handleDecodeFile}
-                  onClipVideo={handleClipSingleVideo}
                   onPreview={handlePreviewFile}
                   onExport={handleExport}
-                  onConvertFps={handleConvertFps}
                 />
               </TabsContent>
 
@@ -1295,6 +1630,134 @@ export default function WorkspacePage() {
                 />
               </TabsContent>
 
+              {/* Dataset Tab */}
+              <TabsContent value="dataset" className="space-y-6 mt-6">
+                {!selectedDataset ? (
+                  // Dataset List View
+                  <>
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold">Datasets</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Datasets are subfolders in your current workspace folder. Create a new dataset or select an existing one to manage files.
+                      </p>
+                    </div>
+
+                    {/* Create Dataset Button */}
+                    <div className="flex items-center justify-between mb-4">
+                      <Button
+                        onClick={() => handleCreateDataset()}
+                        className="bg-purple-600 hover:bg-purple-700"
+                      >
+                        <Database className="h-4 w-4 mr-2" />
+                        Create New Dataset
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => loadDatasets()}
+                        disabled={isLoadingDatasets}
+                      >
+                        Refresh
+                      </Button>
+                    </div>
+
+                    {/* Dataset Grid */}
+                    {datasets.length === 0 && !isLoadingDatasets ? (
+                      <Card className="p-12 text-center">
+                        <Database className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                        <h4 className="text-lg font-semibold text-gray-700 mb-2">No Datasets Found</h4>
+                        <p className="text-sm text-gray-500 mb-6">
+                          Create a new dataset to organize your media files into subfolders.
+                        </p>
+                        <Button
+                          onClick={() => handleCreateDataset()}
+                          className="bg-purple-600 hover:bg-purple-700"
+                        >
+                          <Database className="h-4 w-4 mr-2" />
+                          Create First Dataset
+                        </Button>
+                      </Card>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                        {datasets.map((dataset) => (
+                          <Card
+                            key={dataset.path}
+                            className="cursor-pointer hover:ring-2 hover:ring-purple-400 transition-all group"
+                            onClick={() => selectDataset(dataset)}
+                          >
+                            <div className="p-4">
+                              <div className="flex items-center justify-center mb-3">
+                                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                                  <Database className="h-8 w-8 text-purple-600" />
+                                </div>
+                              </div>
+                              <p className="text-sm font-medium text-center truncate text-gray-700" title={dataset.name}>
+                                {dataset.name}
+                              </p>
+                              <p className="text-xs text-gray-500 text-center mt-1">
+                                {dataset.fileCount} file{dataset.fileCount !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // Dataset Detail View
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={backToDatasetList}
+                            className="text-gray-600 hover:text-gray-900"
+                          >
+                            ← Back to Datasets
+                          </Button>
+                        </div>
+                        <h3 className="text-lg font-semibold mt-2">
+                          <Database className="h-5 w-5 inline mr-2 text-purple-600" />
+                          {selectedDataset.name}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {datasetMediaFiles.length} file{datasetMediaFiles.length !== 1 ? 's' : ''} in dataset
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          selectDataset(selectedDataset);
+                        }}
+                        disabled={isLoadingDatasets}
+                      >
+                        Refresh
+                      </Button>
+                    </div>
+
+                    {/* Dataset Selection Toolbar */}
+                    {datasetMediaFiles.filter(f => f.selected).length > 0 && (
+                      <MediaSelectionToolbar
+                        selectedFiles={datasetMediaFiles.filter(f => f.selected)}
+                        onRename={handleDatasetRename}
+                        onDelete={handleDatasetDelete}
+                        onPreview={handlePreviewFile}
+                      />
+                    )}
+
+                    {/* Media Gallery for Dataset */}
+                    <MediaGallery
+                      mode="dataset"
+                      onFileDoubleClick={handlePreviewFile}
+                      onRename={handleDatasetRename}
+                      onDelete={handleDatasetDelete}
+                      onPreview={handlePreviewFile}
+                    />
+                  </>
+                )}
+              </TabsContent>
+
               {/* Run Workflow Tab */}
               <TabsContent value="run-workflow" className="space-y-6 mt-6">
                 <div className="flex items-center justify-between">
@@ -1411,6 +1874,23 @@ export default function WorkspacePage() {
             onOpenChange={setIsConvertProgressModalOpen}
           />
         )}
+
+        {/* Create Dataset Dialog */}
+        <CreateDatasetDialog
+          open={showCreateDatasetDialog}
+          onOpenChange={setShowCreateDatasetDialog}
+          selectedFiles={datasetFilesToCopy}
+          parentPath={selectedFolder?.folder_path || ''}
+          onSuccess={handleDatasetCreated}
+        />
+
+        {/* Select Dataset Dialog (for export) */}
+        <SelectDatasetDialog
+          open={showSelectDatasetDialog}
+          onOpenChange={setShowSelectDatasetDialog}
+          parentPath={selectedFolder?.folder_path || ''}
+          onSuccess={handleDatasetSelectedForExport}
+        />
       </div>
     </div>
   );
