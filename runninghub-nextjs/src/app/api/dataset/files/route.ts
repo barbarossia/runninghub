@@ -1,0 +1,83 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { readdir, stat } from 'fs/promises';
+import { join, extname } from 'path';
+import { getFileMetadata } from '@/lib/metadata';
+
+// Supported media extensions
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.avif']);
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v']);
+
+export async function POST(request: NextRequest) {
+  try {
+    const { datasetPath } = await request.json();
+
+    if (!datasetPath) {
+      return NextResponse.json({ success: false, error: 'Dataset path is required' }, { status: 400 });
+    }
+
+    // Read all entries in the dataset folder
+    const entries = await readdir(datasetPath, { withFileTypes: true });
+
+    const images: any[] = [];
+    const videos: any[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+
+      const filePath = join(datasetPath, entry.name);
+      const ext = extname(entry.name).toLowerCase();
+
+      // Process image files
+      if (IMAGE_EXTENSIONS.has(ext)) {
+        try {
+          const fileStats = await stat(filePath);
+          const metadata = await getFileMetadata(filePath, 'image');
+
+          images.push({
+            name: entry.name,
+            path: filePath,
+            size: fileStats.size,
+            width: metadata?.width || 0,
+            height: metadata?.height || 0,
+            created_at: fileStats.birthtimeMs || fileStats.ctimeMs,
+            modified_at: fileStats.mtimeMs,
+          });
+        } catch (err) {
+          // Skip files that can't be read
+          console.warn(`Skipping image ${entry.name}:`, err);
+        }
+      }
+      // Process video files
+      else if (VIDEO_EXTENSIONS.has(ext)) {
+        try {
+          const fileStats = await stat(filePath);
+          const metadata = await getFileMetadata(filePath, 'video') as any;
+
+          videos.push({
+            name: entry.name,
+            path: filePath,
+            size: fileStats.size,
+            width: metadata?.width || 0,
+            height: metadata?.height || 0,
+            fps: metadata?.fps || 0,
+            duration: metadata?.duration || 0,
+            thumbnail: undefined,
+            created_at: fileStats.birthtimeMs || fileStats.ctimeMs,
+            modified_at: fileStats.mtimeMs,
+          });
+        } catch (err) {
+          // Skip files that can't be read
+          console.warn(`Skipping video ${entry.name}:`, err);
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true, images, videos });
+  } catch (error) {
+    console.error('Error loading dataset files:', error);
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Failed to load dataset files' },
+      { status: 500 }
+    );
+  }
+}
