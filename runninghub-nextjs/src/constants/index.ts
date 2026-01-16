@@ -67,6 +67,7 @@ export const API_ENDPOINTS = {
   VIDEOS_DELETE: '/api/videos/delete',
   VIDEOS_CROP: '/api/videos/crop',
   VIDEOS_CLIP: '/api/videos/clip',
+  VIDEOS_SPLIT: '/api/videos/split',
 
   // YouTube
   YOUTUBE_DOWNLOAD: '/api/youtube/download',

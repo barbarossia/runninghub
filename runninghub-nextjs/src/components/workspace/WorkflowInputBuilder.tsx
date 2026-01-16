@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { validateFileForParameter, filterValidFilesForParameter, formatFileSize } from '@/utils/workspace-validation';
 import type { Workflow, WorkflowInputParameter, MediaFile, FileInputAssignment } from '@/types/workspace';
 import { toast } from 'sonner';
+import { VideoPreview } from './VideoPreview';
 
 export interface WorkflowInputBuilderProps {
   workflow: Workflow;
@@ -197,7 +198,9 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
             width: uploadedFile.width,
             height: uploadedFile.height,
             selected: false,
-            thumbnail: `/api/images/serve?path=${encodeURIComponent(uploadedFile.workspacePath)}`,
+            thumbnail: file.type.startsWith('image') 
+              ? `/api/images/serve?path=${encodeURIComponent(uploadedFile.workspacePath)}`
+              : undefined,
           };
 
           console.log(`[Direct Upload] ${uploadedFile.name} uploaded to ${uploadPath}`);
@@ -342,8 +345,8 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                             const img = e.currentTarget;
                             if (img.naturalWidth && img.naturalHeight) {
                               // Check if we need to update dimensions (if missing or different)
-                              if (!assignment.width || !assignment.height || 
-                                  assignment.width !== img.naturalWidth || 
+                              if (!assignment.width || !assignment.height ||
+                                  assignment.width !== img.naturalWidth ||
                                   assignment.height !== img.naturalHeight) {
                                 console.log(`[Auto-Detect] Updating dimensions for ${assignment.fileName}: ${img.naturalWidth}x${img.naturalHeight}`);
                                 updateMediaFile(assignment.filePath, {
@@ -354,9 +357,23 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
                             }
                           }}
                         />
+                      ) : assignment.fileType === 'video' ? (
+                        <>
+                          <VideoPreview
+                            src={`/api/videos/serve?path=${encodeURIComponent(assignment.filePath)}`}
+                            poster={assignment.thumbnail}
+                            className="h-full w-full object-contain"
+                          />
+                          {/* Play button overlay for videos */}
+                          <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                            <div className="bg-black/50 rounded-full p-1.5 backdrop-blur-sm">
+                              <Video className="h-5 w-5 text-white" fill="white" />
+                            </div>
+                          </div>
+                        </>
                       ) : (
                         <div className="flex items-center justify-center h-full w-full bg-gray-200 text-gray-400">
-                          <Video className="h-12 w-12" />
+                          <FileText className="h-12 w-12" />
                         </div>
                       )}
                     </div>

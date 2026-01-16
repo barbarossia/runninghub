@@ -26,7 +26,6 @@ import {
   Loader2,
   AlertCircle,
   PlayCircle,
-  Scissors,
   Download,
   Zap,
   Expand,
@@ -113,7 +112,6 @@ export interface MediaGalleryProps {
   onRename?: (file: MediaFile, newName: string) => Promise<void>;
   onDelete?: (files: MediaFile[]) => Promise<void>;
   onDecode?: (file: MediaFile, password?: string) => Promise<void>;
-  onClipVideo?: (file: MediaFile) => void;
   onPreview?: (file: MediaFile) => void;
   onExport?: (files: MediaFile[]) => Promise<void>;
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
@@ -129,7 +127,6 @@ export function MediaGallery({
   onRename,
   onDelete,
   onDecode,
-  onClipVideo,
   onPreview,
   onExport,
   onConvertFps,
@@ -229,7 +226,8 @@ export function MediaGallery({
     const extensions = new Set<string>();
     files.forEach((file) => {
       if (file.extension) {
-        extensions.add(file.extension);
+        // Normalize to lowercase for deduplication
+        extensions.add(file.extension.toLowerCase());
       }
     });
     return Array.from(extensions).sort();
@@ -238,8 +236,8 @@ export function MediaGallery({
   // Filter files based on search and extension
   const filteredFiles = useMemo(() => {
     const filtered = files.filter((file) => {
-      // Extension filter
-      if (selectedExtension && file.extension !== selectedExtension) return false;
+      // Extension filter (normalize for case-insensitive comparison)
+      if (selectedExtension && file.extension.toLowerCase() !== selectedExtension.toLowerCase()) return false;
 
       // Search filter
       if (searchQuery) {
@@ -271,8 +269,11 @@ export function MediaGallery({
 
   const isAllSelected = selectedCount > 0 && selectedCount === filteredFiles.length;
 
-  // Lazy validation: Validate selected images that haven't been validated yet
+  // Lazy validation: Validate selected images that haven't been validated yet (workspace mode only)
   useEffect(() => {
+    // Skip validation in dataset mode
+    if (mode === 'dataset') return;
+
     const selectedImages = files.filter(
       f => f.selected && f.type === 'image' && f.isDuckEncoded === undefined && !validatingFileIds.has(f.id)
     );
@@ -291,7 +292,7 @@ export function MediaGallery({
     const validateImage = async (file: MediaFile) => {
       try {
         // Mark as pending
-        updateMediaFile(file.id, { duckValidationPending: true });
+        updateFile(file.id, { duckValidationPending: true });
 
         const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
           method: 'POST',
@@ -304,7 +305,7 @@ export function MediaGallery({
         console.log(`[MediaGallery] Validation result for ${file.name}:`, data);
 
         // Update the file with validation result
-        updateMediaFile(file.id, {
+        updateFile(file.id, {
           isDuckEncoded: data.isDuckEncoded,
           duckRequiresPassword: data.requiresPassword,
           duckValidationPending: false,
@@ -318,7 +319,7 @@ export function MediaGallery({
         });
       } catch (error) {
         console.error(`[MediaGallery] Failed to validate ${file.name}:`, error);
-        updateMediaFile(file.id, {
+        updateFile(file.id, {
           isDuckEncoded: false,
           duckValidationPending: false,
         });
@@ -333,7 +334,7 @@ export function MediaGallery({
     };
 
     // Validate all selected images in parallel (but limit to 3 at a time to avoid overwhelming)
-    const validateWithConcurrency = async (files: MediaFile[], concurrency = 3) => {
+    const validateWithConcurrency = async (images: MediaFile[], concurrency = 3) => {
       const chunks = [];
       for (let i = 0; i < files.length; i += concurrency) {
         chunks.push(files.slice(i, i + concurrency));
@@ -345,16 +346,16 @@ export function MediaGallery({
     };
 
     validateWithConcurrency(selectedImages);
-  }, [mediaFiles, updateMediaFile, validatingFileIds]);
+  }, [files, updateFile, validatingFileIds, mode]);
 
   // Handle select all toggle
   const handleSelectAllToggle = useCallback(() => {
     if (isAllSelected || selectedCount === filteredFiles.length) {
-      deselectAllMediaFiles();
+      deselectAll();
     } else {
-      selectAllMediaFiles();
+      selectAll();
     }
-  }, [isAllSelected, selectedCount, filteredFiles.length, selectAllMediaFiles, deselectAllMediaFiles]);
+  }, [isAllSelected, selectedCount, filteredFiles.length, selectAll, deselectAll]);
 
   // Handle file click
   const handleFileClick = useCallback(
@@ -935,12 +936,6 @@ export function MediaGallery({
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameDialogOpen(file); }}>
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Rename
-                              </DropdownMenuItem>
-                            )}
-                            {file.type === 'video' && onClipVideo && (
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onClipVideo(file); }} className="text-purple-600 focus:text-purple-700 focus:bg-purple-50">
-                                <Scissors className="h-4 w-4 mr-2" />
-                                Clip Video
                               </DropdownMenuItem>
                             )}
                             {onExport && (

@@ -63,6 +63,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   const [jsonFile, setJsonFile] = useState<File | null>(null);
   const [isImportingJson, setIsImportingJson] = useState(false);
   const [jsonContent, setJsonContent] = useState<string | null>(null); // Store JSON content for second call
+  const [jsonFileName, setJsonFileName] = useState<string | null>(null); // Store file name for second call
   const [detectedNodes, setDetectedNodes] = useState<Array<{ id: string; name: string; inputCount: number; inputType: string; description: string }>>([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [showNodeSelection, setShowNodeSelection] = useState(false);
@@ -109,6 +110,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       // Reset JSON import state
       setJsonFile(null);
       setJsonContent(null);
+      setJsonFileName(null);
       setDetectedNodes([]);
       setSelectedNodeIds(new Set());
       setShowNodeSelection(false);
@@ -308,8 +310,9 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
 
       // Check if node selection is required
       if (data.requiresSelection && data.nodes && data.nodes.length > 0) {
-        // Store JSON content for second call
+        // Store JSON content and file name for second call
         setJsonContent(text);
+        setJsonFileName(jsonFile.name.replace('.json', ''));
         // Show detected nodes for selection
         setDetectedNodes(data.nodes);
         setShowNodeSelection(true);
@@ -350,6 +353,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonContent,
+          workflowName: jsonFileName || 'Imported Workflow',
           selectedNodes: Array.from(selectedNodeIds),
         }),
       });
@@ -372,6 +376,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
       // Reset selection state
       setShowNodeSelection(false);
       setJsonContent(null);
+      setJsonFileName(null);
       setDetectedNodes([]);
       setSelectedNodeIds(new Set());
 
@@ -389,6 +394,7 @@ export function WorkflowEditor({ workflow, onSave, onCancel, onDelete, open = tr
   const handleCancelNodeSelection = useCallback(() => {
     setShowNodeSelection(false);
     setJsonContent(null);
+    setJsonFileName(null);
     setDetectedNodes([]);
     setSelectedNodeIds(new Set());
     setJsonFile(null);

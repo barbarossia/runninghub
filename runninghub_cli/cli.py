@@ -22,7 +22,7 @@ from .utils import (
 
 
 @click.group()
-@click.option("--env-file", default=".env", help="Path to .env file")
+@click.option("--env-file", default=None, help="Path to .env file (defaults to .env.local or .env)")
 @click.pass_context
 def cli(ctx, env_file):
     """RunningHub CLI - A command-line interface for RunningHub API."""
@@ -53,20 +53,25 @@ def config(ctx):
 
 
 @cli.command()
+@click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.pass_context
-def nodes(ctx):
+def nodes(ctx, output_json):
     """List available nodes for the workflow."""
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
 
     try:
-        print_info(f"Fetching nodes for workflow: {cfg.workflow_id}")
         nodes = client.get_node_info(cfg.workflow_id)
 
-        if nodes:
+        if output_json:
+            import json
+            print(json.dumps(nodes, indent=2, ensure_ascii=False))
+        elif nodes:
+            print_info(f"Fetching nodes for workflow: {cfg.workflow_id}")
             print_success(f"Found {len(nodes)} nodes:")
             print(format_node_list(nodes))
         else:
+            print_info(f"Fetching nodes for workflow: {cfg.workflow_id}")
             print_warning("No nodes found for this workflow.")
 
     except Exception as e:
