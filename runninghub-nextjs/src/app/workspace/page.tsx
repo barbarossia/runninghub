@@ -411,7 +411,11 @@ export default function WorkspacePage() {
   // Refresh folder when switching to Media Gallery tab
   useEffect(() => {
     if (activeTab === 'media' && selectedFolder) {
-      handleRefresh(true); // Silent refresh when switching to media tab
+      // Small delay to ensure tab switch completes and UI settles
+      const timer = setTimeout(() => {
+        handleRefresh(true); // Silent refresh when switching to media tab
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [activeTab, selectedFolder, handleRefresh]);
 
