@@ -916,9 +916,12 @@ async function processWorkflowInBackground(
         // NEW: Process outputs - pass stdout for JSON parsing
         await processJobOutputs(taskId, workflowId, jobId, env, stdout);
 
-        // Handle post-processing (cleanup) if needed AND if we used process-multiple (since process handles it internally)
-        // If fileInputs.length !== 1, we used process-multiple which doesn't auto-cleanup
-        if (deleteSourceFiles && fileInputs.length !== 1) {
+        // Handle post-processing (cleanup) if needed
+        // The 'process' command (single file AI app) handles cleanup internally (unless --no-cleanup is passed).
+        // All other commands (process-multiple, run-workflow, run-text-workflow) DO NOT handle cleanup, so we must do it manually.
+        const usedProcessCommand = executionType !== 'workflow' && fileInputs.length === 1;
+        
+        if (deleteSourceFiles && !usedProcessCommand) {
           await writeLog("Cleaning up source files...", 'info', taskId);
           try {
              const fs = await import("fs/promises");
