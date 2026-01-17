@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
+import { useResizeConfigStore } from '@/store/resize-config-store';
 import { motion } from 'framer-motion';
 import {
   Pencil,
@@ -110,7 +111,6 @@ export function MediaSelectionToolbar({
   const [newFileName, setNewFileName] = useState('');
   const [decodePassword, setDecodePassword] = useState('');
   const [longestEdge, setLongestEdge] = useState('768');
-  const [deleteOriginalOnResize, setDeleteOriginalOnResize] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDecoding, setIsDecoding] = useState(false);
@@ -122,6 +122,9 @@ export function MediaSelectionToolbar({
 
   // Get workflows from store
   const { workflows } = useWorkspaceStore();
+
+  // Get resize config from store
+  const { deleteOriginal, setDeleteOriginal } = useResizeConfigStore();
 
   // Handle rename
   const handleRename = useCallback(async () => {
@@ -152,9 +155,9 @@ export function MediaSelectionToolbar({
     if (!onDelete) return;
 
     setIsDeleting(true);
+    setShowDeleteDialog(false); // Close dialog immediately
     try {
       await onDelete(selectedFiles);
-      setShowDeleteDialog(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete files');
     } finally {
@@ -167,6 +170,7 @@ export function MediaSelectionToolbar({
     if (!onDecode || duckEncodedCount === 0) return;
 
     setIsDecoding(true);
+    setShowDecodeDialog(false); // Close dialog immediately
     setDecodeProgress({ current: 0, total: duckEncodedCount });
 
     try {
@@ -248,7 +252,8 @@ export function MediaSelectionToolbar({
   }, [onConvertFps, selectedFiles]);
 
   // Open resize dialog (or call directly if skipping dialog)
-  const openResizeDialog = useCallback(() => {
+  const openResizeDialog = useCallback(async () => {
+    console.log('[openResizeDialog] Called', { selectedFiles: selectedFiles.length, skipResizeDialog, hasOnResize: !!onResize });
     if (selectedFiles.length === 0) {
       toast.error('No files selected');
       return;
@@ -256,8 +261,15 @@ export function MediaSelectionToolbar({
 
     if (skipResizeDialog) {
       // Call resize directly using page config (undefined means use config from store)
-      onResize?.(selectedFiles, undefined, undefined);
-      toast.success(`Resizing ${selectedFiles.length} file(s)...`);
+      try {
+        console.log('[openResizeDialog] Calling onResize with files:', selectedFiles);
+        toast.info(`Resizing ${selectedFiles.length} file(s)...`);
+        await onResize?.(selectedFiles, undefined, undefined);
+        console.log('[openResizeDialog] Resize completed');
+      } catch (err) {
+        console.error('Resize failed:', err);
+        toast.error('Failed to resize files');
+      }
     } else {
       setShowResizeDialog(true);
     }
@@ -275,7 +287,7 @@ export function MediaSelectionToolbar({
 
     setIsResizing(true);
     try {
-      await onResize(selectedFiles, edge, deleteOriginalOnResize);
+      await onResize(selectedFiles, edge, deleteOriginal);
       setShowResizeDialog(false);
       toast.success(`Resized ${selectedFiles.length} file(s)`);
     } catch (error) {
@@ -283,7 +295,7 @@ export function MediaSelectionToolbar({
     } finally {
       setIsResizing(false);
     }
-  }, [onResize, selectedFiles, longestEdge, deleteOriginalOnResize]);
+  }, [onResize, selectedFiles, longestEdge, deleteOriginal]);
 
   // Handle caption
   const handleCaption = useCallback(async () => {
@@ -937,8 +949,8 @@ export function MediaSelectionToolbar({
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="delete-original-resize"
-                  checked={deleteOriginalOnResize}
-                  onCheckedChange={(checked) => setDeleteOriginalOnResize(checked === true)}
+                  checked={deleteOriginal}
+                  onCheckedChange={(checked) => setDeleteOriginal(checked === true)}
                 />
                 <Label
                   htmlFor="delete-original-resize"

@@ -1343,25 +1343,30 @@ export default function WorkspacePage() {
 
   // Handle dataset file resize (from toolbar - uses config from store)
   const handleDatasetResize = useCallback(async (files: MediaFile[], longestEdge?: number, deleteOriginal?: boolean) => {
+    console.log('[handleDatasetResize] Called with:', { files: files.length, longestEdge, deleteOriginal });
     if (!selectedDataset) return;
 
     // Use config from store if not provided
     const resizeConfig = useResizeConfigStore.getState();
+    console.log('[handleDatasetResize] Config from store:', resizeConfig);
     const edge = longestEdge ?? parseInt(resizeConfig.longestEdge);
     const deleteOrig = deleteOriginal ?? resizeConfig.deleteOriginal;
     const suffix = resizeConfig.outputSuffix;
+
+    const filesData = files.map(f => ({
+      path: f.path,
+      type: f.type,
+      width: f.width || 0,
+      height: f.height || 0,
+    }));
+    console.log('[handleDatasetResize] Sending to API:', { edge, deleteOrig, suffix, filesData });
 
     try {
       const response = await fetch('/api/media/resize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          files: files.map(f => ({
-            path: f.path,
-            type: f.type,
-            width: f.width || 0,
-            height: f.height || 0,
-          })),
+          files: filesData,
           longestEdge: edge,
           outputSuffix: suffix,
           deleteOriginal: deleteOrig,
@@ -1369,6 +1374,7 @@ export default function WorkspacePage() {
       });
 
       const data = await response.json();
+      console.log('[handleDatasetResize] API response:', data);
 
       if (data.success) {
         const msg = deleteOrig
@@ -1865,7 +1871,7 @@ export default function WorkspacePage() {
                         onCaption={handleDatasetCaption}
                         onPreview={handlePreviewFile}
                         onDeselectAll={() => deselectAllDatasetFiles()}
-                        skipResizeDialog={true}
+                        skipResizeDialog={false}
                         showCaptionButton={true}
                       />
                     )}

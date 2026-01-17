@@ -7,6 +7,7 @@ interface ResizeConfigState {
   deleteOriginal: boolean;
   setLongestEdge: (edge: string) => void;
   setOutputSuffix: (suffix: string) => void;
+  setDeleteOriginal: (value: boolean) => void;
   toggleDeleteOriginal: () => void;
 }
 
@@ -18,6 +19,7 @@ export const useResizeConfigStore = create<ResizeConfigState>()(
       deleteOriginal: false,
       setLongestEdge: (edge) => set({ longestEdge: edge }),
       setOutputSuffix: (suffix) => set({ outputSuffix: suffix }),
+      setDeleteOriginal: (value) => set({ deleteOriginal: value }),
       toggleDeleteOriginal: () => set((state) => ({ deleteOriginal: !state.deleteOriginal })),
     }),
     {

@@ -283,7 +283,7 @@ export function MediaGallery({
     if (mode === 'dataset') return;
 
     const selectedImages = files.filter(
-      f => f.selected && f.type === 'image' && f.isDuckEncoded === undefined && !validatingFileIds.has(f.id)
+      f => f.selected && f.type === 'image' && f.isDuckEncoded === undefined && !f.duckValidationPending && !validatingFileIds.has(f.id)
     );
 
     if (selectedImages.length === 0) return;
@@ -342,10 +342,10 @@ export function MediaGallery({
     };
 
     // Validate all selected images in parallel (but limit to 3 at a time to avoid overwhelming)
-    const validateWithConcurrency = async (images: MediaFile[], concurrency = 3) => {
+    const validateWithConcurrency = async (imagesToValidate: MediaFile[], concurrency = 3) => {
       const chunks = [];
-      for (let i = 0; i < files.length; i += concurrency) {
-        chunks.push(files.slice(i, i + concurrency));
+      for (let i = 0; i < imagesToValidate.length; i += concurrency) {
+        chunks.push(imagesToValidate.slice(i, i + concurrency));
       }
 
       for (const chunk of chunks) {

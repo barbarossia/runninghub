@@ -18,7 +18,7 @@ export function ResizeConfiguration({
   disabled = false,
   className = '',
 }: ResizeConfigurationProps) {
-  const { longestEdge, outputSuffix, deleteOriginal, setLongestEdge, setOutputSuffix, toggleDeleteOriginal } =
+  const { longestEdge, outputSuffix, deleteOriginal, setLongestEdge, setOutputSuffix, setDeleteOriginal } =
     useResizeConfigStore();
 
   // Notify parent of config changes
@@ -97,7 +97,7 @@ export function ResizeConfiguration({
             <input
               type="checkbox"
               checked={deleteOriginal}
-              onChange={toggleDeleteOriginal}
+              onChange={(e) => setDeleteOriginal(e.target.checked)}
               disabled={disabled}
               className="w-4 h-4 rounded border-gray-300 bg-white text-indigo-600 focus:ring-indigo-500 focus:ring-offset-2 transition-all cursor-pointer"
             />
