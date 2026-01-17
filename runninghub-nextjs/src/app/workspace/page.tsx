@@ -954,6 +954,11 @@ export default function WorkspacePage() {
       // For batch operations, only refresh at the end (when current === total)
       if (!progress || progress.current === progress.total) {
         await handleRefresh(true);
+        
+        // Also refresh dataset if we are in dataset mode
+        if (selectedDataset) {
+          await selectDataset(selectedDataset);
+        }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to decode image';
