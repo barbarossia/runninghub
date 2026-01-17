@@ -40,8 +40,42 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
   const [error, setError] = useState<string | null>(null);
   const [decodedResult, setDecodedResult] = useState<DecodeResult | null>(null);
 
+  const [isValidating, setIsValidating] = useState(false);
+
+  const handleValidationAndDecode = async () => {
+    setIsValidating(true);
+    try {
+      // Validate first
+      const validateResponse = await fetch('/api/workspace/duck-validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imagePath }),
+      });
+      
+      const validateData = await validateResponse.json();
+      
+      if (validateData.requiresPassword) {
+        // Requires password, show dialog
+        setShowDecodeDialog(true);
+      } else {
+        // No password needed, decode directly
+        await handleDecode();
+      }
+    } catch (error) {
+      // If validation fails, fallback to showing dialog to let user try manually
+      console.error('Validation failed, falling back to dialog:', error);
+      setShowDecodeDialog(true);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   const handleDecode = async () => {
     setIsDecoding(true);
+    // If dialog is open, close it only after success to show result, 
+    // but if it wasn't open (direct decode), we don't need to do anything about dialog state
+    const wasDialogOpen = showDecodeDialog; 
+    
     setError(null);
     setDecodedResult(null);
 
@@ -81,15 +115,21 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
         onDecoded(data.decodedFilePath, data.fileType, data.decodedFileType || 'image');
       }
 
-      // Close dialog after success
-      setTimeout(() => {
-        setShowDecodeDialog(false);
-        setPassword('');
-        setDecodedResult(null);
-      }, 2000);
+      // If dialog was open, close it after a delay. If not, we are done.
+      if (wasDialogOpen) {
+        setTimeout(() => {
+          setShowDecodeDialog(false);
+          setPassword('');
+          setDecodedResult(null);
+        }, 2000);
+      }
 
     } catch (err: any) {
       console.error('Decode error:', err);
+      // If direct decode failed (e.g. wrong password or other error), we should probably show the dialog to show the error
+      if (!wasDialogOpen) {
+         setShowDecodeDialog(true);
+      }
       setError(err.message || 'Failed to decode image');
       toast.error('Decode failed: ' + (err.message || 'Unknown error'));
     } finally {
@@ -109,10 +149,15 @@ export function DuckDecodeButton({ imagePath, jobId, onDecoded }: DuckDecodeButt
       <Button
         variant="secondary"
         size="sm"
-        onClick={() => setShowDecodeDialog(true)}
+        onClick={handleValidationAndDecode}
+        disabled={isValidating || isDecoding}
         className="gap-2"
       >
-        <Eye className="h-4 w-4" />
+        {isValidating ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Eye className="h-4 w-4" />
+        )}
         Decode Hidden Data
       </Button>
 

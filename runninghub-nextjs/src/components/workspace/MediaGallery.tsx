@@ -30,6 +30,7 @@ import {
   Zap,
   Expand,
   Database,
+  Save,
 } from 'lucide-react';
 import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -283,7 +284,7 @@ export function MediaGallery({
     if (mode === 'dataset') return;
 
     const selectedImages = files.filter(
-      f => f.selected && f.type === 'image' && f.isDuckEncoded === undefined && !validatingFileIds.has(f.id)
+      f => f.selected && f.type === 'image' && f.isDuckEncoded === undefined && !f.duckValidationPending && !validatingFileIds.has(f.id)
     );
 
     if (selectedImages.length === 0) return;
@@ -342,10 +343,10 @@ export function MediaGallery({
     };
 
     // Validate all selected images in parallel (but limit to 3 at a time to avoid overwhelming)
-    const validateWithConcurrency = async (images: MediaFile[], concurrency = 3) => {
+    const validateWithConcurrency = async (imagesToValidate: MediaFile[], concurrency = 3) => {
       const chunks = [];
-      for (let i = 0; i < files.length; i += concurrency) {
-        chunks.push(files.slice(i, i + concurrency));
+      for (let i = 0; i < imagesToValidate.length; i += concurrency) {
+        chunks.push(imagesToValidate.slice(i, i + concurrency));
       }
 
       for (const chunk of chunks) {
@@ -374,13 +375,37 @@ export function MediaGallery({
     [toggleSelection, onFileClick]
   );
 
+  const [captionEditorFile, setCaptionEditorFile] = useState<MediaFile | null>(null);
+  const [editedCaptionContent, setEditedCaptionContent] = useState('');
+  const [isSavingCaption, setIsSavingCaption] = useState(false);
+
   // Handle file double click
   const handleFileDoubleClick = useCallback(
     (file: MediaFile) => {
-      onFileDoubleClick?.(file);
+      if (mode === 'dataset') {
+        setCaptionEditorFile(file);
+        setEditedCaptionContent(file.caption || '');
+      } else {
+        onFileDoubleClick?.(file);
+      }
     },
-    [onFileDoubleClick]
+    [mode, onFileDoubleClick]
   );
+
+  // Handle save caption from dialog
+  const handleSaveCaptionFromDialog = async () => {
+    if (!captionEditorFile) return;
+    
+    setIsSavingCaption(true);
+    try {
+        await handleSaveCaption(captionEditorFile, editedCaptionContent);
+        setCaptionEditorFile(null);
+    } catch (error) {
+        console.error("Failed to save caption from dialog:", error);
+    } finally {
+        setIsSavingCaption(false);
+    }
+  };
 
   // Helper functions for dialogs
   const setRenameDialogOpen = useCallback((file: MediaFile) => {
@@ -1424,6 +1449,85 @@ export function MediaGallery({
                 </div>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Caption Editor Dialog */}
+      {captionEditorFile && (
+        <Dialog open={!!captionEditorFile} onOpenChange={(open) => !open && setCaptionEditorFile(null)}>
+          <DialogContent className="max-w-4xl w-full h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Edit Caption: {captionEditorFile.name}</DialogTitle>
+              <DialogDescription>
+                Modify the caption content for this file.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-0 py-4">
+              {/* Preview Pane */}
+              <div className="bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center border border-gray-200">
+                {captionEditorFile.type === 'video' ? (
+                  <video
+                    src={captionEditorFile.blobUrl || ''}
+                    controls
+                    className="max-w-full max-h-full object-contain"
+                    preload="metadata"
+                  />
+                ) : (
+                  <div className="relative w-full h-full">
+                    <Image
+                      src={captionEditorFile.thumbnail || captionEditorFile.blobUrl || ''}
+                      alt={captionEditorFile.name}
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Editor Pane */}
+              <div className="flex flex-col h-full">
+                <Label className="mb-2">Caption Content</Label>
+                <textarea
+                  value={editedCaptionContent}
+                  onChange={(e) => setEditedCaptionContent(e.target.value)}
+                  className="flex-1 w-full p-4 border rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter caption text..."
+                  autoFocus
+                />
+                <div className="text-xs text-gray-500 mt-2 text-right">
+                  {editedCaptionContent.length} characters
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCaptionEditorFile(null)}
+                disabled={isSavingCaption}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveCaptionFromDialog}
+                disabled={isSavingCaption}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isSavingCaption ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Caption
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

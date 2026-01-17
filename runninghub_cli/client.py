@@ -125,6 +125,8 @@ class RunningHubClient:
             "nodeInfoList": node_info_list
         }
 
+        print(f"Submitting task payload: {json.dumps(node_info_list, indent=2, ensure_ascii=False)}")
+
         response = self.session.post(
             url,
             json=payload,
@@ -162,6 +164,8 @@ class RunningHubClient:
             "workflowId": workflow_id,
             "nodeInfoList": node_info_list
         }
+
+        print(f"Submitting workflow task payload: {json.dumps(node_info_list, indent=2, ensure_ascii=False)}")
 
         response = self.session.post(
             url,

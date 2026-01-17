@@ -4,6 +4,7 @@ import { join, dirname, extname, basename } from 'path';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { tmpdir } from 'os';
+import { getFileMetadata } from '@/lib/metadata';
 
 interface ResizeRequest {
   files: Array<{
@@ -35,9 +36,13 @@ function calculateDimensions(originalWidth: number, originalHeight: number, long
   }
 
   const scale = longestEdge / maxDimension;
+  // Ensure dimensions are even numbers (required by many codecs like h264)
+  const width = Math.round(originalWidth * scale);
+  const height = Math.round(originalHeight * scale);
+  
   return {
-    width: Math.round(originalWidth * scale),
-    height: Math.round(originalHeight * scale),
+    width: width % 2 === 0 ? width : width + 1,
+    height: height % 2 === 0 ? height : height + 1,
   };
 }
 
@@ -108,6 +113,9 @@ export async function POST(request: NextRequest) {
     const data: ResizeRequest = await request.json();
     const { files, longestEdge, outputSuffix = '_resized', deleteOriginal = false } = data;
 
+    console.log('[Resize API] Request:', { filesCount: files?.length, longestEdge, outputSuffix, deleteOriginal });
+    console.log('[Resize API] Files:', files.map(f => ({ name: f.path, type: f.type, width: f.width, height: f.height })));
+
     if (!files || files.length === 0) {
       return NextResponse.json(
         { success: false, error: 'No files provided' },
@@ -129,11 +137,29 @@ export async function POST(request: NextRequest) {
       const file = files[i];
       const fileName = basename(file.path);
 
+      // If dimensions are missing/invalid, try to fetch them
+      if (!file.width || !file.height) {
+        console.log(`[Resize API] Missing dimensions for ${fileName}, fetching metadata...`);
+        const metadata = await getFileMetadata(file.path, file.type);
+        if (metadata) {
+          file.width = metadata.width;
+          file.height = metadata.height;
+          console.log(`[Resize API] Fetched dimensions: ${file.width}x${file.height}`);
+        } else {
+          console.warn(`[Resize API] Failed to fetch metadata for ${fileName}, proceeding with 0x0 (might skip)`);
+        }
+      }
+
+      console.log(`[Resize API] Processing ${fileName}: ${file.width}x${file.height} -> target: ${longestEdge}`);
+
       // Calculate new dimensions
       const newDimensions = calculateDimensions(file.width, file.height, longestEdge);
 
+      console.log(`[Resize API] New dimensions:`, newDimensions);
+
       // Check if resize is actually needed
       if (newDimensions.width === file.width && newDimensions.height === file.height) {
+        console.log(`[Resize API] Skipping ${fileName}: already within target size`);
         results.push({
           fileName,
           originalSize: `${file.width}x${file.height}`,
@@ -170,12 +196,14 @@ export async function POST(request: NextRequest) {
       }
 
       try {
+        console.log(`[Resize API] Running resize for ${fileName} -> ${outputPath}`);
         // Perform resize based on file type
         if (file.type === 'video') {
           await runFFmpegResize(file.path, outputPath, newDimensions.width, newDimensions.height);
         } else {
           await runImageResize(file.path, outputPath, newDimensions.width, newDimensions.height);
         }
+        console.log(`[Resize API] Resize complete for ${fileName}`);
 
         // If deleteOriginal is true, replace the original file
         if (deleteOriginal) {
