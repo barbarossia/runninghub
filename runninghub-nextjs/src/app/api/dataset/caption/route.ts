@@ -107,28 +107,49 @@ export async function POST(request: NextRequest) {
       // Try direct parse first
       cliResult = JSON.parse(cliOutput);
     } catch (parseError) {
-      // If that fails, try to extract JSON from the output
-      // Find the first { and last } to extract just the JSON portion
-      const jsonStart = cliOutput.indexOf('{');
-      if (jsonStart !== -1) {
-        try {
-          const jsonEnd = cliOutput.lastIndexOf('}');
-          if (jsonEnd !== -1 && jsonEnd > jsonStart) {
-            const jsonStr = cliOutput.substring(jsonStart, jsonEnd + 1);
-            cliResult = JSON.parse(jsonStr);
-            writeLog(`Extracted JSON from output (found at position ${jsonStart})`, 'info', requestId);
-          } else {
-            throw new Error('Could not find complete JSON object');
+      // Robust extraction: Find all potential JSON objects and pick the valid result
+      const validObjects: any[] = [];
+      let lastError = null;
+
+      // Find all occurrences of '{'
+      for (let i = 0; i < cliOutput.length; i++) {
+        if (cliOutput[i] === '{') {
+          // Attempt to parse starting from this brace
+          try {
+            // We don't know where it ends, so we rely on JSON.parse behavior or brace counting
+            // A simple brace counter is safer to isolate the object string
+            let braceCount = 0;
+            let end = -1;
+            for (let j = i; j < cliOutput.length; j++) {
+              if (cliOutput[j] === '{') braceCount++;
+              if (cliOutput[j] === '}') braceCount--;
+              if (braceCount === 0) {
+                end = j;
+                break;
+              }
+            }
+
+            if (end !== -1) {
+              const potentialJson = cliOutput.substring(i, end + 1);
+              const obj = JSON.parse(potentialJson);
+              // Check if it looks like a RunningHub response
+              if (obj.code !== undefined) {
+                validObjects.push(obj);
+              }
+            }
+          } catch (e) {
+            // Not valid JSON, continue
+            lastError = e;
           }
-        } catch (extractError) {
-          writeLog(`Failed to extract JSON from CLI output: ${cliOutput.slice(0, 500)}`, 'error', requestId);
-          return NextResponse.json<CaptionResponse>({
-            success: false,
-            message: 'Failed to parse CLI output',
-          }, { status: 500 });
         }
+      }
+
+      if (validObjects.length > 0) {
+        // Use the last valid response object found
+        cliResult = validObjects[validObjects.length - 1];
+        writeLog(`Extracted valid JSON result from mixed output`, 'info', requestId);
       } else {
-        writeLog(`Failed to parse CLI output as JSON: ${cliOutput.slice(0, 500)}`, 'error', requestId);
+        writeLog(`Failed to extract JSON from CLI output: ${cliOutput.slice(0, 500)}`, 'error', requestId);
         return NextResponse.json<CaptionResponse>({
           success: false,
           message: 'Failed to parse CLI output',
