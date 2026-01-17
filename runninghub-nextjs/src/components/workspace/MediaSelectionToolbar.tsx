@@ -310,24 +310,23 @@ export function MediaSelectionToolbar({
 
     // Fire and forget - run in background
     toast.success(`Started captioning ${videoFiles.length} video(s)`);
-    setIsCaptioning(true);
-    setCaptionProgress({ current: 0, total: videoFiles.length });
+    
+    // Deselect files immediately to hide toolbar and return control
+    if (onDeselectAll) {
+      onDeselectAll();
+    }
 
     (async () => {
       try {
         for (let i = 0; i < videoFiles.length; i++) {
           await onCaption([videoFiles[i]]);
-          setCaptionProgress({ current: i + 1, total: videoFiles.length });
         }
         toast.success(`Captioned ${videoFiles.length} video(s)`);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to caption videos');
-      } finally {
-        setIsCaptioning(false);
-        setCaptionProgress({ current: 0, total: 0 });
       }
     })();
-  }, [onCaption, selectedFiles]);
+  }, [onCaption, selectedFiles, onDeselectAll]);
 
   const toolbarDisabled = disabled || isRenaming || isDeleting || isDecoding || isClipping || isResizing || isCaptioning;
 
