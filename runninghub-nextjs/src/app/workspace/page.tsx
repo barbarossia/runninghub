@@ -1554,36 +1554,36 @@ export default function WorkspacePage() {
                 localStorage.setItem('workspace-active-tab', v);
               }
             }}>
-              <TabsList className="grid w-full grid-cols-7">
-                <TabsTrigger value="media" className="flex items-center gap-2">
+              <TabsList className="flex w-full justify-start overflow-x-auto h-auto p-1 bg-muted/50 scrollbar-none">
+                <TabsTrigger value="media" className="flex items-center gap-2 min-w-fit px-4">
                   <FolderOpen className="h-4 w-4" />
                   Media Gallery
                 </TabsTrigger>
-                <TabsTrigger value="youtube" className="flex items-center gap-2">
+                <TabsTrigger value="youtube" className="flex items-center gap-2 min-w-fit px-4">
                   <Youtube className="h-4 w-4" />
                   YouTube
                 </TabsTrigger>
-                <TabsTrigger value="clip" className="flex items-center gap-2">
+                <TabsTrigger value="clip" className="flex items-center gap-2 min-w-fit px-4">
                   <Scissors className="h-4 w-4" />
                   Clip
                 </TabsTrigger>
-                <TabsTrigger value="convert" className="flex items-center gap-2">
+                <TabsTrigger value="convert" className="flex items-center gap-2 min-w-fit px-4">
                   <Zap className="h-4 w-4" />
                   Convert
                 </TabsTrigger>
-                <TabsTrigger value="dataset" className="flex items-center gap-2">
+                <TabsTrigger value="dataset" className="flex items-center gap-2 min-w-fit px-4">
                   <Database className="h-4 w-4" />
                   Dataset
                 </TabsTrigger>
-                <TabsTrigger value="run-workflow" className="flex items-center gap-2">
+                <TabsTrigger value="run-workflow" className="flex items-center gap-2 min-w-fit px-4">
                   <Play className="h-4 w-4" />
                   Run Workflow
                 </TabsTrigger>
-                <TabsTrigger value="workflows" className="flex items-center gap-2">
+                <TabsTrigger value="workflows" className="flex items-center gap-2 min-w-fit px-4">
                   <WorkflowIcon className="h-4 w-4" />
                   Workflows
                 </TabsTrigger>
-                <TabsTrigger value="jobs" className="flex items-center gap-2">
+                <TabsTrigger value="jobs" className="flex items-center gap-2 min-w-fit px-4">
                   <Clock className="h-4 w-4" />
                   Job History
                 </TabsTrigger>
