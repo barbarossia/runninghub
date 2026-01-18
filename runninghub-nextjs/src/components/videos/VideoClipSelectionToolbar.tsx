@@ -39,7 +39,7 @@ export function VideoClipSelectionToolbar({
   disabled = false,
   className = '',
   label = 'Select videos to extract images',
-  clipButtonText = 'Crop',
+  clipButtonText = 'Clip',
   showCancelButton = true,
 }: VideoClipSelectionToolbarProps) {
   // For backward compatibility with standalone clip page
@@ -101,12 +101,18 @@ export function VideoClipSelectionToolbar({
     setIsProcessing(true);
     try {
       await onClip(selectedPaths);
+      // Clear selection after action
+      if (onDeselectAll) {
+        onDeselectAll();
+      } else {
+        store.deselectAll();
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
     } finally {
       setIsProcessing(false);
     }
-  }, [onClip, selectedPaths]);
+  }, [onClip, selectedPaths, onDeselectAll, store]);
 
   // Handle FPS convert
   const handleConvertFps = useCallback(async () => {
