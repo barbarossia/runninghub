@@ -1408,28 +1408,28 @@ export default function WorkspacePage() {
     }
   }, [selectedDataset, selectDataset]);
 
-  // Handle dataset video caption (AI video description)
+  // Handle dataset media caption (AI description)
   const handleDatasetCaption = useCallback(async (files: MediaFile[]) => {
     if (!selectedDataset) return;
 
-    // Filter for video files only
-    const videoFiles = files.filter(f => f.type === 'video');
-    if (videoFiles.length === 0) {
-      toast.error('No video files selected');
+    // Filter for video or image files
+    const mediaFiles = files.filter(f => f.type === 'video' || f.type === 'image');
+    if (mediaFiles.length === 0) {
+      toast.error('No media files selected');
       return;
     }
 
-    const videoFile = videoFiles[0]; // Caption one at a time for now
+    const mediaFile = mediaFiles[0]; // Caption one at a time for now
 
     try {
-      toast.info(`Generating caption for ${videoFile.name}...`);
+      toast.info(`Generating caption for ${mediaFile.name}...`);
 
       const response = await fetch('/api/dataset/caption', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          videoPath: videoFile.path,
-          videoName: videoFile.name,
+          videoPath: mediaFile.path, // Legacy field name, handles both
+          videoName: mediaFile.name,
           datasetPath: selectedDataset.path,
         }),
       });
@@ -1437,7 +1437,7 @@ export default function WorkspacePage() {
       const data = await response.json();
 
       if (data.success) {
-        toast.success(`Caption saved: ${videoFile.name.replace(/\.[^/.]+$/, '')}.txt`);
+        toast.success(`Caption saved: ${mediaFile.name.replace(/\.[^/.]+$/, '')}.txt`);
         // Refresh dataset to show the new caption file
         await selectDataset(selectedDataset);
       } else {
