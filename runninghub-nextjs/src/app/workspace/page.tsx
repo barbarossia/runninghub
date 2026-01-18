@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore, useWorkspaceFolder } from '@/store/folder-store';
 import { useVideoClipStore } from '@/store/video-clip-store';
@@ -100,7 +100,6 @@ export default function WorkspacePage() {
     mediaSortDirection,
     selectedDataset,
     datasetMediaFiles,
-    setMediaFiles,
     setSelectedWorkflow,
     setSelectedDataset,
     addWorkflow,
@@ -114,7 +113,6 @@ export default function WorkspacePage() {
     deselectAllMediaFiles,
     removeMediaFile,
     autoAssignSelectedFilesToWorkflow,
-    updateMediaFile,
     fetchJobs,
     setMediaSorting,
     setDatasetMediaFiles,
@@ -125,6 +123,13 @@ export default function WorkspacePage() {
     updateDatasetFile,
     getSelectedDatasetFiles,
   } = useWorkspaceStore();
+
+  // Stable actions for effects
+  const upsertMediaFile = useWorkspaceStore(state => state.upsertMediaFile);
+  const updateMediaFile = useWorkspaceStore(state => state.updateMediaFile);
+  const removeMediaFileByPath = useWorkspaceStore(state => state.removeMediaFileByPath);
+  const mergeMediaFiles = useWorkspaceStore(state => state.mergeMediaFiles);
+  const setMediaFiles = useWorkspaceStore(state => state.setMediaFiles); // stable setMediaFiles
 
   // Local state
   const [error, setError] = useState<string>('');
@@ -194,6 +199,10 @@ export default function WorkspacePage() {
 
   // Custom hooks
   const { loadFolderContents } = useFileSystem({ pageType: 'workspace' });
+  // Store mediaSubscription in a ref to avoid state-dependent effect loops
+  const mediaSubscriptionRef = useRef<EventSource | null>(null);
+  const isMediaMountedRef = useRef(true);
+  const [isMediaLive, setIsMediaLive] = useState(false);
 
   // Validate duck encoding for all images in parallel
   const validateAllImagesForDuck = useCallback(async (imageFiles: MediaFile[]) => {
@@ -318,7 +327,7 @@ export default function WorkspacePage() {
     }
 
     const uniqueFiles = Array.from(uniqueMap.values());
-    setMediaFiles(uniqueFiles as MediaFile[]);
+    mergeMediaFiles(uniqueFiles as MediaFile[]);
 
     // NOTE: Disabled automatic validation on folder load for performance
     // Images will be validated lazily when selected instead
@@ -336,6 +345,103 @@ export default function WorkspacePage() {
     }
   }, [selectedFolder, loadFolderContents, processFolderContents]);
 
+  const stopMediaSubscription = useCallback(() => {
+    const hadSubscription = !!mediaSubscriptionRef.current;
+    if (mediaSubscriptionRef.current) {
+      mediaSubscriptionRef.current.close();
+      mediaSubscriptionRef.current = null;
+    }
+    // Only update state if we are actually stopping an active live session
+    // AND the component is still mounted. This prevents loops.
+    if (isMediaMountedRef.current && hadSubscription) {
+      setIsMediaLive(false);
+    }
+  }, []);
+
+
+  const startMediaSubscription = useCallback((folderPath: string) => {
+    // Clean up any existing subscription first
+    if (mediaSubscriptionRef.current) {
+      mediaSubscriptionRef.current.close();
+      mediaSubscriptionRef.current = null;
+    }
+
+    const source = new EventSource(`/api/workspace/subscribe?path=${encodeURIComponent(folderPath)}`);
+    mediaSubscriptionRef.current = source;
+
+    source.onopen = () => {
+      if (isMediaMountedRef.current) {
+        setIsMediaLive(true);
+      }
+    };
+
+    source.addEventListener('update', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const file = payload?.payload;
+        if (!file || !payload?.type) return;
+
+        const mediaFile: MediaFile = {
+          id: file.path,
+          name: file.name,
+          path: file.path,
+          type: payload.type,
+          extension: file.extension,
+          size: file.size || 0,
+          width: file.width,
+          height: file.height,
+          fps: file.fps,
+          duration: file.duration,
+          created_at: file.created_at,
+          modified_at: file.modified_at,
+          thumbnail: payload.type === 'image'
+            ? `/api/images/serve?path=${encodeURIComponent(file.path)}`
+            : file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
+          blobUrl: payload.type === 'video'
+            ? `/api/videos/serve?path=${encodeURIComponent(file.path)}`
+            : undefined,
+          caption: file.caption,
+          captionPath: file.captionPath,
+        };
+
+        upsertMediaFile(mediaFile);
+      } catch (error) {
+        console.error('[Workspace] Failed to parse media update event', error);
+      }
+    });
+
+    source.addEventListener('caption', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const filePath = payload?.filePath;
+        if (!filePath) return;
+        updateMediaFile(filePath, {
+          caption: payload.caption,
+          captionPath: payload.captionPath,
+        });
+      } catch (error) {
+        console.error('[Workspace] Failed to parse caption event', error);
+      }
+    });
+
+    source.addEventListener('remove', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (!payload?.path) return;
+        removeMediaFileByPath(payload.path);
+      } catch (error) {
+        console.error('[Workspace] Failed to parse media remove event', error);
+      }
+    });
+
+    source.onerror = () => {
+      stopMediaSubscription();
+      if (isMediaMountedRef.current) {
+        setIsMediaLive(false);
+      }
+    };
+  }, [removeMediaFileByPath, stopMediaSubscription, updateMediaFile, upsertMediaFile]);
+
   const handleTaskComplete = useCallback((taskId: string, status: 'completed' | 'failed') => {
     // Find job associated with this task
     const job = jobs.find(j => j.taskId === taskId);
@@ -352,7 +458,6 @@ export default function WorkspacePage() {
         logger.success('Job completed successfully', {
           metadata: { jobId: job.id, taskId, status }
         });
-        handleRefresh(true); // Refresh folder contents to show new files
       } else {
         // Note: Error message will be available after fetchJobs() completes
         logger.error(`Job failed`, {
@@ -384,17 +489,20 @@ export default function WorkspacePage() {
     folderType: 'workspace',
   });
 
+  // Stabilize the onFolderLoaded callback
+  const handleFolderLoaded = useCallback((folder: any, contents: any) => {
+    // Folder is automatically set as selected by the hook
+    // If contents were provided during validation, use them directly
+    if (contents) {
+      processFolderContents(contents);
+    }
+    // Otherwise, the useEffect below will load contents when selectedFolder changes
+  }, [processFolderContents]);
+
   // Auto-load last opened folder on mount
   useAutoLoadFolder({
     folderType: 'workspace',
-    onFolderLoaded: (folder, contents) => {
-      // Folder is automatically set as selected by the hook
-      // If contents were provided during validation, use them directly
-      if (contents) {
-        processFolderContents(contents);
-      }
-      // Otherwise, the useEffect below will load contents when selectedFolder changes
-    },
+    onFolderLoaded: handleFolderLoaded,
   });
 
   // Load folder contents when folder is selected
@@ -405,26 +513,25 @@ export default function WorkspacePage() {
           processFolderContents(result);
         }
       );
+    } else {
+      stopMediaSubscription();
     }
-  }, [selectedFolder, loadFolderContents, processFolderContents]);
+  }, [selectedFolder, loadFolderContents, processFolderContents, stopMediaSubscription]);
 
   // Refresh folder when switching to Media Gallery tab
   useEffect(() => {
     if (activeTab === 'media' && selectedFolder) {
-      // Small delay to ensure tab switch completes and UI settles
-      const timer = setTimeout(() => {
-        handleRefresh(true); // Silent refresh when switching to media tab
-      }, 100);
-      return () => clearTimeout(timer);
+      startMediaSubscription(selectedFolder.folder_path);
+    } else {
+      stopMediaSubscription();
     }
-  }, [activeTab, selectedFolder, handleRefresh]);
 
-  // Refresh folder when switching to Convert tab
-  useEffect(() => {
-    if (activeTab === 'convert' && selectedFolder) {
-      handleRefresh(true); // Silent refresh when switching to convert tab
-    }
-  }, [activeTab, selectedFolder, handleRefresh]);
+    return () => {
+      stopMediaSubscription();
+    };
+  }, [activeTab, selectedFolder, startMediaSubscription, stopMediaSubscription]);
+
+
 
   // Fallback: Validate duck encoding for selected images (only if not already validated on load)
   // NOTE: Most images are validated in parallel on load via validateAllImagesForDuck()
@@ -710,8 +817,17 @@ export default function WorkspacePage() {
         throw new Error(errorData.error || 'Failed to rename file');
       }
 
-      // Silent refresh to update UI without toast
-      await handleRefresh(true);
+      const data = await response.json();
+
+      const updatedPath = data?.newPath || data?.new_path || file.path;
+
+      removeMediaFileByPath(file.path);
+      upsertMediaFile({
+        ...file,
+        id: updatedPath,
+        path: updatedPath,
+        name: data?.newName || data?.new_name || newName,
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to rename file';
       toast.error(errorMessage);
@@ -794,8 +910,7 @@ export default function WorkspacePage() {
         throw new Error(errorData.error || 'Failed to delete files');
       }
 
-      // Silent refresh to update UI without toast
-      await handleRefresh(true);
+      files.forEach((file) => removeMediaFileByPath(file.path));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
       toast.error(errorMessage);
@@ -844,12 +959,7 @@ export default function WorkspacePage() {
         setActiveConsoleTaskId(data.task_id);
         toast.success(`Started converting ${videos.length} video${videos.length > 1 ? 's' : ''} to ${targetFps} FPS`);
 
-        // Refresh folder contents after conversion completes (similar to crop page)
-        setTimeout(() => {
-          if (selectedFolder) {
-            handleRefresh(true);
-          }
-        }, 2000);
+        // Folder updates handled by subscription
       } else {
         toast.error(data.error || 'Failed to start FPS conversion');
       }
@@ -921,12 +1031,7 @@ export default function WorkspacePage() {
         }
         toast.success(`Started cropping ${files.length} video${files.length > 1 ? 's' : ''}`);
 
-        // Refresh folder contents after cropping completes
-        setTimeout(() => {
-          if (selectedFolder) {
-            handleRefresh(true);
-          }
-        }, 2000);
+        // Folder updates handled by subscription
       } else {
         toast.error(data.error || ERROR_MESSAGES.CROP_FAILED);
       }
@@ -961,12 +1066,8 @@ export default function WorkspacePage() {
         toast.success(`Successfully decoded: ${file.name}`);
       }
 
-      // Refresh gallery to show decoded file and hide original
-      // For batch operations, only refresh at the end (when current === total)
+      // For batch operations, only refresh dataset view at the end (when current === total)
       if (!progress || progress.current === progress.total) {
-        await handleRefresh(true);
-        
-        // Also refresh dataset if we are in dataset mode
         if (selectedDataset) {
           await selectDataset(selectedDataset);
         }
@@ -1029,7 +1130,14 @@ export default function WorkspacePage() {
 
       if (data.success) {
         toast.success(`Renamed to ${data.new_name}`);
-        await handleRefresh(true);
+        removeMediaFileByPath(video.path);
+        const updatedPath = data.new_path || data.newPath || video.path;
+        upsertMediaFile({
+          ...video,
+          id: updatedPath,
+          path: updatedPath,
+          name: data.new_name || newName,
+        });
       } else {
         toast.error(data.error || 'Failed to rename video');
       }
@@ -1053,7 +1161,7 @@ export default function WorkspacePage() {
 
       if (data.success) {
         toast.success('Video deleted');
-        await handleRefresh(true);
+        removeMediaFileByPath(video.path);
       } else {
         toast.error(data.error || 'Failed to delete video');
       }
@@ -1078,7 +1186,7 @@ export default function WorkspacePage() {
 
       if (data.success) {
         toast.success(`Deleted ${selectedPaths.length} video(s)`);
-        await handleRefresh(true);
+        selectedPaths.forEach((path) => removeMediaFileByPath(path));
       } else {
         toast.error(data.error || 'Failed to delete videos');
       }
@@ -1095,7 +1203,6 @@ export default function WorkspacePage() {
   };
 
   const handleDatasetCreated = async (dataset: { name: string; path: string }) => {
-    await handleRefresh(true);
     await loadDatasets();
     toast.success(`Dataset "${dataset.name}" created successfully`);
   };
@@ -1144,9 +1251,6 @@ export default function WorkspacePage() {
         // Deselect files after export
         deselectAllMediaFiles();
         toast.success(`Moved ${filesToExport.length} file${filesToExport.length !== 1 ? 's' : ''} to "${dataset.name}"`);
-        // Refresh the workspace to ensure data consistency
-        await handleRefresh(true);
-        // Refresh the dataset view
         if (selectedDataset && selectedDataset.path === dataset.path) {
           await selectDataset(selectedDataset);
         }
@@ -1543,16 +1647,24 @@ export default function WorkspacePage() {
         ) : (
           /* Selected Folder Display */
           <div className="space-y-6">
-            <SelectedFolderHeader
-              folderName={selectedFolder.folder_name}
-              folderPath={selectedFolder.folder_path}
-              itemCount={mediaFiles.length}
-              itemType="images"
-              isVirtual={selectedFolder.is_virtual}
-              isLoading={false}
-              onRefresh={() => handleRefresh(false)}
-              colorVariant="purple"
-            />
+              <SelectedFolderHeader
+                folderName={selectedFolder.folder_name}
+                folderPath={selectedFolder.folder_path}
+                itemCount={mediaFiles.length}
+                itemType="images"
+                isVirtual={selectedFolder.is_virtual}
+                isLoading={false}
+                onRefresh={() => handleRefresh(false)}
+                colorVariant="purple"
+              />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className={`inline-flex items-center gap-2 rounded-full px-2 py-1 ${isMediaLive ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                  <span className={`h-2 w-2 rounded-full ${isMediaLive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  {isMediaLive ? 'Live updates' : 'Offline'}
+                </span>
+                <span>Changes sync without refresh when on Media tab.</span>
+              </div>
+
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(v) => {
