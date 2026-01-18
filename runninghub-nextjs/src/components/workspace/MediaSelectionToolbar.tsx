@@ -135,12 +135,13 @@ export function MediaSelectionToolbar({
       await onRename(selectedFiles[0], newFileName);
       setShowRenameDialog(false);
       setNewFileName('');
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to rename file');
     } finally {
       setIsRenaming(false);
     }
-  }, [onRename, isSingleSelection, selectedFiles, newFileName]);
+  }, [onRename, isSingleSelection, selectedFiles, newFileName, onDeselectAll]);
 
   // Open rename dialog
   const openRenameDialog = useCallback(() => {
@@ -158,12 +159,13 @@ export function MediaSelectionToolbar({
     setShowDeleteDialog(false); // Close dialog immediately
     try {
       await onDelete(selectedFiles);
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete files');
     } finally {
       setIsDeleting(false);
     }
-  }, [onDelete, selectedFiles]);
+  }, [onDelete, selectedFiles, onDeselectAll]);
 
   // Handle decode (single or batch)
   const handleDecode = useCallback(async () => {
@@ -189,13 +191,14 @@ export function MediaSelectionToolbar({
       setShowDecodeDialog(false);
       setDecodePassword('');
       setDecodeProgress({ current: 0, total: 0 });
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to decode images');
     } finally {
       setIsDecoding(false);
       setDecodeProgress({ current: 0, total: 0 });
     }
-  }, [onDecode, duckEncodedCount, selectedFiles, decodePassword]);
+  }, [onDecode, duckEncodedCount, selectedFiles, decodePassword, onDeselectAll]);
 
   // Handle deselect all
   const handleDeselectAll = useCallback(() => {
@@ -208,8 +211,9 @@ export function MediaSelectionToolbar({
   const handleQuickRunConfirm = useCallback((workflowId: string) => {
     if (onRunWorkflow) {
       onRunWorkflow(workflowId);
+      onDeselectAll?.(); // Clear selection after action
     }
-  }, [onRunWorkflow]);
+  }, [onRunWorkflow, onDeselectAll]);
 
   // Handle clip
   const handleClip = useCallback(async () => {
@@ -219,12 +223,13 @@ export function MediaSelectionToolbar({
     try {
       const videoFiles = selectedFiles.filter(f => f.type === 'video');
       await onClip(videoFiles);
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
     } finally {
       setIsClipping(false);
     }
-  }, [onClip, selectedFiles]);
+  }, [onClip, selectedFiles, onDeselectAll]);
 
   // Handle preview
   const handlePreview = useCallback(() => {
@@ -243,13 +248,15 @@ export function MediaSelectionToolbar({
   const handleExportClick = useCallback(() => {
     if (!onExport || selectedFiles.length === 0) return;
     onExport(selectedFiles);
-  }, [onExport, selectedFiles]);
+    onDeselectAll?.(); // Clear selection after action
+  }, [onExport, selectedFiles, onDeselectAll]);
 
   // Handle FPS convert
   const handleConvertFpsClick = useCallback(() => {
     if (!onConvertFps || selectedFiles.length === 0) return;
     onConvertFps(selectedFiles);
-  }, [onConvertFps, selectedFiles]);
+    onDeselectAll?.(); // Clear selection after action
+  }, [onConvertFps, selectedFiles, onDeselectAll]);
 
   // Open resize dialog (or call directly if skipping dialog)
   const openResizeDialog = useCallback(async () => {
@@ -290,26 +297,27 @@ export function MediaSelectionToolbar({
       await onResize(selectedFiles, edge, deleteOriginal);
       setShowResizeDialog(false);
       toast.success(`Resized ${selectedFiles.length} file(s)`);
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to resize files');
     } finally {
       setIsResizing(false);
     }
-  }, [onResize, selectedFiles, longestEdge, deleteOriginal]);
+  }, [onResize, selectedFiles, longestEdge, deleteOriginal, onDeselectAll]);
 
   // Handle caption
   const handleCaption = useCallback(async () => {
     if (!onCaption) return;
 
-    // Filter video files
-    const videoFiles = selectedFiles.filter(f => f.type === 'video');
-    if (videoFiles.length === 0) {
-      toast.error('No video files selected for captioning');
+    // Filter media files (video or image)
+    const mediaFiles = selectedFiles.filter(f => f.type === 'video' || f.type === 'image');
+    if (mediaFiles.length === 0) {
+      toast.error('No media files selected for captioning');
       return;
     }
 
     // Fire and forget - run in background
-    toast.success(`Started captioning ${videoFiles.length} video(s)`);
+    toast.success(`Started captioning ${mediaFiles.length} media file(s)`);
     
     // Deselect files immediately to hide toolbar and return control
     if (onDeselectAll) {
@@ -318,12 +326,12 @@ export function MediaSelectionToolbar({
 
     (async () => {
       try {
-        for (let i = 0; i < videoFiles.length; i++) {
-          await onCaption([videoFiles[i]]);
+        for (let i = 0; i < mediaFiles.length; i++) {
+          await onCaption([mediaFiles[i]]);
         }
-        toast.success(`Captioned ${videoFiles.length} video(s)`);
+        toast.success(`Captioned ${mediaFiles.length} media file(s)`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to caption videos');
+        toast.error(error instanceof Error ? error.message : 'Failed to caption media');
       }
     })();
   }, [onCaption, selectedFiles, onDeselectAll]);
@@ -404,20 +412,20 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
-                {/* Caption - only for videos in dataset tab */}
-                {showCaptionButton && onCaption && selectedFiles.some(f => f.type === 'video') && (
+                {/* Caption - only for videos/images in dataset tab */}
+                {showCaptionButton && onCaption && selectedFiles.some(f => f.type === 'video' || f.type === 'image') && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleCaption}
                     disabled={toolbarDisabled}
                     className="h-9 border-teal-100 bg-teal-50/50 hover:bg-teal-100 text-teal-700"
-                    title="Generate AI captions for videos"
+                    title="Generate AI captions for media"
                   >
                     {isCaptioning ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageSquare className="h-4 w-4 mr-2" />}
                     {isCaptioning
                       ? `Captioning ${captionProgress.current}/${captionProgress.total}...`
-                      : `Caption ${selectedFiles.filter(f => f.type === 'video').length} Video${selectedFiles.filter(f => f.type === 'video').length > 1 ? 's' : ''}`
+                      : `Caption ${selectedCount > 1 ? selectedCount : ''}`
                     }
                   </Button>
                 )}
@@ -588,14 +596,14 @@ export function MediaSelectionToolbar({
                 )}
 
                 {/* Caption - floating mode */}
-                {showCaptionButton && onCaption && selectedFiles.some(f => f.type === 'video') && (
+                {showCaptionButton && onCaption && selectedFiles.some(f => f.type === 'video' || f.type === 'image') && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={handleCaption}
                     disabled={toolbarDisabled}
                     className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-                    title="Generate AI captions for videos"
+                    title="Generate AI captions"
                   >
                     {isCaptioning ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5 mr-2 text-teal-400" />}
                     <span className="text-xs">{isCaptioning ? `${captionProgress.current}/${captionProgress.total}` : 'Caption'}</span>

@@ -537,6 +537,30 @@ async function processWorkflowInBackground(
     // This ensures job history references files from job folder, not original location
     await updateJobFile(jobId, { fileInputs: jobFileInputs });
 
+    // Handle source file deletion BEFORE execution
+    // Since we've already copied the files to the job directory, it's safe to remove the originals from the gallery
+    if (deleteSourceFiles) {
+      await writeLog("Cleaning up original source files from gallery...", 'info', taskId);
+      try {
+         const fs = await import("fs/promises");
+         const path = await import("path");
+         for (const input of fileInputs) {
+           try {
+             // Check if original path exists and is different from the new path
+             // (it should be different since it's in the job folder now)
+             if (await fs.stat(input.filePath).then(s => s.isFile()).catch(() => false)) {
+               await fs.unlink(input.filePath);
+               await writeLog(`Deleted original: ${path.basename(input.filePath)}`, 'info', taskId);
+             }
+           } catch (e) {
+             await writeLog(`Failed to delete original ${input.filePath}: ${e}`, 'warning', taskId);
+           }
+         }
+      } catch (e) {
+        await writeLog(`Source cleanup failed: ${e}`, 'error', taskId);
+      }
+    }
+
     // Clean up temporary uploads immediately after ensuring they are in the job folder
     // This prevents accumulation of files in ~/Downloads/workspace/uploads
     try {
@@ -552,10 +576,15 @@ async function processWorkflowInBackground(
             // Only delete if:
             // 1. File was successfully copied (path changed)
             // 2. Original file is in the uploads directory
+            // 3. We didn't already delete it in the deleteSourceFiles block above
             if (originalPath !== newPath && originalPath.includes(uploadsDirMarker)) {
                 try {
-                    await fs.unlink(originalPath);
-                    await writeLog(`Cleaned up temporary upload: ${path.basename(originalPath)}`, 'info', taskId);
+                    // Check existence first to avoid errors if already deleted
+                    const exists = await fs.stat(originalPath).then(() => true).catch(() => false);
+                    if (exists) {
+                        await fs.unlink(originalPath);
+                        await writeLog(`Cleaned up temporary upload: ${path.basename(originalPath)}`, 'info', taskId);
+                    }
                 } catch (cleanupError) {
                     // Log but don't fail the job
                     console.warn(`Failed to cleanup temporary file ${originalPath}:`, cleanupError);
@@ -821,12 +850,10 @@ async function processWorkflowInBackground(
             }
 
             // Handle cleanup flag
-            // CLI behavior: Default is to delete. --no-cleanup prevents deletion.
-            // We want to delete if deleteSourceFiles is TRUE.
-            // So if deleteSourceFiles is FALSE, we pass --no-cleanup.
-            if (!deleteSourceFiles) {
-                args.push("--no-cleanup");
-            }
+            // CLI behavior: Default is to delete the source file it was given.
+            // Since we've already manually deleted the originals from the gallery,
+            // and we want to keep the copies in the job folder, we ALWAYS pass --no-cleanup.
+            args.push("--no-cleanup");
 
         } else {
             // Multiple files (or 0 files with just params) -> use 'process-multiple' command
@@ -849,7 +876,7 @@ async function processWorkflowInBackground(
                 args.push("-p", `${getNodeId(paramId)}:${fieldName}:${value}`);
             }
 
-            // Note: process-multiple in CLI doesn't support --no-cleanup yet, manual cleanup required
+            // Note: process-multiple in CLI doesn't support --no-cleanup yet, but it doesn't auto-delete either
         }
     }
 
@@ -916,24 +943,8 @@ async function processWorkflowInBackground(
         // NEW: Process outputs - pass stdout for JSON parsing
         await processJobOutputs(taskId, workflowId, jobId, env, stdout);
 
-        // Handle post-processing (cleanup) if needed AND if we used process-multiple (since process handles it internally)
-        // If fileInputs.length !== 1, we used process-multiple which doesn't auto-cleanup
-        if (deleteSourceFiles && fileInputs.length !== 1) {
-          await writeLog("Cleaning up source files...", 'info', taskId);
-          try {
-             const fs = await import("fs/promises");
-             for (const input of fileInputs) {
-               try {
-                 await fs.unlink(input.filePath);
-                 await writeLog(`Deleted: ${input.filePath}`, 'info', taskId);
-               } catch (e) {
-                 await writeLog(`Failed to delete ${input.filePath}: ${e}`, 'warning', taskId);
-               }
-             }
-          } catch (e) {
-            await writeLog(`Cleanup failed: ${e}`, 'error', taskId);
-          }
-        }
+        // Note: Manual cleanup moved to BEFORE execution block above.
+        // No further cleanup needed here.
 
       } else {
         await writeLog(`Workflow execution failed with code ${code}`, 'error', taskId);

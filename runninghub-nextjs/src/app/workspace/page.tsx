@@ -511,7 +511,11 @@ export default function WorkspacePage() {
     setIsEditingWorkflow(true);
   };
 
-  const handleRunJob = async (data?: { fileInputs: FileInputAssignment[]; textInputs: Record<string, string> }) => {
+  const handleRunJob = async (data?: { 
+    fileInputs: FileInputAssignment[]; 
+    textInputs: Record<string, string>;
+    deleteSourceFiles?: boolean;
+  }) => {
     if (!selectedWorkflowId) {
       toast.error('Please select a workflow');
       return;
@@ -528,7 +532,7 @@ export default function WorkspacePage() {
       return;
     }
 
-    const { fileInputs, textInputs } = data;
+    const { fileInputs, textInputs, deleteSourceFiles } = data;
 
     // Check if this is a re-run from Job Detail page
     const currentJob = selectedJobId ? jobs.find(j => j.id === selectedJobId) : null;
@@ -561,7 +565,7 @@ export default function WorkspacePage() {
           fileInputs: fileInputs,
           textInputs: textInputs,
           folderPath: selectedFolder?.folder_path,
-          deleteSourceFiles: false,
+          deleteSourceFiles: deleteSourceFiles || false,
           parentJobId,
           seriesId,
         }),
@@ -683,6 +687,9 @@ export default function WorkspacePage() {
 
     // Auto-assign files to workflow
     autoAssignSelectedFilesToWorkflow(workflowId);
+
+    // Clear selection in gallery so it's clean when user comes back
+    deselectAllMediaFiles();
 
     // Switch to Run Workflow tab
     setActiveTab('run-workflow');
@@ -1401,28 +1408,28 @@ export default function WorkspacePage() {
     }
   }, [selectedDataset, selectDataset]);
 
-  // Handle dataset video caption (AI video description)
+  // Handle dataset media caption (AI description)
   const handleDatasetCaption = useCallback(async (files: MediaFile[]) => {
     if (!selectedDataset) return;
 
-    // Filter for video files only
-    const videoFiles = files.filter(f => f.type === 'video');
-    if (videoFiles.length === 0) {
-      toast.error('No video files selected');
+    // Filter for video or image files
+    const mediaFiles = files.filter(f => f.type === 'video' || f.type === 'image');
+    if (mediaFiles.length === 0) {
+      toast.error('No media files selected');
       return;
     }
 
-    const videoFile = videoFiles[0]; // Caption one at a time for now
+    const mediaFile = mediaFiles[0]; // Caption one at a time for now
 
     try {
-      toast.info(`Generating caption for ${videoFile.name}...`);
+      toast.info(`Generating caption for ${mediaFile.name}...`);
 
       const response = await fetch('/api/dataset/caption', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          videoPath: videoFile.path,
-          videoName: videoFile.name,
+          videoPath: mediaFile.path, // Legacy field name, handles both
+          videoName: mediaFile.name,
           datasetPath: selectedDataset.path,
         }),
       });
@@ -1430,7 +1437,7 @@ export default function WorkspacePage() {
       const data = await response.json();
 
       if (data.success) {
-        toast.success(`Caption saved: ${videoFile.name.replace(/\.[^/.]+$/, '')}.txt`);
+        toast.success(`Caption saved: ${mediaFile.name.replace(/\.[^/.]+$/, '')}.txt`);
         // Refresh dataset to show the new caption file
         await selectDataset(selectedDataset);
       } else {
@@ -1554,36 +1561,36 @@ export default function WorkspacePage() {
                 localStorage.setItem('workspace-active-tab', v);
               }
             }}>
-              <TabsList className="grid w-full grid-cols-7">
-                <TabsTrigger value="media" className="flex items-center gap-2">
+              <TabsList className="flex w-full justify-start overflow-x-auto h-auto p-1 bg-muted/50 scrollbar-none">
+                <TabsTrigger value="media" className="flex items-center gap-2 min-w-fit px-4">
                   <FolderOpen className="h-4 w-4" />
                   Media Gallery
                 </TabsTrigger>
-                <TabsTrigger value="youtube" className="flex items-center gap-2">
+                <TabsTrigger value="youtube" className="flex items-center gap-2 min-w-fit px-4">
                   <Youtube className="h-4 w-4" />
                   YouTube
                 </TabsTrigger>
-                <TabsTrigger value="clip" className="flex items-center gap-2">
+                <TabsTrigger value="clip" className="flex items-center gap-2 min-w-fit px-4">
                   <Scissors className="h-4 w-4" />
                   Clip
                 </TabsTrigger>
-                <TabsTrigger value="convert" className="flex items-center gap-2">
+                <TabsTrigger value="convert" className="flex items-center gap-2 min-w-fit px-4">
                   <Zap className="h-4 w-4" />
                   Convert
                 </TabsTrigger>
-                <TabsTrigger value="dataset" className="flex items-center gap-2">
+                <TabsTrigger value="dataset" className="flex items-center gap-2 min-w-fit px-4">
                   <Database className="h-4 w-4" />
                   Dataset
                 </TabsTrigger>
-                <TabsTrigger value="run-workflow" className="flex items-center gap-2">
+                <TabsTrigger value="run-workflow" className="flex items-center gap-2 min-w-fit px-4">
                   <Play className="h-4 w-4" />
                   Run Workflow
                 </TabsTrigger>
-                <TabsTrigger value="workflows" className="flex items-center gap-2">
+                <TabsTrigger value="workflows" className="flex items-center gap-2 min-w-fit px-4">
                   <WorkflowIcon className="h-4 w-4" />
                   Workflows
                 </TabsTrigger>
-                <TabsTrigger value="jobs" className="flex items-center gap-2">
+                <TabsTrigger value="jobs" className="flex items-center gap-2 min-w-fit px-4">
                   <Clock className="h-4 w-4" />
                   Job History
                 </TabsTrigger>

@@ -8,11 +8,12 @@ import { execSync } from 'child_process';
 // CLI and workflow configuration
 const RUNNINGHUB_CLI = '/opt/homebrew/Caskroom/miniconda/base/bin/runninghub';
 const WORKSPACE_WORKFLOWS = '/Users/barbarossia/Downloads/workspace/workflows';
-const CAPTION_WORKFLOW_JSON = 'workflow_1768572436369_rvc96w13l.json';
+const VIDEO_CAPTION_WORKFLOW_JSON = 'workflow_1768572436369_rvc96w13l.json';
+const IMAGE_CAPTION_WORKFLOW_JSON = 'workflow_1767161797843_bnyrpqcjb.json';
 
 interface CaptionRequest {
-  videoPath: string;
-  videoName: string;
+  videoPath: string; // Used for both video and image path (legacy name)
+  videoName: string; // Used for both video and image name
   datasetPath: string;
 }
 
@@ -27,9 +28,9 @@ interface CaptionResponse {
 /**
  * POST /api/dataset/caption
  *
- * Submits a video to the RunningHub workflow for AI captioning using the CLI.
- * The workflow processes the video and returns a text description.
- * The text file is downloaded and saved alongside the video with the same name.
+ * Submits a file (video or image) to the RunningHub workflow for AI captioning using the CLI.
+ * The workflow processes the file and returns a text description.
+ * The text file is downloaded and saved alongside the media with the same name.
  */
 export async function POST(request: NextRequest) {
   const requestId = `caption-${Date.now()}`;
@@ -38,20 +39,37 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: CaptionRequest = await request.json();
-    const { videoPath, videoName, datasetPath } = body;
+    const { videoPath: filePath, videoName: fileName, datasetPath } = body;
 
-    if (!videoPath || !videoName || !datasetPath) {
+    if (!filePath || !fileName || !datasetPath) {
       return NextResponse.json<CaptionResponse>({
         success: false,
         message: 'Missing required fields: videoPath, videoName, datasetPath',
       }, { status: 400 });
     }
 
-    // Verify video file exists
-    if (!existsSync(videoPath)) {
+    // Determine file type
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    const isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext);
+    const isImage = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'].includes(ext);
+
+    if (!isVideo && !isImage) {
       return NextResponse.json<CaptionResponse>({
         success: false,
-        message: `Video file not found: ${videoPath}`,
+        message: `Unsupported file type: ${ext}`,
+      }, { status: 400 });
+    }
+
+    // Select workflow based on type
+    const workflowFile = isVideo ? VIDEO_CAPTION_WORKFLOW_JSON : IMAGE_CAPTION_WORKFLOW_JSON;
+    const nodeId = isVideo ? '77' : '40'; // 77 for video input, 40 for image input
+    const typeLabel = isVideo ? 'video' : 'image';
+
+    // Verify file exists
+    if (!existsSync(filePath)) {
+      return NextResponse.json<CaptionResponse>({
+        success: false,
+        message: `File not found: ${filePath}`,
       }, { status: 404 });
     }
 
@@ -64,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify workflow JSON exists
-    const workflowJsonPath = join(WORKSPACE_WORKFLOWS, CAPTION_WORKFLOW_JSON);
+    const workflowJsonPath = join(WORKSPACE_WORKFLOWS, workflowFile);
     if (!existsSync(workflowJsonPath)) {
       return NextResponse.json<CaptionResponse>({
         success: false,
@@ -72,12 +90,11 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    writeLog(`Starting caption for video: ${videoName}`, 'info', requestId);
+    writeLog(`Starting caption for ${typeLabel}: ${fileName}`, 'info', requestId);
 
     // Build CLI command to run workflow
     // Format: runninghub run-workflow --workflow workflow_xxx.json --image "node_id:file_path" --timeout 600 --json
-    // Node ID 77 is the video input node (from param_77_video)
-    const cliCommand = `${RUNNINGHUB_CLI} run-workflow --workflow ${workflowJsonPath} --image "77:${videoPath}" --timeout 600 --json`;
+    const cliCommand = `${RUNNINGHUB_CLI} run-workflow --workflow ${workflowJsonPath} --image "${nodeId}:${filePath}" --timeout 600 --json`;
 
     writeLog(`Executing CLI command...`, 'info', requestId);
     writeLog(`Command: ${cliCommand}`, 'debug', requestId);
@@ -222,7 +239,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save caption text file alongside the video
-    const videoBaseName = videoName.replace(/\.[^/.]+$/, '');
+    const videoBaseName = fileName.replace(/\.[^/.]+$/, '');
     const captionFileName = `${videoBaseName}.txt`;
     const captionFilePath = join(datasetPath, captionFileName);
 
