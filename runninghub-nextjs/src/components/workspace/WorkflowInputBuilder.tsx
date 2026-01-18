@@ -38,7 +38,11 @@ import { VideoPreview } from './VideoPreview';
 
 export interface WorkflowInputBuilderProps {
   workflow: Workflow;
-  onRunJob?: (data?: { fileInputs: FileInputAssignment[]; textInputs: Record<string, string> }) => void;
+  onRunJob?: (data?: { 
+    fileInputs: FileInputAssignment[]; 
+    textInputs: Record<string, string>;
+    deleteSourceFiles?: boolean;
+  }) => void;
   className?: string;
 }
 
@@ -576,9 +580,10 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
       onRunJob?.({
         fileInputs: jobFiles,
         textInputs: localInputs,
+        deleteSourceFiles,
       });
     }
-  }, [validationResult, jobFiles, localInputs, onRunJob]);
+  }, [validationResult, jobFiles, localInputs, deleteSourceFiles, onRunJob]);
 
   // Check for swap capability
   const fileParams = useMemo(() => workflow.inputs.filter(p => p.type === 'file'), [workflow.inputs]);

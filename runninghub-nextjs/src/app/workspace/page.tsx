@@ -511,7 +511,11 @@ export default function WorkspacePage() {
     setIsEditingWorkflow(true);
   };
 
-  const handleRunJob = async (data?: { fileInputs: FileInputAssignment[]; textInputs: Record<string, string> }) => {
+  const handleRunJob = async (data?: { 
+    fileInputs: FileInputAssignment[]; 
+    textInputs: Record<string, string>;
+    deleteSourceFiles?: boolean;
+  }) => {
     if (!selectedWorkflowId) {
       toast.error('Please select a workflow');
       return;
@@ -528,7 +532,7 @@ export default function WorkspacePage() {
       return;
     }
 
-    const { fileInputs, textInputs } = data;
+    const { fileInputs, textInputs, deleteSourceFiles } = data;
 
     // Check if this is a re-run from Job Detail page
     const currentJob = selectedJobId ? jobs.find(j => j.id === selectedJobId) : null;
@@ -561,7 +565,7 @@ export default function WorkspacePage() {
           fileInputs: fileInputs,
           textInputs: textInputs,
           folderPath: selectedFolder?.folder_path,
-          deleteSourceFiles: false,
+          deleteSourceFiles: deleteSourceFiles || false,
           parentJobId,
           seriesId,
         }),
@@ -683,6 +687,9 @@ export default function WorkspacePage() {
 
     // Auto-assign files to workflow
     autoAssignSelectedFilesToWorkflow(workflowId);
+
+    // Clear selection in gallery so it's clean when user comes back
+    deselectAllMediaFiles();
 
     // Switch to Run Workflow tab
     setActiveTab('run-workflow');

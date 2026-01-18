@@ -135,12 +135,13 @@ export function MediaSelectionToolbar({
       await onRename(selectedFiles[0], newFileName);
       setShowRenameDialog(false);
       setNewFileName('');
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to rename file');
     } finally {
       setIsRenaming(false);
     }
-  }, [onRename, isSingleSelection, selectedFiles, newFileName]);
+  }, [onRename, isSingleSelection, selectedFiles, newFileName, onDeselectAll]);
 
   // Open rename dialog
   const openRenameDialog = useCallback(() => {
@@ -158,12 +159,13 @@ export function MediaSelectionToolbar({
     setShowDeleteDialog(false); // Close dialog immediately
     try {
       await onDelete(selectedFiles);
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete files');
     } finally {
       setIsDeleting(false);
     }
-  }, [onDelete, selectedFiles]);
+  }, [onDelete, selectedFiles, onDeselectAll]);
 
   // Handle decode (single or batch)
   const handleDecode = useCallback(async () => {
@@ -189,13 +191,14 @@ export function MediaSelectionToolbar({
       setShowDecodeDialog(false);
       setDecodePassword('');
       setDecodeProgress({ current: 0, total: 0 });
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to decode images');
     } finally {
       setIsDecoding(false);
       setDecodeProgress({ current: 0, total: 0 });
     }
-  }, [onDecode, duckEncodedCount, selectedFiles, decodePassword]);
+  }, [onDecode, duckEncodedCount, selectedFiles, decodePassword, onDeselectAll]);
 
   // Handle deselect all
   const handleDeselectAll = useCallback(() => {
@@ -208,8 +211,9 @@ export function MediaSelectionToolbar({
   const handleQuickRunConfirm = useCallback((workflowId: string) => {
     if (onRunWorkflow) {
       onRunWorkflow(workflowId);
+      onDeselectAll?.(); // Clear selection after action
     }
-  }, [onRunWorkflow]);
+  }, [onRunWorkflow, onDeselectAll]);
 
   // Handle clip
   const handleClip = useCallback(async () => {
@@ -219,12 +223,13 @@ export function MediaSelectionToolbar({
     try {
       const videoFiles = selectedFiles.filter(f => f.type === 'video');
       await onClip(videoFiles);
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to clip videos');
     } finally {
       setIsClipping(false);
     }
-  }, [onClip, selectedFiles]);
+  }, [onClip, selectedFiles, onDeselectAll]);
 
   // Handle preview
   const handlePreview = useCallback(() => {
@@ -243,13 +248,15 @@ export function MediaSelectionToolbar({
   const handleExportClick = useCallback(() => {
     if (!onExport || selectedFiles.length === 0) return;
     onExport(selectedFiles);
-  }, [onExport, selectedFiles]);
+    onDeselectAll?.(); // Clear selection after action
+  }, [onExport, selectedFiles, onDeselectAll]);
 
   // Handle FPS convert
   const handleConvertFpsClick = useCallback(() => {
     if (!onConvertFps || selectedFiles.length === 0) return;
     onConvertFps(selectedFiles);
-  }, [onConvertFps, selectedFiles]);
+    onDeselectAll?.(); // Clear selection after action
+  }, [onConvertFps, selectedFiles, onDeselectAll]);
 
   // Open resize dialog (or call directly if skipping dialog)
   const openResizeDialog = useCallback(async () => {
@@ -290,12 +297,13 @@ export function MediaSelectionToolbar({
       await onResize(selectedFiles, edge, deleteOriginal);
       setShowResizeDialog(false);
       toast.success(`Resized ${selectedFiles.length} file(s)`);
+      onDeselectAll?.(); // Clear selection after action
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to resize files');
     } finally {
       setIsResizing(false);
     }
-  }, [onResize, selectedFiles, longestEdge, deleteOriginal]);
+  }, [onResize, selectedFiles, longestEdge, deleteOriginal, onDeselectAll]);
 
   // Handle caption
   const handleCaption = useCallback(async () => {
