@@ -209,10 +209,11 @@ export default function WorkspacePage() {
   // true = forced on, false = forced off, null = auto (default)
   const [manualLiveOverride, setManualLiveOverride] = useState<boolean | null>(null);
 
-  // Reset override when switching tabs or folders
+  // Reset override when switching folders
   useEffect(() => {
+    logger.info('[Workspace] Resetting manualLiveOverride due to folder change', { toast: false });
     setManualLiveOverride(null);
-  }, [activeTab, selectedFolder]);
+  }, [selectedFolder]);
 
   useEffect(() => {
     isMediaMountedRef.current = true;
@@ -365,28 +366,34 @@ export default function WorkspacePage() {
   const stopMediaSubscription = useCallback(() => {
     const hadSubscription = !!mediaSubscriptionRef.current;
     if (mediaSubscriptionRef.current) {
+      logger.info('[Workspace] stopMediaSubscription: Closing subscription');
       mediaSubscriptionRef.current.close();
       mediaSubscriptionRef.current = null;
     }
     // Only update state if we are actually stopping an active live session
     // AND the component is still mounted. This prevents loops.
     if (isMediaMountedRef.current && hadSubscription) {
+      logger.info('[Workspace] stopMediaSubscription: Setting isMediaLive to false');
       setIsMediaLive(false);
     }
   }, []);
 
 
   const startMediaSubscription = useCallback((folderPath: string) => {
+    logger.info(`[Workspace] startMediaSubscription called for: ${folderPath} at ${new Date().toISOString()}`, { toast: false });
     // Clean up any existing subscription first
     if (mediaSubscriptionRef.current) {
+      logger.info('[Workspace] Closing existing subscription before starting new one');
       mediaSubscriptionRef.current.close();
       mediaSubscriptionRef.current = null;
     }
 
+    logger.info('[Workspace] Creating new EventSource...');
     const source = new EventSource(`/api/workspace/subscribe?path=${encodeURIComponent(folderPath)}`);
     mediaSubscriptionRef.current = source;
 
     source.onopen = () => {
+      logger.info('[Workspace] SSE Connected (onopen)');
       if (isMediaMountedRef.current) {
         setIsMediaLive(true);
       }
@@ -447,7 +454,7 @@ export default function WorkspacePage() {
         if (!payload?.path) return;
 
         // Check if file still exists in store before attempting removal
-        const mediaFiles = useMediaStore.getState().mediaFiles;
+        const mediaFiles = useWorkspaceStore.getState().mediaFiles;
         const fileExists = mediaFiles.some(f => f.path === payload.path);
 
         if (fileExists) {
@@ -468,7 +475,7 @@ export default function WorkspacePage() {
           console.log('[Workspace] File already removed, skipping subscription event:', payload.path);
           
           // Also log store state for debugging
-          const currentFiles = useMediaStore.getState().mediaFiles;
+          const currentFiles = useWorkspaceStore.getState().mediaFiles;
           const matchingFile = currentFiles.find(f => f.path === payload.path);
           console.log('[Workspace] Debug: File exists check =', fileExists, 'Matching file in store =', !!matchingFile, 'Current store files count =', currentFiles.length);
         }
@@ -479,11 +486,16 @@ export default function WorkspacePage() {
       }
     });
 
-    source.onerror = () => {
-      stopMediaSubscription();
-      if (isMediaMountedRef.current) {
-        setIsMediaLive(false);
+    source.onerror = (err) => {
+      console.error('[Workspace] SSE Connection Error:', err);
+      // Don't close immediately - let the browser try to reconnect
+      // Only close if it's explicitly stopped or component unmounts
+      if (!isMediaMountedRef.current) {
+        stopMediaSubscription();
       }
+      // If we're still mounted but error occurred, just mark as not live temporarily
+      // The browser will retry connection automatically
+      setIsMediaLive(false);
     };
   }, [removeMediaFileByPath, stopMediaSubscription, updateMediaFile, upsertMediaFile]);
 
@@ -505,9 +517,8 @@ export default function WorkspacePage() {
         });
       } else {
         // Note: Error message will be available after fetchJobs() completes
-        logger.error(`Job failed`, {
-          metadata: { jobId: job.id, taskId, status }
-        });
+        // Using warning instead of error to avoid console noise during polling
+        console.warn(`[Workspace] Job failed: ${job.id}`, { jobId: job.id, taskId, status });
       }
     }
   }, [jobs, updateJob, handleRefresh, fetchJobs]);
@@ -563,23 +574,29 @@ export default function WorkspacePage() {
     }
   }, [selectedFolder, loadFolderContents, processFolderContents, stopMediaSubscription]);
 
-  // Refresh folder when switching to relevant tabs
+  // Manage SSE subscription (persists across tabs)
   useEffect(() => {
-    const liveTabs = ['media', 'clip', 'convert', 'dataset'];
-    const shouldBeLive = liveTabs.includes(activeTab) && !!selectedFolder;
+    // We want live sync active for all tabs by default
+    const shouldBeLive = !!selectedFolder;
+
+    logger.info(`[Workspace] SSE Effect: shouldBeLive=${shouldBeLive}, override=${manualLiveOverride}, folder=${selectedFolder?.folder_path}`, { toast: false });
 
     if (shouldBeLive && manualLiveOverride !== false) {
       if (selectedFolder) {
         startMediaSubscription(selectedFolder.folder_path);
+      } else {
+        logger.info('[Workspace] Cannot start SSE: selectedFolder is missing', { toast: false });
       }
     } else {
+      logger.info('[Workspace] Stopping SSE due to override/folder state', { toast: false });
       stopMediaSubscription();
     }
 
     return () => {
+      // Cleanup on folder change or manual stop
       stopMediaSubscription();
     };
-  }, [activeTab, selectedFolder, startMediaSubscription, stopMediaSubscription, manualLiveOverride]);
+  }, [selectedFolder, startMediaSubscription, stopMediaSubscription, manualLiveOverride]);
 
 
 
@@ -1732,6 +1749,7 @@ export default function WorkspacePage() {
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(v) => {
               setActiveTab(v as any);
+              setManualLiveOverride(null); // Reset override on tab switch (batched update)
               if (typeof window !== 'undefined') {
                 localStorage.setItem('workspace-active-tab', v);
               }

@@ -25,9 +25,11 @@ import {
   ChevronDown,
   Edit,
   X,
+  FolderOpen,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useWorkspaceStore } from '@/store/workspace-store';
+import { useWorkspaceFolder } from '@/store/folder-store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +68,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
     setSelectedJob,
     getJobsBySeriesId,
   } = useWorkspaceStore();
+  const { selectedFolder: workspaceFolder } = useWorkspaceFolder();
   const [isReRunning, setIsReRunning] = useState(false);
   const [isReQuerying, setIsReQuerying] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
@@ -441,6 +444,37 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
       toast.success('Download started');
     } catch (error) {
       toast.error('Download failed');
+    }
+  };
+
+  // Handle save to workspace folder
+  const handleSaveToWorkspace = async (filePath: string, fileName: string) => {
+    if (!workspaceFolder?.folder_path) {
+      toast.error('Please select a workspace folder first');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/workspace/copy-to-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourcePath: filePath,
+          targetFolder: workspaceFolder.folder_path,
+          fileName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save to workspace');
+      }
+
+      toast.success(`Saved to workspace: ${fileName}`);
+    } catch (error) {
+      console.error('Save to workspace failed:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to save to workspace');
     }
   };
 
@@ -1049,9 +1083,24 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                               />
                             )}
                             {output.path && (
-                              <Button variant="outline" size="sm" onClick={() => handleDownloadOutput(output)}>
-                                <Download className="h-4 w-4" />
-                              </Button>
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDownloadOutput(output)}
+                                  title="Download to browser default"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleSaveToWorkspace(output.path!, output.fileName || getBasename(output.path!) || 'download')}
+                                  title={workspaceFolder ? `Save to ${workspaceFolder.folder_name}` : 'Save to workspace'}
+                                >
+                                  <FolderOpen className="h-4 w-4" />
+                                </Button>
+                              </>
                             )}
                          </div>
                       </div>
@@ -1094,15 +1143,28 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                                   Decoded: {getBasename(decodedFile.decodedPath)}
                                 </p>
                               </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-7"
-                                onClick={() => downloadFile(decodedFile.decodedPath, getBasename(decodedFile.decodedPath))}
-                              >
-                                <Download className="h-3 w-3 mr-1" />
-                                Download
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs h-7"
+                                  onClick={() => downloadFile(decodedFile.decodedPath, getBasename(decodedFile.decodedPath))}
+                                  title="Download to browser default"
+                                >
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Download
+                                </Button>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  className="text-xs h-7"
+                                  onClick={() => handleSaveToWorkspace(decodedFile.decodedPath, getBasename(decodedFile.decodedPath))}
+                                  title={workspaceFolder ? `Save to ${workspaceFolder.folder_name}` : 'Save to workspace'}
+                                >
+                                  <FolderOpen className="h-3 w-3 mr-1" />
+                                  Save
+                                </Button>
+                              </div>
                             </div>
                          </div>
                       )}

@@ -132,61 +132,6 @@ export function YoutubeDownloader({
     }
   };
 
-  // Handle download button click for job history files
-  const handleJobHistoryDownload = async (jobFile: any) => {
-    // Validate folder is selected
-    if (!selectedFolder) {
-      toast.error('Please select a folder first');
-      return;
-    }
-
-    // Get current workspace folder (where to download)
-    const targetFolder = useWorkspaceFolder().config.path;
-    
-    try {
-      setIsDownloading(true);
-      
-      const response = await fetch('/api/youtube/download', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: jobFile.url,
-          folderPath: targetFolder,  // Download to current workspace folder
-          sessionId: undefined,  // Not needed for job history files
-          cookieMode: undefined,
-          cookieContent: undefined,
-          cookieFilePath: undefined,
-          persistCookies: false,
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to start download');
-      }
-
-      toast.success('Download started');
-      setUrl(''); // Clear URL input after successful start
-
-      // Notify parent component
-      if (onDownloadStart && data.task_id) {
-        onDownloadStart(data.task_id);
-      }
-    } catch (error) {
-      console.error('Download error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start download');
-      
-      if (onDownloadComplete) {
-        onDownloadComplete(false);
-      }
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   // Handle download button click
   const handleDownload = async () => {
     // Validate URL
@@ -228,8 +173,7 @@ export function YoutubeDownloader({
     try {
      const requestBody = {
       url: url.trim(),
-      // Detect if this is a job history download and use workspace root folder instead
-      folderPath: selectedFolder.folder_path.includes('/workspace/') ? useWorkspaceFolder().config.path : selectedFolder.folder_path,
+      folderPath: selectedFolder.folder_path,
       sessionId: selectedFolder.session_id,
       cookieMode,
       cookieContent: cookieMode === 'paste' ? cookieContent : undefined,

@@ -3,6 +3,7 @@ import { access, readFile, stat } from 'fs/promises';
 import path from 'path';
 import chokidar from 'chokidar';
 import { getFileMetadata } from '@/lib/metadata';
+import { writeLog } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -168,20 +169,41 @@ export async function GET(request: NextRequest) {
     ignored: [/\.git/, /node_modules/, /\.DS_Store/],
     ignoreInitial: true,
     persistent: true,
-    recursive: false,
     awaitWriteFinish: {
       stabilityThreshold: 300,
       pollInterval: 100,
     },
   });
 
+  writeLog(`[Subscribe] Client connected to watch: ${folderPath}`, 'info');
+
   const emitEvent = async (event: string, payload: unknown) => {
     if (closed) return;
     const message = formatSseEvent(event, payload);
-    await writer.write(new TextEncoder().encode(message));
+    try {
+      await writer.write(new TextEncoder().encode(message));
+    } catch (err) {
+      writeLog(`[Subscribe] Error writing to stream: ${err}`, 'error');
+      closeStream();
+    }
   };
 
+  // Heartbeat to keep connection alive
+  const heartbeatInterval = setInterval(() => {
+    if (closed) {
+      clearInterval(heartbeatInterval);
+      return;
+    }
+    // Send comment as keep-alive
+    const keepAlive = ': keepalive\n\n';
+    writer.write(new TextEncoder().encode(keepAlive)).catch(() => {
+        clearInterval(heartbeatInterval);
+        closeStream();
+    });
+  }, 15000); // 15 seconds
+
   const handleChange = async (filePath: string) => {
+    writeLog(`[Subscribe] File changed: ${filePath}`, 'info');
     if (filePath.endsWith('.txt')) {
       await emitCaptionUpdate(filePath, emitEvent);
       return;
@@ -192,8 +214,8 @@ export async function GET(request: NextRequest) {
 
     // Don't emit update events for files in the 'encoded' folder
     // These files are intentionally hidden from gallery view
-    if (filePath.includes(path.join(path.dirname(filePath), 'encoded'))) {
-      console.log(`[Subscribe] Skipping 'encoded' folder file: ${filePath}`);
+    if (filePath.split(path.sep).includes('encoded')) {
+      writeLog(`[Subscribe] Skipping 'encoded' folder file: ${filePath}`, 'info');
       return;
     }
 
@@ -225,7 +247,7 @@ export async function GET(request: NextRequest) {
       }
     
     await emitEvent('remove', { path: filePath });
-    console.log('[Workspace] Removed file via subscription:', filePath);
+    writeLog(`[Workspace] Removed file via subscription: ${filePath}`, 'info');
   };
 
   const debouncedChange = debounceByKey(async (filePath: string) => {
@@ -240,6 +262,8 @@ export async function GET(request: NextRequest) {
   watcher.on('unlink', (filePath) => debouncedRemove(filePath));
 
   request.signal.addEventListener('abort', async () => {
+    writeLog(`[Subscribe] Client disconnected from: ${folderPath}`, 'info');
+    clearInterval(heartbeatInterval);
     await watcher.close();
     closeStream();
   });
