@@ -71,6 +71,8 @@ import {
   Database,
   RefreshCw,
   Loader2,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -203,6 +205,21 @@ export default function WorkspacePage() {
   const mediaSubscriptionRef = useRef<EventSource | null>(null);
   const isMediaMountedRef = useRef(true);
   const [isMediaLive, setIsMediaLive] = useState(false);
+  // Manual override for live media subscription
+  // true = forced on, false = forced off, null = auto (default)
+  const [manualLiveOverride, setManualLiveOverride] = useState<boolean | null>(null);
+
+  // Reset override when switching tabs or folders
+  useEffect(() => {
+    setManualLiveOverride(null);
+  }, [activeTab, selectedFolder]);
+
+  useEffect(() => {
+    isMediaMountedRef.current = true;
+    return () => {
+      isMediaMountedRef.current = false;
+    };
+  }, []);
 
   // Validate duck encoding for all images in parallel
   const validateAllImagesForDuck = useCallback(async (imageFiles: MediaFile[]) => {
@@ -428,9 +445,37 @@ export default function WorkspacePage() {
       try {
         const payload = JSON.parse(event.data);
         if (!payload?.path) return;
-        removeMediaFileByPath(payload.path);
+
+        // Check if file still exists in store before attempting removal
+        const mediaFiles = useMediaStore.getState().mediaFiles;
+        const fileExists = mediaFiles.some(f => f.path === payload.path);
+
+        if (fileExists) {
+          // Only remove if file still in store (prevents race conditions)
+          removeMediaFileByPath(payload.path);
+          console.log('[Workspace] Removed file via subscription:', payload.path);
+          
+          // Force a store refresh to ensure UI reflects current file system state
+          // This helps prevent stale UI state where files appear to still exist
+          // but were already removed by a race condition or earlier operation
+          setTimeout(() => {
+            console.log('[Workspace] Force refreshing store after removal to ensure UI sync');
+            // Refresh the workspace contents to sync with file system
+            handleRefresh();
+          }, 100);
+        } else {
+          // File already removed (e.g., by dataset export), skip to avoid warnings
+          console.log('[Workspace] File already removed, skipping subscription event:', payload.path);
+          
+          // Also log store state for debugging
+          const currentFiles = useMediaStore.getState().mediaFiles;
+          const matchingFile = currentFiles.find(f => f.path === payload.path);
+          console.log('[Workspace] Debug: File exists check =', fileExists, 'Matching file in store =', !!matchingFile, 'Current store files count =', currentFiles.length);
+        }
       } catch (error) {
         console.error('[Workspace] Failed to parse media remove event', error);
+        // Also log the event payload for debugging
+        console.error('[Workspace] Remove event payload:', JSON.stringify(event.data));
       }
     });
 
@@ -518,10 +563,15 @@ export default function WorkspacePage() {
     }
   }, [selectedFolder, loadFolderContents, processFolderContents, stopMediaSubscription]);
 
-  // Refresh folder when switching to Media Gallery tab
+  // Refresh folder when switching to relevant tabs
   useEffect(() => {
-    if (activeTab === 'media' && selectedFolder) {
-      startMediaSubscription(selectedFolder.folder_path);
+    const liveTabs = ['media', 'clip', 'convert', 'dataset'];
+    const shouldBeLive = liveTabs.includes(activeTab) && !!selectedFolder;
+
+    if (shouldBeLive && manualLiveOverride !== false) {
+      if (selectedFolder) {
+        startMediaSubscription(selectedFolder.folder_path);
+      }
     } else {
       stopMediaSubscription();
     }
@@ -529,7 +579,7 @@ export default function WorkspacePage() {
     return () => {
       stopMediaSubscription();
     };
-  }, [activeTab, selectedFolder, startMediaSubscription, stopMediaSubscription]);
+  }, [activeTab, selectedFolder, startMediaSubscription, stopMediaSubscription, manualLiveOverride]);
 
 
 
@@ -1658,11 +1708,24 @@ export default function WorkspacePage() {
                 colorVariant="purple"
               />
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className={`inline-flex items-center gap-2 rounded-full px-2 py-1 ${isMediaLive ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                  <span className={`h-2 w-2 rounded-full ${isMediaLive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                  {isMediaLive ? 'Live updates' : 'Offline'}
+                <button
+                  onClick={() => {
+                    // Toggle manual override
+                    if (isMediaLive) {
+                      setManualLiveOverride(false);
+                    } else {
+                      setManualLiveOverride(true);
+                    }
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-full px-2 py-1 transition-colors hover:opacity-80 cursor-pointer ${isMediaLive ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}
+                  title={isMediaLive ? 'Click to disable live sync' : 'Click to enable live sync'}
+                >
+                  {isMediaLive ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                  {isMediaLive ? 'Live' : 'Offline'}
+                </button>
+                <span className="text-muted-foreground/70">
+                  {isMediaLive ? 'Changes sync automatically' : 'Click to enable live sync'}
                 </span>
-                <span>Changes sync without refresh when on Media tab.</span>
               </div>
 
 

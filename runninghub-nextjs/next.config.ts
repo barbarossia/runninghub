@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
 
   // Turbopack configuration (Next.js 16 uses Turbopack by default)
   turbopack: {
-    // Empty config to use default Turbopack behavior
+    root: __dirname,
   },
 
   // Logging
