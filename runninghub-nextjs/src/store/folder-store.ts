@@ -111,6 +111,13 @@ export const useFolderStore = create<FolderState>()(
       // Page-specific setters
       setSelectedFolder: (page, folder) =>
         set((state) => {
+          if (folder?.folder_path !== state[page].selectedFolder?.folder_path) {
+            console.log(`[FolderStore] Folder changed for ${page}:`, {
+              from: state[page].selectedFolder?.folder_path,
+              to: folder?.folder_path,
+              timestamp: new Date().toISOString()
+            });
+          }
           const pageState = state[page];
           return {
             [page]: { ...pageState, selectedFolder: folder, error: null },

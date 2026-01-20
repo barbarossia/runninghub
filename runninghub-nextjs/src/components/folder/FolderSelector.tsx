@@ -125,10 +125,12 @@ export default function FolderSelector({
         virtual_path?: string;
         actual_path?: string;
         session_id?: string;
+        folder_name?: string;
         error?: string;
       };
 
       if (response.success) {
+        console.log('[FolderSelector] Folder selected via picker:', response.actual_path || response.virtual_path);
         setSelectedFolder(directoryInfo.name);
         setLastUsedFolder(directoryInfo.name);
 
@@ -206,6 +208,7 @@ export default function FolderSelector({
       };
 
       if (response.success) {
+        console.log('[FolderSelector] Folder selected via manual input:', response.folder_path);
         setSelectedFolder(response.folder_name || '');
         setLastUsedFolder(response.folder_name || '');
 
