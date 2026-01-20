@@ -124,7 +124,7 @@ export function YoutubeDownloader({
     return true;
   };
 
-  // Handle URL input change
+    // Handle URL input change
   const handleUrlChange = (value: string) => {
     setUrl(value);
     if (value && urlError) {
@@ -171,15 +171,15 @@ export function YoutubeDownloader({
     setIsDownloading(true);
 
     try {
-      const requestBody = {
-        url: url.trim(),
-        folderPath: selectedFolder.folder_path,
-        sessionId: selectedFolder.session_id, // Will be undefined if not set, that's ok
-        cookieMode,
-        cookieContent: cookieMode === 'paste' ? cookieContent : undefined,
-        cookieFilePath: cookieMode === 'file' ? cookieFilePath : undefined,
-        persistCookies: true,
-      };
+     const requestBody = {
+      url: url.trim(),
+      folderPath: selectedFolder.folder_path,
+      sessionId: selectedFolder.session_id,
+      cookieMode,
+      cookieContent: cookieMode === 'paste' ? cookieContent : undefined,
+      cookieFilePath: cookieMode === 'file' ? cookieFilePath : undefined,
+      persistCookies: true,
+    };
 
       console.log('Sending YouTube download request:', requestBody);
 

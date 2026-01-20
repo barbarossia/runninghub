@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useFolderStore, useWorkspaceFolder } from '@/store/folder-store';
 import { useVideoClipStore } from '@/store/video-clip-store';
@@ -71,6 +71,8 @@ import {
   Database,
   RefreshCw,
   Loader2,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -100,7 +102,6 @@ export default function WorkspacePage() {
     mediaSortDirection,
     selectedDataset,
     datasetMediaFiles,
-    setMediaFiles,
     setSelectedWorkflow,
     setSelectedDataset,
     addWorkflow,
@@ -114,7 +115,6 @@ export default function WorkspacePage() {
     deselectAllMediaFiles,
     removeMediaFile,
     autoAssignSelectedFilesToWorkflow,
-    updateMediaFile,
     fetchJobs,
     setMediaSorting,
     setDatasetMediaFiles,
@@ -125,6 +125,13 @@ export default function WorkspacePage() {
     updateDatasetFile,
     getSelectedDatasetFiles,
   } = useWorkspaceStore();
+
+  // Stable actions for effects
+  const upsertMediaFile = useWorkspaceStore(state => state.upsertMediaFile);
+  const updateMediaFile = useWorkspaceStore(state => state.updateMediaFile);
+  const removeMediaFileByPath = useWorkspaceStore(state => state.removeMediaFileByPath);
+  const mergeMediaFiles = useWorkspaceStore(state => state.mergeMediaFiles);
+  const setMediaFiles = useWorkspaceStore(state => state.setMediaFiles); // stable setMediaFiles
 
   // Local state
   const [error, setError] = useState<string>('');
@@ -194,6 +201,26 @@ export default function WorkspacePage() {
 
   // Custom hooks
   const { loadFolderContents } = useFileSystem({ pageType: 'workspace' });
+  // Store mediaSubscription in a ref to avoid state-dependent effect loops
+  const mediaSubscriptionRef = useRef<EventSource | null>(null);
+  const isMediaMountedRef = useRef(true);
+  const [isMediaLive, setIsMediaLive] = useState(false);
+  // Manual override for live media subscription
+  // true = forced on, false = forced off, null = auto (default)
+  const [manualLiveOverride, setManualLiveOverride] = useState<boolean | null>(null);
+
+  // Reset override when switching folders
+  useEffect(() => {
+    logger.info('[Workspace] Resetting manualLiveOverride due to folder change', { toast: false });
+    setManualLiveOverride(null);
+  }, [selectedFolder]);
+
+  useEffect(() => {
+    isMediaMountedRef.current = true;
+    return () => {
+      isMediaMountedRef.current = false;
+    };
+  }, []);
 
   // Validate duck encoding for all images in parallel
   const validateAllImagesForDuck = useCallback(async (imageFiles: MediaFile[]) => {
@@ -318,7 +345,7 @@ export default function WorkspacePage() {
     }
 
     const uniqueFiles = Array.from(uniqueMap.values());
-    setMediaFiles(uniqueFiles as MediaFile[]);
+    mergeMediaFiles(uniqueFiles as MediaFile[]);
 
     // NOTE: Disabled automatic validation on folder load for performance
     // Images will be validated lazily when selected instead
@@ -336,6 +363,142 @@ export default function WorkspacePage() {
     }
   }, [selectedFolder, loadFolderContents, processFolderContents]);
 
+  const stopMediaSubscription = useCallback(() => {
+    const hadSubscription = !!mediaSubscriptionRef.current;
+    if (mediaSubscriptionRef.current) {
+      logger.info('[Workspace] stopMediaSubscription: Closing subscription');
+      mediaSubscriptionRef.current.close();
+      mediaSubscriptionRef.current = null;
+    }
+    // Only update state if we are actually stopping an active live session
+    // AND the component is still mounted. This prevents loops.
+    if (isMediaMountedRef.current && hadSubscription) {
+      logger.info('[Workspace] stopMediaSubscription: Setting isMediaLive to false');
+      setIsMediaLive(false);
+    }
+  }, []);
+
+
+  const startMediaSubscription = useCallback((folderPath: string) => {
+    logger.info(`[Workspace] startMediaSubscription called for: ${folderPath} at ${new Date().toISOString()}`, { toast: false });
+    // Clean up any existing subscription first
+    if (mediaSubscriptionRef.current) {
+      logger.info('[Workspace] Closing existing subscription before starting new one');
+      mediaSubscriptionRef.current.close();
+      mediaSubscriptionRef.current = null;
+    }
+
+    logger.info('[Workspace] Creating new EventSource...');
+    const source = new EventSource(`/api/workspace/subscribe?path=${encodeURIComponent(folderPath)}`);
+    mediaSubscriptionRef.current = source;
+
+    source.onopen = () => {
+      logger.info('[Workspace] SSE Connected (onopen)');
+      if (isMediaMountedRef.current) {
+        setIsMediaLive(true);
+      }
+    };
+
+    source.addEventListener('update', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const file = payload?.payload;
+        if (!file || !payload?.type) return;
+
+        const mediaFile: MediaFile = {
+          id: file.path,
+          name: file.name,
+          path: file.path,
+          type: payload.type,
+          extension: file.extension,
+          size: file.size || 0,
+          width: file.width,
+          height: file.height,
+          fps: file.fps,
+          duration: file.duration,
+          created_at: file.created_at,
+          modified_at: file.modified_at,
+          thumbnail: payload.type === 'image'
+            ? `/api/images/serve?path=${encodeURIComponent(file.path)}`
+            : file.thumbnail ? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}` : undefined,
+          blobUrl: payload.type === 'video'
+            ? `/api/videos/serve?path=${encodeURIComponent(file.path)}`
+            : undefined,
+          caption: file.caption,
+          captionPath: file.captionPath,
+        };
+
+        upsertMediaFile(mediaFile);
+      } catch (error) {
+        console.error('[Workspace] Failed to parse media update event', error);
+      }
+    });
+
+    source.addEventListener('caption', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const filePath = payload?.filePath;
+        if (!filePath) return;
+        updateMediaFile(filePath, {
+          caption: payload.caption,
+          captionPath: payload.captionPath,
+        });
+      } catch (error) {
+        console.error('[Workspace] Failed to parse caption event', error);
+      }
+    });
+
+    source.addEventListener('remove', (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (!payload?.path) return;
+
+        // Check if file still exists in store before attempting removal
+        const mediaFiles = useWorkspaceStore.getState().mediaFiles;
+        const fileExists = mediaFiles.some(f => f.path === payload.path);
+
+        if (fileExists) {
+          // Only remove if file still in store (prevents race conditions)
+          removeMediaFileByPath(payload.path);
+          console.log('[Workspace] Removed file via subscription:', payload.path);
+          
+          // Force a store refresh to ensure UI reflects current file system state
+          // This helps prevent stale UI state where files appear to still exist
+          // but were already removed by a race condition or earlier operation
+          setTimeout(() => {
+            console.log('[Workspace] Force refreshing store after removal to ensure UI sync');
+            // Refresh the workspace contents to sync with file system
+            handleRefresh();
+          }, 100);
+        } else {
+          // File already removed (e.g., by dataset export), skip to avoid warnings
+          console.log('[Workspace] File already removed, skipping subscription event:', payload.path);
+          
+          // Also log store state for debugging
+          const currentFiles = useWorkspaceStore.getState().mediaFiles;
+          const matchingFile = currentFiles.find(f => f.path === payload.path);
+          console.log('[Workspace] Debug: File exists check =', fileExists, 'Matching file in store =', !!matchingFile, 'Current store files count =', currentFiles.length);
+        }
+      } catch (error) {
+        console.error('[Workspace] Failed to parse media remove event', error);
+        // Also log the event payload for debugging
+        console.error('[Workspace] Remove event payload:', JSON.stringify(event.data));
+      }
+    });
+
+    source.onerror = (err) => {
+      console.error('[Workspace] SSE Connection Error:', err);
+      // Don't close immediately - let the browser try to reconnect
+      // Only close if it's explicitly stopped or component unmounts
+      if (!isMediaMountedRef.current) {
+        stopMediaSubscription();
+      }
+      // If we're still mounted but error occurred, just mark as not live temporarily
+      // The browser will retry connection automatically
+      setIsMediaLive(false);
+    };
+  }, [removeMediaFileByPath, stopMediaSubscription, updateMediaFile, upsertMediaFile]);
+
   const handleTaskComplete = useCallback((taskId: string, status: 'completed' | 'failed') => {
     // Find job associated with this task
     const job = jobs.find(j => j.taskId === taskId);
@@ -352,12 +515,10 @@ export default function WorkspacePage() {
         logger.success('Job completed successfully', {
           metadata: { jobId: job.id, taskId, status }
         });
-        handleRefresh(true); // Refresh folder contents to show new files
       } else {
         // Note: Error message will be available after fetchJobs() completes
-        logger.error(`Job failed`, {
-          metadata: { jobId: job.id, taskId, status }
-        });
+        // Using warning instead of error to avoid console noise during polling
+        console.warn(`[Workspace] Job failed: ${job.id}`, { jobId: job.id, taskId, status });
       }
     }
   }, [jobs, updateJob, handleRefresh, fetchJobs]);
@@ -384,17 +545,20 @@ export default function WorkspacePage() {
     folderType: 'workspace',
   });
 
+  // Stabilize the onFolderLoaded callback
+  const handleFolderLoaded = useCallback((folder: any, contents: any) => {
+    // Folder is automatically set as selected by the hook
+    // If contents were provided during validation, use them directly
+    if (contents) {
+      processFolderContents(contents);
+    }
+    // Otherwise, the useEffect below will load contents when selectedFolder changes
+  }, [processFolderContents]);
+
   // Auto-load last opened folder on mount
   useAutoLoadFolder({
     folderType: 'workspace',
-    onFolderLoaded: (folder, contents) => {
-      // Folder is automatically set as selected by the hook
-      // If contents were provided during validation, use them directly
-      if (contents) {
-        processFolderContents(contents);
-      }
-      // Otherwise, the useEffect below will load contents when selectedFolder changes
-    },
+    onFolderLoaded: handleFolderLoaded,
   });
 
   // Load folder contents when folder is selected
@@ -405,26 +569,36 @@ export default function WorkspacePage() {
           processFolderContents(result);
         }
       );
+    } else {
+      stopMediaSubscription();
     }
-  }, [selectedFolder, loadFolderContents, processFolderContents]);
+  }, [selectedFolder, loadFolderContents, processFolderContents, stopMediaSubscription]);
 
-  // Refresh folder when switching to Media Gallery tab
+  // Manage SSE subscription (persists across tabs)
   useEffect(() => {
-    if (activeTab === 'media' && selectedFolder) {
-      // Small delay to ensure tab switch completes and UI settles
-      const timer = setTimeout(() => {
-        handleRefresh(true); // Silent refresh when switching to media tab
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab, selectedFolder, handleRefresh]);
+    // We want live sync active for all tabs by default
+    const shouldBeLive = !!selectedFolder;
 
-  // Refresh folder when switching to Convert tab
-  useEffect(() => {
-    if (activeTab === 'convert' && selectedFolder) {
-      handleRefresh(true); // Silent refresh when switching to convert tab
+    logger.info(`[Workspace] SSE Effect: shouldBeLive=${shouldBeLive}, override=${manualLiveOverride}, folder=${selectedFolder?.folder_path}`, { toast: false });
+
+    if (shouldBeLive && manualLiveOverride !== false) {
+      if (selectedFolder) {
+        startMediaSubscription(selectedFolder.folder_path);
+      } else {
+        logger.info('[Workspace] Cannot start SSE: selectedFolder is missing', { toast: false });
+      }
+    } else {
+      logger.info('[Workspace] Stopping SSE due to override/folder state', { toast: false });
+      stopMediaSubscription();
     }
-  }, [activeTab, selectedFolder, handleRefresh]);
+
+    return () => {
+      // Cleanup on folder change or manual stop
+      stopMediaSubscription();
+    };
+  }, [selectedFolder, startMediaSubscription, stopMediaSubscription, manualLiveOverride]);
+
+
 
   // Fallback: Validate duck encoding for selected images (only if not already validated on load)
   // NOTE: Most images are validated in parallel on load via validateAllImagesForDuck()
@@ -710,8 +884,17 @@ export default function WorkspacePage() {
         throw new Error(errorData.error || 'Failed to rename file');
       }
 
-      // Silent refresh to update UI without toast
-      await handleRefresh(true);
+      const data = await response.json();
+
+      const updatedPath = data?.newPath || data?.new_path || file.path;
+
+      removeMediaFileByPath(file.path);
+      upsertMediaFile({
+        ...file,
+        id: updatedPath,
+        path: updatedPath,
+        name: data?.newName || data?.new_name || newName,
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to rename file';
       toast.error(errorMessage);
@@ -794,8 +977,7 @@ export default function WorkspacePage() {
         throw new Error(errorData.error || 'Failed to delete files');
       }
 
-      // Silent refresh to update UI without toast
-      await handleRefresh(true);
+      files.forEach((file) => removeMediaFileByPath(file.path));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete file';
       toast.error(errorMessage);
@@ -844,12 +1026,7 @@ export default function WorkspacePage() {
         setActiveConsoleTaskId(data.task_id);
         toast.success(`Started converting ${videos.length} video${videos.length > 1 ? 's' : ''} to ${targetFps} FPS`);
 
-        // Refresh folder contents after conversion completes (similar to crop page)
-        setTimeout(() => {
-          if (selectedFolder) {
-            handleRefresh(true);
-          }
-        }, 2000);
+        // Folder updates handled by subscription
       } else {
         toast.error(data.error || 'Failed to start FPS conversion');
       }
@@ -921,12 +1098,7 @@ export default function WorkspacePage() {
         }
         toast.success(`Started cropping ${files.length} video${files.length > 1 ? 's' : ''}`);
 
-        // Refresh folder contents after cropping completes
-        setTimeout(() => {
-          if (selectedFolder) {
-            handleRefresh(true);
-          }
-        }, 2000);
+        // Folder updates handled by subscription
       } else {
         toast.error(data.error || ERROR_MESSAGES.CROP_FAILED);
       }
@@ -961,12 +1133,8 @@ export default function WorkspacePage() {
         toast.success(`Successfully decoded: ${file.name}`);
       }
 
-      // Refresh gallery to show decoded file and hide original
-      // For batch operations, only refresh at the end (when current === total)
+      // For batch operations, only refresh dataset view at the end (when current === total)
       if (!progress || progress.current === progress.total) {
-        await handleRefresh(true);
-        
-        // Also refresh dataset if we are in dataset mode
         if (selectedDataset) {
           await selectDataset(selectedDataset);
         }
@@ -1029,7 +1197,14 @@ export default function WorkspacePage() {
 
       if (data.success) {
         toast.success(`Renamed to ${data.new_name}`);
-        await handleRefresh(true);
+        removeMediaFileByPath(video.path);
+        const updatedPath = data.new_path || data.newPath || video.path;
+        upsertMediaFile({
+          ...video,
+          id: updatedPath,
+          path: updatedPath,
+          name: data.new_name || newName,
+        });
       } else {
         toast.error(data.error || 'Failed to rename video');
       }
@@ -1053,7 +1228,7 @@ export default function WorkspacePage() {
 
       if (data.success) {
         toast.success('Video deleted');
-        await handleRefresh(true);
+        removeMediaFileByPath(video.path);
       } else {
         toast.error(data.error || 'Failed to delete video');
       }
@@ -1078,7 +1253,7 @@ export default function WorkspacePage() {
 
       if (data.success) {
         toast.success(`Deleted ${selectedPaths.length} video(s)`);
-        await handleRefresh(true);
+        selectedPaths.forEach((path) => removeMediaFileByPath(path));
       } else {
         toast.error(data.error || 'Failed to delete videos');
       }
@@ -1095,7 +1270,6 @@ export default function WorkspacePage() {
   };
 
   const handleDatasetCreated = async (dataset: { name: string; path: string }) => {
-    await handleRefresh(true);
     await loadDatasets();
     toast.success(`Dataset "${dataset.name}" created successfully`);
   };
@@ -1144,9 +1318,6 @@ export default function WorkspacePage() {
         // Deselect files after export
         deselectAllMediaFiles();
         toast.success(`Moved ${filesToExport.length} file${filesToExport.length !== 1 ? 's' : ''} to "${dataset.name}"`);
-        // Refresh the workspace to ensure data consistency
-        await handleRefresh(true);
-        // Refresh the dataset view
         if (selectedDataset && selectedDataset.path === dataset.path) {
           await selectDataset(selectedDataset);
         }
@@ -1543,20 +1714,42 @@ export default function WorkspacePage() {
         ) : (
           /* Selected Folder Display */
           <div className="space-y-6">
-            <SelectedFolderHeader
-              folderName={selectedFolder.folder_name}
-              folderPath={selectedFolder.folder_path}
-              itemCount={mediaFiles.length}
-              itemType="images"
-              isVirtual={selectedFolder.is_virtual}
-              isLoading={false}
-              onRefresh={() => handleRefresh(false)}
-              colorVariant="purple"
-            />
+              <SelectedFolderHeader
+                folderName={selectedFolder.folder_name}
+                folderPath={selectedFolder.folder_path}
+                itemCount={mediaFiles.length}
+                itemType="images"
+                isVirtual={selectedFolder.is_virtual}
+                isLoading={false}
+                onRefresh={() => handleRefresh(false)}
+                colorVariant="purple"
+              />
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <button
+                  onClick={() => {
+                    // Toggle manual override
+                    if (isMediaLive) {
+                      setManualLiveOverride(false);
+                    } else {
+                      setManualLiveOverride(true);
+                    }
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-full px-2 py-1 transition-colors hover:opacity-80 cursor-pointer ${isMediaLive ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}
+                  title={isMediaLive ? 'Click to disable live sync' : 'Click to enable live sync'}
+                >
+                  {isMediaLive ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+                  {isMediaLive ? 'Live' : 'Offline'}
+                </button>
+                <span className="text-muted-foreground/70">
+                  {isMediaLive ? 'Changes sync automatically' : 'Click to enable live sync'}
+                </span>
+              </div>
+
 
             {/* Tab Navigation */}
             <Tabs value={activeTab} onValueChange={(v) => {
               setActiveTab(v as any);
+              setManualLiveOverride(null); // Reset override on tab switch (batched update)
               if (typeof window !== 'undefined') {
                 localStorage.setItem('workspace-active-tab', v);
               }

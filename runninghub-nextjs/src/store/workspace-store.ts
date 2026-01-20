@@ -154,8 +154,11 @@ interface WorkspaceActions extends WorkspaceState {
   // ============================================================
   setSelectedFolder: (folder: FolderSelectionResponse | null) => void;
   setMediaFiles: (files: MediaFile[]) => void;
+  mergeMediaFiles: (files: MediaFile[]) => void;
+  upsertMediaFile: (file: MediaFile) => void;
   addMediaFile: (file: MediaFile) => void;
   removeMediaFile: (fileId: string) => void;
+  removeMediaFileByPath: (filePath: string) => void;
   updateMediaFile: (fileId: string, updates: Partial<MediaFile>) => void;
   toggleMediaFileSelection: (fileId: string) => void;
   selectAllMediaFiles: () => void;
@@ -467,16 +470,162 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
         });
       },
 
+      mergeMediaFiles: (files) =>
+        set((state) => {
+          const existingById = new Map(state.mediaFiles.map((file) => [file.id, file]));
+          const merged = files.map((file) => {
+            const existing = existingById.get(file.id);
+            if (!existing) {
+              return file;
+            }
+
+            return {
+              ...file,
+              selected: existing.selected,
+              isDuckEncoded: existing.isDuckEncoded ?? file.isDuckEncoded,
+              duckRequiresPassword: existing.duckRequiresPassword ?? file.duckRequiresPassword,
+              duckValidationPending: existing.duckValidationPending ?? file.duckValidationPending,
+            };
+          });
+
+          const sorted = [...merged].sort((a, b) => {
+            let comparison = 0;
+
+            switch (state.mediaSortField) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                const aDate = (a as any).modified_at || (a as any).created_at || 0;
+                const bDate = (b as any).modified_at || (b as any).created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaFiles: sorted, error: null };
+        }),
+
+      upsertMediaFile: (file) =>
+        set((state) => {
+          const existingIndex = state.mediaFiles.findIndex((item) => item.id === file.id);
+          if (existingIndex === -1) {
+            const updated = [...state.mediaFiles, file];
+            const sorted = [...updated].sort((a, b) => {
+              let comparison = 0;
+
+              switch (state.mediaSortField) {
+                case 'name':
+                  comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                  break;
+                case 'date':
+                  const aDate = (a as any).modified_at || (a as any).created_at || 0;
+                  const bDate = (b as any).modified_at || (b as any).created_at || 0;
+                  comparison = aDate - bDate;
+                  break;
+                case 'size':
+                  comparison = a.size - b.size;
+                  break;
+                case 'type':
+                  comparison = a.type.localeCompare(b.type);
+                  break;
+              }
+
+              return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+            });
+
+            return { mediaFiles: sorted, error: null };
+          }
+
+          const existing = state.mediaFiles[existingIndex];
+          const updated = {
+            ...file,
+            selected: existing.selected,
+            isDuckEncoded: existing.isDuckEncoded ?? file.isDuckEncoded,
+            duckRequiresPassword: existing.duckRequiresPassword ?? file.duckRequiresPassword,
+            duckValidationPending: existing.duckValidationPending ?? file.duckValidationPending,
+          };
+
+          const updatedMediaFiles = [...state.mediaFiles];
+          updatedMediaFiles[existingIndex] = updated;
+
+          const sorted = [...updatedMediaFiles].sort((a, b) => {
+            let comparison = 0;
+
+            switch (state.mediaSortField) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                const aDate = (a as any).modified_at || (a as any).created_at || 0;
+                const bDate = (b as any).modified_at || (b as any).created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          });
+
+          return { mediaFiles: sorted, error: null };
+        }),
+
       addMediaFile: (file) =>
-        set((state) => ({
-          mediaFiles: [...state.mediaFiles, file],
-          error: null,
-        })),
+        set((state) => {
+          const updated = [...state.mediaFiles, file];
+          const sorted = [...updated].sort((a, b) => {
+            let comparison = 0;
+
+            switch (state.mediaSortField) {
+              case 'name':
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+                break;
+              case 'date':
+                const aDate = (a as any).modified_at || (a as any).created_at || 0;
+                const bDate = (b as any).modified_at || (b as any).created_at || 0;
+                comparison = aDate - bDate;
+                break;
+              case 'size':
+                comparison = a.size - b.size;
+                break;
+              case 'type':
+                comparison = a.type.localeCompare(b.type);
+                break;
+            }
+
+            return state.mediaSortDirection === 'asc' ? comparison : -comparison;
+          });
+
+          return {
+            mediaFiles: sorted,
+            error: null,
+          };
+        }),
+
 
       removeMediaFile: (fileId) =>
         set((state) => ({
           mediaFiles: state.mediaFiles.filter((f) => f.id !== fileId),
           jobFiles: state.jobFiles.filter((jf) => jf.filePath !== fileId),
+        })),
+
+      removeMediaFileByPath: (filePath) =>
+        set((state) => ({
+          mediaFiles: state.mediaFiles.filter((f) => f.path !== filePath),
+          jobFiles: state.jobFiles.filter((jf) => jf.filePath !== filePath),
         })),
 
       updateMediaFile: (fileId, updates) =>
