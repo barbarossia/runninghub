@@ -31,6 +31,7 @@ import {
   Expand,
   Database,
   Save,
+  FilePlus,
 } from 'lucide-react';
 import { VideoPreview } from './VideoPreview';
 import { useWorkspaceStore } from '@/store/workspace-store';
@@ -119,6 +120,7 @@ export interface MediaGalleryProps {
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
   onExportToDataset?: (file: MediaFile) => void;
   onResize?: (file: MediaFile) => void;
+  onAddCaption?: (files: MediaFile[]) => Promise<void>;
   className?: string;
 }
 
@@ -134,6 +136,7 @@ export function MediaGallery({
   onConvertFps,
   onExportToDataset,
   onResize,
+  onAddCaption,
   className = '',
 }: MediaGalleryProps) {
   const {
@@ -981,6 +984,19 @@ export function MediaGallery({
                               >
                                 <Download className="h-4 w-4 mr-2" />
                                 Export
+                              </DropdownMenuItem>
+                            )}
+                            {/* Add Caption - only in dataset mode if no caption exists */}
+                            {mode === 'dataset' && onAddCaption && !file.captionPath && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAddCaption([file]);
+                                }}
+                                className="text-yellow-600 focus:text-yellow-700 focus:bg-yellow-50"
+                              >
+                                <FilePlus className="h-4 w-4 mr-2" />
+                                Add Caption
                               </DropdownMenuItem>
                             )}
                             {/* Export to Dataset - only in workspace mode, not dataset mode */}

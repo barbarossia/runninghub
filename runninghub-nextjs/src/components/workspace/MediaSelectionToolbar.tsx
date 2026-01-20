@@ -18,6 +18,7 @@ import {
   FileText,
   MessageSquare,
   Database,
+  FilePlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -61,6 +62,7 @@ interface MediaSelectionToolbarProps {
   onConvertFps?: (files: MediaFile[]) => Promise<void>;
   onResize?: (files: MediaFile[], longestEdge?: number, deleteOriginal?: boolean) => Promise<void>;
   onCaption?: (files: MediaFile[]) => Promise<void>; // Caption videos using workflow
+  onAddCaption?: (files: MediaFile[]) => Promise<void>; // Manually add caption (empty txt)
   onExportToDataset?: () => void; // Export selected files to dataset
   onDeselectAll?: () => void;
   disabled?: boolean;
@@ -82,6 +84,7 @@ export function MediaSelectionToolbar({
   onConvertFps,
   onResize,
   onCaption,
+  onAddCaption,
   onExportToDataset,
   onDeselectAll,
   disabled = false,
@@ -412,6 +415,25 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
+                {/* Add Caption (Manual) - only if selection has no caption */}
+                {showCaptionButton && onAddCaption && selectedFiles.some(f => !f.captionPath && (f.type === 'video' || f.type === 'image')) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                        const filesWithoutCaption = selectedFiles.filter(f => !f.captionPath);
+                        onAddCaption(filesWithoutCaption);
+                        onDeselectAll?.();
+                    }}
+                    disabled={toolbarDisabled}
+                    className="h-9 border-yellow-100 bg-yellow-50/50 hover:bg-yellow-100 text-yellow-700"
+                    title="Add caption text file"
+                  >
+                    <FilePlus className="h-4 w-4 mr-2" />
+                    Add Caption
+                  </Button>
+                )}
+
                 {/* Caption - only for videos/images in dataset tab */}
                 {showCaptionButton && onCaption && selectedFiles.some(f => f.type === 'video' || f.type === 'image') && (
                   <Button
@@ -592,6 +614,25 @@ export function MediaSelectionToolbar({
                   >
                     {isClipping ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Scissors className="h-3.5 w-3.5 mr-2 text-purple-400" />}
                     <span className="text-xs">{isClipping ? '...' : 'Clip'}</span>
+                  </Button>
+                )}
+
+                {/* Add Caption (Manual) - floating mode */}
+                {showCaptionButton && onAddCaption && selectedFiles.some(f => !f.captionPath && (f.type === 'video' || f.type === 'image')) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                        const filesWithoutCaption = selectedFiles.filter(f => !f.captionPath);
+                        onAddCaption(filesWithoutCaption);
+                        onDeselectAll?.();
+                    }}
+                    disabled={toolbarDisabled}
+                    className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+                    title="Add caption text file"
+                  >
+                    <FilePlus className="h-3.5 w-3.5 mr-2 text-yellow-400" />
+                    <span className="text-xs">Add Caption</span>
                   </Button>
                 )}
 
