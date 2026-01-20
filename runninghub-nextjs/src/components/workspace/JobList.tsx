@@ -15,11 +15,13 @@ import {
   Calendar,
   FileText,
   RefreshCcw,
+  RefreshCw,
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import {
   Select,
   SelectContent,
@@ -36,15 +38,61 @@ export interface JobListProps {
 }
 
 export function JobList({ onJobClick, className = '' }: JobListProps) {
-  const { jobs, selectedJobId, setSelectedJob, deleteJob, getJobById, fetchJobs, isLoadingJobs } = useWorkspaceStore();
+  const { jobs, selectedJobId, setSelectedJob, deleteJob, getJobById, fetchJobs, isLoadingJobs, updateJob } = useWorkspaceStore();
 
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
   const [workflowFilter, setWorkflowFilter] = useState<string>('all');
+  const [reQueryingIds, setReQueryingIds] = useState<Set<string>>(new Set());
 
   // Fetch jobs on mount
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
+
+  const handleReQuery = async (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    if (!job.runninghubTaskId) return;
+
+    setReQueryingIds(prev => new Set(prev).add(job.id));
+    try {
+      const response = await fetch('/api/workspace/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: job.id,
+          taskId: job.taskId,
+          runninghubTaskId: job.runninghubTaskId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to query task status');
+      }
+
+      updateJob(job.id, {
+        status: data.status,
+        completedAt: data.job?.completedAt,
+        error: data.job?.error,
+      });
+
+      toast.success(`Status updated: ${data.status}`);
+      
+      if (data.status === 'completed') {
+        fetchJobs();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to query task status';
+      toast.error(errorMessage);
+    } finally {
+      setReQueryingIds(prev => {
+        const next = new Set(prev);
+        next.delete(job.id);
+        return next;
+      });
+    }
+  };
 
   // Get unique workflow IDs
   const workflowIds = useMemo(() => {
@@ -230,22 +278,36 @@ export function JobList({ onJobClick, className = '' }: JobListProps) {
                         </div>
                       </div>
 
-                      {/* Right: Delete button */}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-600 hover:text-red-700"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('Delete this job?')) {
-                            deleteJob(job.id);
-                          }
-                        }}
-                      >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 011-1h2a1 1 0 011 1v3a1 1 0 001 1h1a1 1 0 001-1v-3a1 1 0 011-1h2a1 1 0 011 1v9" />
-                        </svg>
-                      </Button>
+                      <div className="flex gap-1">
+                        {job.runninghubTaskId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={(e) => handleReQuery(e, job)}
+                            disabled={reQueryingIds.has(job.id)}
+                            title="Re-query status from RunningHub"
+                          >
+                            <RefreshCw className={cn("h-4 w-4", reQueryingIds.has(job.id) && "animate-spin")} />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Delete this job?')) {
+                              deleteJob(job.id);
+                            }
+                          }}
+                          title="Delete job"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 011-1h2a1 1 0 011 1v3a1 1 0 001 1h1a1 1 0 001-1v-3a1 1 0 011-1h2a1 1 0 011 1v9" />
+                          </svg>
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 </motion.div>
