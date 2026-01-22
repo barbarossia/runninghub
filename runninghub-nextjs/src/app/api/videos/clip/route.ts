@@ -7,6 +7,7 @@ import { ENVIRONMENT_VARIABLES } from "@/constants";
 import path from "path";
 import fs from "fs/promises";
 import os from "os";
+import { useWorkspaceStore } from "@/store/workspace-store";
 
 interface ClipRequest {
   videos: string[];
@@ -117,7 +118,20 @@ function clipSingleVideo(
   error?: string;
 }> {
   return new Promise(async (resolve) => {
-    const outputDir = resolvePath(ENVIRONMENT_VARIABLES.CLIP_OUTPUT_FOLDER);
+    let outputDir = resolvePath(ENVIRONMENT_VARIABLES.CLIP_OUTPUT_FOLDER);
+
+    // If saveToWorkspace is enabled, use selected workspace folder
+    let organizeByVideo = clipConfig.organizeByVideo;
+    let deleteOriginal = clipConfig.deleteOriginal;
+
+    if (clipConfig.saveToWorkspace) {
+      const { selectedFolder } = useWorkspaceStore.getState();
+      if (selectedFolder?.folder_path) {
+        outputDir = selectedFolder.folder_path;
+        // Force no-organize when saving to workspace (conflicting option)
+        organizeByVideo = false;
+      }
+    }
 
     const args = [
       "-m", "runninghub_cli.cli",
@@ -127,8 +141,8 @@ function clipSingleVideo(
       "--format", clipConfig.imageFormat,
       "--quality", String(clipConfig.quality),
       "--output-dir", outputDir,
-      clipConfig.organizeByVideo ? "--organize" : "--no-organize",
-      clipConfig.deleteOriginal ? "--delete" : "--no-delete",
+      organizeByVideo ? "--organize" : "--no-organize",
+      deleteOriginal ? "--delete" : "--no-delete",
       "--timeout", String(timeout),
     ];
 

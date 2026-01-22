@@ -190,4 +190,5 @@ export const DEFAULT_CLIP_CONFIG = {
   intervalFrames: 1,
   organizeByVideo: true,
   deleteOriginal: false,
+  saveToWorkspace: false,
 } as const;
