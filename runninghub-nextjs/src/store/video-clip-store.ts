@@ -17,6 +17,7 @@ interface VideoClipState {
   setIntervalFrames: (frames: number) => void;
   toggleOrganizeByVideo: () => void;
   toggleDeleteOriginal: () => void;
+  toggleSaveToWorkspace: () => void;
 
   // Reset
   resetConfig: () => void;
@@ -74,6 +75,13 @@ export const useVideoClipStore = create<VideoClipState>()(
           clipConfig: {
             ...state.clipConfig,
             deleteOriginal: !state.clipConfig.deleteOriginal,
+          },
+        })),
+      toggleSaveToWorkspace: () =>
+        set((state) => ({
+          clipConfig: {
+            ...state.clipConfig,
+            saveToWorkspace: !state.clipConfig.saveToWorkspace,
           },
         })),
 
