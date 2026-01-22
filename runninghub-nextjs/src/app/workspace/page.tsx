@@ -405,6 +405,13 @@ export default function WorkspacePage() {
         const file = payload?.payload;
         if (!file || !payload?.type) return;
 
+        // Defensive check: skip if file already exists in store to prevent duplicates
+        const currentFiles = useWorkspaceStore.getState().mediaFiles;
+        if (currentFiles.some(f => f.id === file.path)) {
+          console.log('[Workspace] File already exists in store, skipping update:', file.path);
+          return;
+        }
+
         const mediaFile: MediaFile = {
           id: file.path,
           name: file.name,
@@ -1313,13 +1320,21 @@ export default function WorkspacePage() {
       const data = await response.json();
 
       if (data.success) {
-        // Immediately remove moved files from store for instant UI update
-        filesToExport.forEach(file => {
-          removeMediaFile(file.id);
-        });
-        // Deselect files after export
+        if (data.movedCount > 0) {
+          filesToExport.forEach(file => {
+            removeMediaFile(file.id);
+          });
+        }
         deselectAllMediaFiles();
-        toast.success(`Moved ${filesToExport.length} file${filesToExport.length !== 1 ? 's' : ''} to "${dataset.name}"`);
+
+        const skippedMsg = data.skippedCount > 0
+          ? ` (${data.skippedCount} skipped - already exist)`
+          : '';
+        const errorMsg = data.errorCount > 0
+          ? ` (${data.errorCount} failed)`
+          : '';
+        toast.success(`Moved ${data.movedCount} file${data.movedCount !== 1 ? 's' : ''} to "${dataset.name}"${skippedMsg}${errorMsg}`);
+
         if (selectedDataset && selectedDataset.path === dataset.path) {
           await selectDataset(selectedDataset);
         }
