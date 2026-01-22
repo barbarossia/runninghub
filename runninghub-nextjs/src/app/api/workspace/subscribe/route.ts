@@ -128,7 +128,7 @@ function formatSseEvent(event: string, data: unknown) {
 
 function debounceByKey<T extends (...args: any[]) => Promise<void>>(
   handler: T,
-  delay = 200,
+  delay = 50,
 ) {
   const timers = new Map<string, NodeJS.Timeout>();
 
@@ -166,12 +166,22 @@ export async function GET(request: NextRequest) {
   };
 
   const watcher = chokidar.watch(folderPath, {
-    ignored: [/\.git/, /node_modules/, /\.DS_Store/],
+    ignored: [
+      /\.git/,
+      /node_modules/,
+      /\.DS_Store/,
+      // Ignore all subdirectories - only watch files directly in folderPath
+      (filePath) => {
+        const relativePath = path.relative(folderPath, filePath);
+        const relativeParts = relativePath.split(path.sep);
+        return relativeParts.length > 1; // Ignore if path has any subdirectories
+      },
+    ],
     ignoreInitial: true,
     persistent: true,
     awaitWriteFinish: {
-      stabilityThreshold: 300,
-      pollInterval: 100,
+      stabilityThreshold: 50,
+      pollInterval: 10,
     },
   });
 

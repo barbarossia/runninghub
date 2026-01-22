@@ -118,7 +118,7 @@ function clipSingleVideo(
 }> {
   return new Promise(async (resolve) => {
     const outputDir = resolvePath(ENVIRONMENT_VARIABLES.CLIP_OUTPUT_FOLDER);
-    
+
     const args = [
       "-m", "runninghub_cli.cli",
       "clip",
@@ -126,14 +126,24 @@ function clipSingleVideo(
       "--mode", clipConfig.mode,
       "--format", clipConfig.imageFormat,
       "--quality", String(clipConfig.quality),
-      "--frame-count", String(clipConfig.frameCount),
-      "--interval", String(clipConfig.intervalSeconds),
-      "--frame-interval", String(clipConfig.intervalFrames),
       "--output-dir", outputDir,
       clipConfig.organizeByVideo ? "--organize" : "--no-organize",
       clipConfig.deleteOriginal ? "--delete" : "--no-delete",
       "--timeout", String(timeout),
     ];
+
+    // Add mode-specific parameters
+    switch (clipConfig.mode) {
+      case 'last_frames':
+        args.push("--frame-count", "1");
+        break;
+      case 'interval':
+        args.push("--interval", String(clipConfig.intervalSeconds));
+        break;
+      case 'frame_interval':
+        args.push("--frame-interval", String(clipConfig.intervalFrames));
+        break;
+    }
 
     const childProcess = spawn("python3", args, {
       env,

@@ -51,6 +51,7 @@ export function useAutoLoadFolder({
 
     // Validate and load the last folder
     const validateAndLoadFolder = async () => {
+      console.log(`[useAutoLoadFolder] Attempting to auto-load folder for ${pageType}:`, lastFolder.folder_path);
       try {
         // Check if folder still exists by listing its contents
         const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
@@ -61,6 +62,15 @@ export function useAutoLoadFolder({
             session_id: lastFolder.session_id,
           }),
         });
+
+        const currentFolder = getSelectedFolder(pageType);
+        if (currentFolder && currentFolder.folder_path !== lastFolder.folder_path) {
+          console.warn('[useAutoLoadFolder] Folder changed during validation, aborting auto-load', {
+            validating: lastFolder.folder_path,
+            current: currentFolder.folder_path
+          });
+          return;
+        }
 
         const text = await response.text();
         let data;

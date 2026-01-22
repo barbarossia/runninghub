@@ -366,14 +366,14 @@ export default function WorkspacePage() {
   const stopMediaSubscription = useCallback(() => {
     const hadSubscription = !!mediaSubscriptionRef.current;
     if (mediaSubscriptionRef.current) {
-      logger.info('[Workspace] stopMediaSubscription: Closing subscription');
+      logger.info('[Workspace] stopMediaSubscription: Closing subscription', { toast: false });
       mediaSubscriptionRef.current.close();
       mediaSubscriptionRef.current = null;
     }
     // Only update state if we are actually stopping an active live session
     // AND the component is still mounted. This prevents loops.
     if (isMediaMountedRef.current && hadSubscription) {
-      logger.info('[Workspace] stopMediaSubscription: Setting isMediaLive to false');
+      logger.info('[Workspace] stopMediaSubscription: Setting isMediaLive to false', { toast: false });
       setIsMediaLive(false);
     }
   }, []);
@@ -383,17 +383,17 @@ export default function WorkspacePage() {
     logger.info(`[Workspace] startMediaSubscription called for: ${folderPath} at ${new Date().toISOString()}`, { toast: false });
     // Clean up any existing subscription first
     if (mediaSubscriptionRef.current) {
-      logger.info('[Workspace] Closing existing subscription before starting new one');
+      logger.info('[Workspace] Closing existing subscription before starting new one', { toast: false });
       mediaSubscriptionRef.current.close();
       mediaSubscriptionRef.current = null;
     }
 
-    logger.info('[Workspace] Creating new EventSource...');
+    logger.info('[Workspace] Creating new EventSource...', { toast: false });
     const source = new EventSource(`/api/workspace/subscribe?path=${encodeURIComponent(folderPath)}`);
     mediaSubscriptionRef.current = source;
 
     source.onopen = () => {
-      logger.info('[Workspace] SSE Connected (onopen)');
+      logger.info('[Workspace] SSE Connected (onopen)', { toast: false });
       if (isMediaMountedRef.current) {
         setIsMediaLive(true);
       }
@@ -404,6 +404,13 @@ export default function WorkspacePage() {
         const payload = JSON.parse(event.data);
         const file = payload?.payload;
         if (!file || !payload?.type) return;
+
+        // Defensive check: skip if file already exists in store to prevent duplicates
+        const currentFiles = useWorkspaceStore.getState().mediaFiles;
+        if (currentFiles.some(f => f.id === file.path)) {
+          console.log('[Workspace] File already exists in store, skipping update:', file.path);
+          return;
+        }
 
         const mediaFile: MediaFile = {
           id: file.path,
@@ -564,12 +571,14 @@ export default function WorkspacePage() {
   // Load folder contents when folder is selected
   useEffect(() => {
     if (selectedFolder) {
+      console.log('[WorkspacePage] Selected folder changed:', selectedFolder.folder_path);
       loadFolderContents(selectedFolder.folder_path, selectedFolder.session_id).then(
         (result) => {
           processFolderContents(result);
         }
       );
     } else {
+      console.log('[WorkspacePage] Selected folder cleared');
       stopMediaSubscription();
     }
   }, [selectedFolder, loadFolderContents, processFolderContents, stopMediaSubscription]);
@@ -1311,13 +1320,21 @@ export default function WorkspacePage() {
       const data = await response.json();
 
       if (data.success) {
-        // Immediately remove moved files from store for instant UI update
-        filesToExport.forEach(file => {
-          removeMediaFile(file.id);
-        });
-        // Deselect files after export
+        if (data.movedCount > 0) {
+          filesToExport.forEach(file => {
+            removeMediaFile(file.id);
+          });
+        }
         deselectAllMediaFiles();
-        toast.success(`Moved ${filesToExport.length} file${filesToExport.length !== 1 ? 's' : ''} to "${dataset.name}"`);
+
+        const skippedMsg = data.skippedCount > 0
+          ? ` (${data.skippedCount} skipped - already exist)`
+          : '';
+        const errorMsg = data.errorCount > 0
+          ? ` (${data.errorCount} failed)`
+          : '';
+        toast.success(`Moved ${data.movedCount} file${data.movedCount !== 1 ? 's' : ''} to "${dataset.name}"${skippedMsg}${errorMsg}`);
+
         if (selectedDataset && selectedDataset.path === dataset.path) {
           await selectDataset(selectedDataset);
         }
@@ -1578,6 +1595,47 @@ export default function WorkspacePage() {
       toast.error('Failed to resize files');
     }
   }, [selectedDataset, selectDataset]);
+
+  // Handle manual caption creation (empty file)
+  const handleManualAddCaption = useCallback(async (files: MediaFile[]) => {
+    if (!selectedDataset) return;
+
+    let createdCount = 0;
+
+    for (const file of files) {
+      if (file.captionPath) continue; // Skip if already has caption
+
+      try {
+        // Construct .txt path
+        const lastDotIndex = file.path.lastIndexOf('.');
+        const txtPath = (lastDotIndex > -1 ? file.path.substring(0, lastDotIndex) : file.path) + '.txt';
+
+        const response = await fetch('/api/files/write-txt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: txtPath,
+            content: '', // Empty content
+          }),
+        });
+
+        if (response.ok) {
+          // Update store
+          updateDatasetFile(file.id, {
+            caption: '',
+            captionPath: txtPath
+          });
+          createdCount++;
+        }
+      } catch (error) {
+        console.error('Failed to create caption file:', error);
+      }
+    }
+
+    if (createdCount > 0) {
+      toast.success(`Created ${createdCount} caption file${createdCount !== 1 ? 's' : ''}`);
+    }
+  }, [selectedDataset, updateDatasetFile]);
 
   // Handle dataset media caption (AI description)
   const handleDatasetCaption = useCallback(async (files: MediaFile[]) => {
@@ -2078,6 +2136,7 @@ export default function WorkspacePage() {
                         onDelete={handleDatasetDelete}
                         onResize={handleDatasetResize}
                         onCaption={handleDatasetCaption}
+                        onAddCaption={handleManualAddCaption}
                         onPreview={handlePreviewFile}
                         onDeselectAll={() => deselectAllDatasetFiles()}
                         skipResizeDialog={false}
@@ -2086,14 +2145,15 @@ export default function WorkspacePage() {
                     )}
 
                     {/* Media Gallery for Dataset */}
-                    <MediaGallery
-                      mode="dataset"
-                      onFileDoubleClick={handlePreviewFile}
-                      onRename={handleDatasetRename}
-                      onDelete={handleDatasetDelete}
-                      onResize={handleResizeFromContextMenu}
-                      onPreview={handlePreviewFile}
-                    />
+                      <MediaGallery
+                        mode="dataset"
+                        onFileDoubleClick={handlePreviewFile}
+                        onRename={handleDatasetRename}
+                        onDelete={handleDatasetDelete}
+                        onResize={handleResizeFromContextMenu}
+                        onPreview={handlePreviewFile}
+                        onAddCaption={handleManualAddCaption}
+                      />
                   </>
                 )}
               </TabsContent>

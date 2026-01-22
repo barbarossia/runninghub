@@ -9,7 +9,7 @@ import { execSync } from 'child_process';
 const RUNNINGHUB_CLI = '/opt/homebrew/Caskroom/miniconda/base/bin/runninghub';
 const WORKSPACE_WORKFLOWS = '/Users/barbarossia/Downloads/workspace/workflows';
 const VIDEO_CAPTION_WORKFLOW_JSON = 'workflow_1768572436369_rvc96w13l.json';
-const IMAGE_CAPTION_WORKFLOW_JSON = 'workflow_1767161797843_bnyrpqcjb.json';
+const IMAGE_CAPTION_WORKFLOW_JSON = 'workflow_1769062557786_f2a0s6twm.json';
 
 interface CaptionRequest {
   videoPath: string; // Used for both video and image path (legacy name)
