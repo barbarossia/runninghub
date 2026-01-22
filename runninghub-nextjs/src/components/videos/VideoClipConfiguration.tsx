@@ -174,10 +174,11 @@ export function VideoClipConfiguration({
                 <Input
                   type="number"
                   min="1"
-                  value={clipConfig.frameCount}
-                  onChange={(e) => setFrameCount(parseInt(e.target.value) || 10)}
-                  className="border-gray-300 bg-white text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                  value={1}
+                  disabled
+                  className="border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed"
                 />
+                <p className="text-xs text-gray-500 mt-1">Last frame mode always extracts only 1 frame</p>
               </div>
             )}
 
