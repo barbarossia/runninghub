@@ -30,7 +30,8 @@ export function VideoClipConfiguration({
     setIntervalSeconds,
     setIntervalFrames,
     toggleOrganizeByVideo,
-    toggleDeleteOriginal
+    toggleDeleteOriginal,
+    toggleSaveToWorkspace,
   } = useVideoClipStore();
 
   // Notify parent of config changes
@@ -51,11 +52,6 @@ export function VideoClipConfiguration({
       iconColor="text-purple-600"
       disabled={disabled}
       className={className}
-      subtitle={
-        <>
-          Mode: {clipConfig.mode.replace('_', ' ')} • Format: {clipConfig.imageFormat.toUpperCase()} {clipConfig.organizeByVideo && '• Organized'} {clipConfig.deleteOriginal && '• Auto-delete'}
-        </>
-      }
     >
       <div className="space-y-4">
         {/* Clip Mode Presets */}
@@ -81,6 +77,115 @@ export function VideoClipConfiguration({
             </button>
           ))}
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-200">
+          {/* Image Output Settings */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <ImageIcon className="h-4 w-4" />
+              Output Settings
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Format</label>
+                <div className="flex p-1 bg-gray-100 rounded-lg border border-gray-200">
+                  <button
+                    onClick={() => setImageFormat('png')}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+                      clipConfig.imageFormat === 'png'
+                        ? "bg-purple-500 text-white shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    PNG
+                  </button>
+                  <button
+                    onClick={() => setImageFormat('jpg')}
+                    className={cn(
+                      "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+                      clipConfig.imageFormat === 'jpg'
+                        ? "bg-purple-500 text-white shadow-sm"
+                        : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    JPG
+                  </button>
+                </div>
+              </div>
+
+              {clipConfig.imageFormat === 'jpg' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Quality (1-100)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={clipConfig.quality}
+                    onChange={(e) => setQuality(parseInt(e.target.value) || 95)}
+                    className="border-gray-300 bg-white text-gray-900 focus:border-purple-500 focus:ring-purple-500"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* File Organization Options */}
+          <div className="space-y-3 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Settings2 className="h-4 w-4" />
+              File Organization
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={clipConfig.organizeByVideo}
+                    onChange={toggleOrganizeByVideo}
+                    className="w-4 h-4 rounded border-gray-300 bg-white text-purple-600 focus:ring-purple-500 focus:ring-offset-2 transition-all cursor-pointer"
+                    disabled={clipConfig.saveToWorkspace}
+                  />
+                </div>
+                <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Organize images by video name</span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={clipConfig.deleteOriginal}
+                    onChange={toggleDeleteOriginal}
+                    className="w-4 h-4 rounded border-gray-300 bg-white text-red-600 focus:ring-red-500 focus:ring-offset-2 transition-all cursor-pointer"
+                  />
+                </div>
+                <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Delete video after processing</span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={clipConfig.saveToWorkspace}
+                    onChange={toggleSaveToWorkspace}
+                    className="w-4 h-4 rounded border-gray-300 bg-blue-600 focus:ring-blue-500 focus:ring-offset-2 transition-all cursor-pointer"
+                  />
+                </div>
+                <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Save to workspace</span>
+              </label>
+            </div>
+
+            {clipConfig.organizeByVideo && clipConfig.saveToWorkspace && (
+              <div className="mt-3 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <span className="text-yellow-600 text-sm">⚠️</span>
+                <span className="text-sm text-yellow-800">
+                  <strong>Conflicting options:</strong> Cannot organize by video name and save to workspace simultaneously.
+                </span>
+              </div>
+            )}
+          </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-200">
           {/* Image Output Settings */}
