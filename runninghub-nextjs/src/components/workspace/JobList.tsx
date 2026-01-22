@@ -279,7 +279,19 @@ export function JobList({ onJobClick, className = '' }: JobListProps) {
                       </div>
 
                       <div className="flex gap-1">
-                        {job.runninghubTaskId && (
+                        {job.status === 'failed' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={(e) => handleReQuery(e, job)}
+                            disabled={reQueryingIds.has(job.id)}
+                            title="Re-query status from RunningHub"
+                          >
+                            <RefreshCw className={cn("h-4 w-4", reQueryingIds.has(job.id) && "animate-spin")} />
+                          </Button>
+                        )}
+                        {job.runninghubTaskId && job.status !== 'failed' && (
                           <Button
                             variant="ghost"
                             size="icon"
