@@ -497,7 +497,6 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
-                {/* Database - export to dataset */}
                 {onExportToDataset && (
                   <Button
                     variant="outline"
@@ -508,7 +507,7 @@ export function MediaSelectionToolbar({
                     title="Export to dataset"
                   >
                     <Database className="h-4 w-4 mr-2" />
-                    Database
+                    Dataset
                   </Button>
                 )}
 
@@ -696,7 +695,6 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
-                {/* Database - floating mode */}
                 {onExportToDataset && (
                   <Button
                     variant="ghost"
@@ -707,7 +705,7 @@ export function MediaSelectionToolbar({
                     title="Export to dataset"
                   >
                     <Database className="h-3.5 w-3.5 mr-2 text-purple-400" />
-                    <span className="text-xs">Database</span>
+                    <span className="text-xs">Dataset</span>
                   </Button>
                 )}
 

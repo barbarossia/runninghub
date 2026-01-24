@@ -30,24 +30,20 @@ export async function POST(request: NextRequest) {
     }
 
     let movedCount = 0;
+    let skippedCount = 0;
     const errors: string[] = [];
-    const skipped: string[] = [];
 
     for (const filePath of files) {
       try {
-        // Check if source file exists
-        const sourceStats = await stat(filePath);
-
         const fileName = basename(filePath);
         const destPath = join(datasetPath, fileName);
 
-        // Check if file already exists in dataset
         if (existsSync(destPath)) {
-          skipped.push(fileName);
+          skippedCount++;
           continue;
         }
 
-        // Move file to dataset (rename is atomic on same filesystem)
+        await stat(filePath);
         await rename(filePath, destPath);
         movedCount++;
       } catch (err) {
@@ -58,15 +54,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Moved ${movedCount} file${movedCount !== 1 ? 's' : ''} to dataset${skipped.length > 0 ? ` (${skipped.length} skipped - already exist)` : ''}${errors.length > 0 ? ` (${errors.length} failed)` : ''}`,
+      message: `Moved ${movedCount} file${movedCount !== 1 ? 's' : ''} to dataset${skippedCount > 0 ? ` (${skippedCount} skipped - already exist)` : ''}${errors.length > 0 ? ` (${errors.length} failed)` : ''}`,
       movedCount,
-      skippedCount: skipped.length,
+      skippedCount,
       errorCount: errors.length,
     });
   } catch (error) {
-    console.error('Move files to dataset API error:', error);
+    console.error('Export files to dataset API error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to move files to dataset' },
+      { success: false, error: 'Failed to export files to dataset' },
       { status: 500 }
     );
   }
