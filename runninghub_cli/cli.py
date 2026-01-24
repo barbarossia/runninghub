@@ -25,6 +25,7 @@ from .utils import (
 # Workflow Field Name Detection from JSON
 # ============================================================================
 
+
 def extract_field_name_from_param_id(param_id: str) -> tuple[str, str]:
     """Extract node ID and field name from a workflow parameter ID.
 
@@ -44,11 +45,14 @@ def extract_field_name_from_param_id(param_id: str) -> tuple[str, str]:
         ValueError: If the param_id doesn't match the expected pattern.
     """
     import re
-    pattern = r'^param_(\d+)_(\w+)$'
+
+    pattern = r"^param_(\d+)_(\w+)$"
     match = re.match(pattern, param_id)
     if match:
         return match.group(1), match.group(2)
-    raise ValueError(f"Invalid parameter ID format: '{param_id}'. Expected 'param_<nodeId>_<fieldName>'")
+    raise ValueError(
+        f"Invalid parameter ID format: '{param_id}'. Expected 'param_<nodeId>_<fieldName>'"
+    )
 
 
 def build_field_name_mapping(workflow_path: str) -> dict[str, str]:
@@ -72,20 +76,22 @@ def build_field_name_mapping(workflow_path: str) -> dict[str, str]:
             if not workflow_file.exists():
                 raise FileNotFoundError(f"Workflow file not found: {workflow_path}")
 
-    with open(workflow_file, 'r') as f:
+    with open(workflow_file, "r") as f:
         workflow = json.load(f)
 
     mapping = {}
-    for param in workflow.get('inputs', []):
-        param_id = param.get('id', '')
-        if param_id.startswith('param_'):
+    for param in workflow.get("inputs", []):
+        param_id = param.get("id", "")
+        if param_id.startswith("param_"):
             node_id, field_name = extract_field_name_from_param_id(param_id)
             mapping[node_id] = field_name
 
     return mapping
 
 
-def parse_file_param(param: str, field_mapping: dict[str, str] | None = None) -> tuple[str, str, str]:
+def parse_file_param(
+    param: str, field_mapping: dict[str, str] | None = None
+) -> tuple[str, str, str]:
     """Parse file parameter with support for extended format.
 
     Supports three formats:
@@ -111,12 +117,12 @@ def parse_file_param(param: str, field_mapping: dict[str, str] | None = None) ->
     Raises:
         ValueError: If the format is invalid.
     """
-    parts = param.split(':')
+    parts = param.split(":")
     if len(parts) == 2:
         # Format: node_id:file_path
         node_id, file_path = parts
         # Use mapping if available, otherwise default to "image"
-        field_name = field_mapping.get(node_id, 'image') if field_mapping else 'image'
+        field_name = field_mapping.get(node_id, "image") if field_mapping else "image"
     elif len(parts) == 3:
         # Format: node_id:field_name:file_path (explicit override)
         node_id, field_name, file_path = parts
@@ -132,8 +138,13 @@ def parse_file_param(param: str, field_mapping: dict[str, str] | None = None) ->
 # CLI Commands
 # ============================================================================
 
+
 @click.group()
-@click.option("--env-file", default=None, help="Path to .env file (defaults to .env.local or .env)")
+@click.option(
+    "--env-file",
+    default=None,
+    help="Path to .env file (defaults to .env.local or .env)",
+)
 @click.pass_context
 def cli(ctx, env_file):
     """RunningHub CLI - A command-line interface for RunningHub API."""
@@ -176,6 +187,7 @@ def nodes(ctx, output_json):
 
         if output_json:
             import json
+
             print(json.dumps(nodes, indent=2, ensure_ascii=False))
         elif nodes:
             print_info(f"Fetching nodes for workflow: {cfg.workflow_id}")
@@ -337,7 +349,13 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option("--node", required=True, help="Node ID to use")
-@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
+@click.option(
+    "-p",
+    "--param",
+    "params",
+    multiple=True,
+    help="Additional node parameters (format: nodeId:type:value)",
+)
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
@@ -346,11 +364,19 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
 @click.option(
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
-@click.option(
-    "--workflow-id", help="Override workflow ID from configuration"
-)
+@click.option("--workflow-id", help="Override workflow ID from configuration")
 @click.pass_context
-def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup, params, workflow_id):
+def process(
+    ctx,
+    file_path,
+    node,
+    timeout,
+    output_json,
+    no_download,
+    no_cleanup,
+    params,
+    workflow_id,
+):
     """Upload a file and process it in one command."""
     source_file_path = file_path
     cfg = ctx.obj["config"]
@@ -370,34 +396,45 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
         node_configs = []
 
         # Add image node config
-        node_configs.append({
-            "nodeId": node,
-            "fieldName": "image",
-            "fieldValue": file_id,
-            "description": "image",
-        })
+        node_configs.append(
+            {
+                "nodeId": node,
+                "fieldName": "image",
+                "fieldValue": file_id,
+                "description": "image",
+            }
+        )
 
         # Add additional parameter node configs
         for param in params:
             try:
-                parts = param.split(':', 2)
+                parts = param.split(":", 2)
                 if len(parts) != 3:
-                    print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                    print_error(
+                        f"Invalid parameter format: {param}. Expected format: nodeId:type:value"
+                    )
                     continue
 
                 node_id, field_name, value = parts
-                node_configs.append({
-                    "nodeId": node_id,
-                    "fieldName": field_name,
-                    "fieldValue": value,
-                    "description": field_name,
-                })
-                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
+                node_configs.append(
+                    {
+                        "nodeId": node_id,
+                        "fieldName": field_name,
+                        "fieldValue": value,
+                        "description": field_name,
+                    }
+                )
+                print_info(
+                    f"  Added parameter: node {node_id} ({field_name}) = {value}"
+                )
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
         task_id = client.submit_task(active_workflow_id, node_configs)
-        print_success(f"Task submitted successfully! Task ID: {task_id}")
+        if output_json:
+            print(json.dumps({"taskId": task_id, "status": "submitted"}))
+        else:
+            print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 3: Wait for completion
         print_info("Waiting for task completion...")
@@ -459,20 +496,38 @@ def process(ctx, file_path, node, timeout, output_json, no_download, no_cleanup,
 
 
 @cli.command("process-multiple")
-@click.option("--image", "images", multiple=True, required=True,
-              help="Media input in format <node_id>:<file_path> or <node_id>:<field_name>:<file_path>")
-@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:field_name:value)")
-@click.option("--workflow", "workflow_json", help="Path to workflow JSON file (auto-detects field names from param IDs)")
+@click.option(
+    "--image",
+    "images",
+    multiple=True,
+    required=True,
+    help="Media input in format <node_id>:<file_path> or <node_id>:<field_name>:<file_path>",
+)
+@click.option(
+    "-p",
+    "--param",
+    "params",
+    multiple=True,
+    help="Additional node parameters (format: nodeId:field_name:value)",
+)
+@click.option(
+    "--workflow",
+    "workflow_json",
+    help="Path to workflow JSON file (auto-detects field names from param IDs)",
+)
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
     "--no-download", is_flag=True, help="Skip automatic download of output files"
 )
 @click.option(
-    "--workflow-id", help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)"
+    "--workflow-id",
+    help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)",
 )
 @click.pass_context
-def process_multiple(ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id):
+def process_multiple(
+    ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id
+):
     """Process multiple files in one workflow."""
     cfg = ctx.obj["config"]
     field_mapping = None
@@ -489,16 +544,28 @@ def process_multiple(ctx, images, params, workflow_json, timeout, output_json, n
             # Extract workflow ID from JSON if not explicitly provided
             workflow_file = Path(workflow_json)
             if not workflow_file.exists():
-                workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / workflow_json
+                workflow_file = (
+                    Path.home()
+                    / "Downloads"
+                    / "workspace"
+                    / "workflows"
+                    / workflow_json
+                )
                 if not workflow_file.exists():
-                    workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / f"{workflow_json}.json"
+                    workflow_file = (
+                        Path.home()
+                        / "Downloads"
+                        / "workspace"
+                        / "workflows"
+                        / f"{workflow_json}.json"
+                    )
 
-            with open(workflow_file, 'r') as f:
+            with open(workflow_file, "r") as f:
                 workflow_data = json.load(f)
 
             # Use sourceWorkflowId from JSON if available and workflow_id not provided
-            if not workflow_id and 'sourceWorkflowId' in workflow_data:
-                workflow_id = workflow_data['sourceWorkflowId']
+            if not workflow_id and "sourceWorkflowId" in workflow_data:
+                workflow_id = workflow_data["sourceWorkflowId"]
                 print_info(f"Using workflow ID from JSON: {workflow_id}")
         except FileNotFoundError as e:
             print_error(f"{e}")
@@ -517,7 +584,9 @@ def process_multiple(ctx, images, params, workflow_json, timeout, output_json, n
         # Step 1: Upload all media files and create node configs
         for image_param in images:
             try:
-                node_id, field_name, file_path = parse_file_param(image_param, field_mapping)
+                node_id, field_name, file_path = parse_file_param(
+                    image_param, field_mapping
+                )
                 if not Path(file_path).exists():
                     print_error(f"File not found: {file_path}")
                     return
@@ -526,12 +595,14 @@ def process_multiple(ctx, images, params, workflow_json, timeout, output_json, n
                 file_id = client.upload_file(file_path)
                 print_success(f"File uploaded successfully! File ID: {file_id}")
 
-                node_configs.append({
-                    "nodeId": node_id,
-                    "fieldName": field_name,
-                    "fieldValue": file_id,
-                    "description": field_name,
-                })
+                node_configs.append(
+                    {
+                        "nodeId": node_id,
+                        "fieldName": field_name,
+                        "fieldValue": file_id,
+                        "description": field_name,
+                    }
+                )
                 print_info(f"  Configured node {node_id} with fieldName '{field_name}'")
             except ValueError as e:
                 print_error(f"{e}")
@@ -543,26 +614,37 @@ def process_multiple(ctx, images, params, workflow_json, timeout, output_json, n
         # Step 2: Add additional text parameter node configs
         for param in params:
             try:
-                parts = param.split(':', 2)
+                parts = param.split(":", 2)
                 if len(parts) != 3:
-                    print_error(f"Invalid parameter format: {param}. Expected format: nodeId:field_name:value")
+                    print_error(
+                        f"Invalid parameter format: {param}. Expected format: nodeId:field_name:value"
+                    )
                     continue
 
                 node_id, field_name, value = parts
-                node_configs.append({
-                    "nodeId": node_id,
-                    "fieldName": field_name,
-                    "fieldValue": value,
-                    "description": field_name,
-                })
-                print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
+                node_configs.append(
+                    {
+                        "nodeId": node_id,
+                        "fieldName": field_name,
+                        "fieldValue": value,
+                        "description": field_name,
+                    }
+                )
+                print_info(
+                    f"  Added parameter: node {node_id} ({field_name}) = {value}"
+                )
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
         # Step 3: Submit task
-        print_info(f"Submitting task to workflow {active_workflow_id} with multiple inputs...")
+        print_info(
+            f"Submitting task to workflow {active_workflow_id} with multiple inputs..."
+        )
         task_id = client.submit_task(active_workflow_id, node_configs)
-        print_success(f"Task submitted successfully! Task ID: {task_id}")
+        if output_json:
+            print(json.dumps({"taskId": task_id, "status": "submitted"}))
+        else:
+            print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 4: Wait for completion
         print_info("Waiting for task completion...")
@@ -581,20 +663,38 @@ def process_multiple(ctx, images, params, workflow_json, timeout, output_json, n
 
 
 @cli.command("run-workflow")
-@click.option("--image", "images", multiple=True, required=True,
-              help="Media input in format <node_id>:<file_path> or <node_id>:<field_name>:<file_path>")
-@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:field_name:value)")
-@click.option("--workflow", "workflow_json", help="Path to workflow JSON file (auto-detects field names from param IDs)")
+@click.option(
+    "--image",
+    "images",
+    multiple=True,
+    required=True,
+    help="Media input in format <node_id>:<file_path> or <node_id>:<field_name>:<file_path>",
+)
+@click.option(
+    "-p",
+    "--param",
+    "params",
+    multiple=True,
+    help="Additional node parameters (format: nodeId:field_name:value)",
+)
+@click.option(
+    "--workflow",
+    "workflow_json",
+    help="Path to workflow JSON file (auto-detects field names from param IDs)",
+)
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
     "--no-download", is_flag=True, help="Skip automatic download of output files"
 )
 @click.option(
-    "--workflow-id", help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)"
+    "--workflow-id",
+    help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)",
 )
 @click.pass_context
-def run_workflow(ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id):
+def run_workflow(
+    ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id
+):
     """Run a workflow using /task/openapi/create endpoint.
 
     Automatically detects field names from workflow JSON parameter IDs:
@@ -626,16 +726,28 @@ def run_workflow(ctx, images, params, workflow_json, timeout, output_json, no_do
             # Extract workflow ID from JSON if not explicitly provided
             workflow_file = Path(workflow_json)
             if not workflow_file.exists():
-                workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / workflow_json
+                workflow_file = (
+                    Path.home()
+                    / "Downloads"
+                    / "workspace"
+                    / "workflows"
+                    / workflow_json
+                )
                 if not workflow_file.exists():
-                    workflow_file = Path.home() / "Downloads" / "workspace" / "workflows" / f"{workflow_json}.json"
+                    workflow_file = (
+                        Path.home()
+                        / "Downloads"
+                        / "workspace"
+                        / "workflows"
+                        / f"{workflow_json}.json"
+                    )
 
-            with open(workflow_file, 'r') as f:
+            with open(workflow_file, "r") as f:
                 workflow_data = json.load(f)
 
             # Use sourceWorkflowId from JSON if available and workflow_id not provided
-            if not workflow_id and 'sourceWorkflowId' in workflow_data:
-                workflow_id = workflow_data['sourceWorkflowId']
+            if not workflow_id and "sourceWorkflowId" in workflow_data:
+                workflow_id = workflow_data["sourceWorkflowId"]
                 if not output_json:
                     print_info(f"Using workflow ID from JSON: {workflow_id}")
         except FileNotFoundError as e:
@@ -655,7 +767,9 @@ def run_workflow(ctx, images, params, workflow_json, timeout, output_json, no_do
         # Step 1: Upload all media files and create node configs
         for image_param in images:
             try:
-                node_id, field_name, file_path = parse_file_param(image_param, field_mapping)
+                node_id, field_name, file_path = parse_file_param(
+                    image_param, field_mapping
+                )
                 if not Path(file_path).exists():
                     print_error(f"File not found: {file_path}")
                     return
@@ -666,13 +780,17 @@ def run_workflow(ctx, images, params, workflow_json, timeout, output_json, no_do
                 if not output_json:
                     print_success(f"File uploaded successfully! File ID: {file_id}")
 
-                node_configs.append({
-                    "nodeId": node_id,
-                    "fieldName": field_name,
-                    "fieldValue": file_id,
-                })
+                node_configs.append(
+                    {
+                        "nodeId": node_id,
+                        "fieldName": field_name,
+                        "fieldValue": file_id,
+                    }
+                )
                 if not output_json:
-                    print_info(f"  Configured node {node_id} with fieldName '{field_name}'")
+                    print_info(
+                        f"  Configured node {node_id} with fieldName '{field_name}'"
+                    )
             except ValueError as e:
                 print_error(f"{e}")
                 return
@@ -683,33 +801,45 @@ def run_workflow(ctx, images, params, workflow_json, timeout, output_json, no_do
         # Step 2: Add additional text parameter node configs
         for param in params:
             try:
-                parts = param.split(':', 2)
+                parts = param.split(":", 2)
                 if len(parts) != 3:
-                    print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                    print_error(
+                        f"Invalid parameter format: {param}. Expected format: nodeId:type:value"
+                    )
                     continue
 
                 node_id, field_name, value = parts
-                node_configs.append({
-                    "nodeId": node_id,
-                    "fieldName": field_name,
-                    "fieldValue": value,
-                })
+                node_configs.append(
+                    {
+                        "nodeId": node_id,
+                        "fieldName": field_name,
+                        "fieldValue": value,
+                    }
+                )
                 if not output_json:
-                    print_info(f"  Added parameter: node {node_id} ({field_name}) = {value}")
+                    print_info(
+                        f"  Added parameter: node {node_id} ({field_name}) = {value}"
+                    )
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
         # Step 3: Submit task using workflow endpoint
         if not output_json:
-            print_info(f"Submitting task to workflow {active_workflow_id} with multiple inputs...")
+            print_info(
+                f"Submitting task to workflow {active_workflow_id} with multiple inputs..."
+            )
         task_id = client.submit_workflow_task(active_workflow_id, node_configs)
-        if not output_json:
+        if output_json:
+            print(json.dumps({"taskId": task_id, "status": "submitted"}))
+        else:
             print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 4: Wait for completion
         if not output_json:
             print_info("Waiting for task completion...")
-        final_status = client.wait_for_completion(task_id, timeout=timeout, silent=output_json)
+        final_status = client.wait_for_completion(
+            task_id, timeout=timeout, silent=output_json
+        )
         if not output_json:
             print_success("Processing completed!")
 
@@ -725,15 +855,19 @@ def run_workflow(ctx, images, params, workflow_json, timeout, output_json, no_do
 
 
 @cli.command("run-text-workflow")
-@click.option("-p", "--param", "params", multiple=True, help="Node parameters (format: nodeId:value)")
+@click.option(
+    "-p",
+    "--param",
+    "params",
+    multiple=True,
+    help="Node parameters (format: nodeId:value)",
+)
 @click.option("--timeout", default=600, help="Timeout in seconds (default: 600)")
 @click.option("--json", "output_json", is_flag=True, help="Output raw JSON")
 @click.option(
     "--no-download", is_flag=True, help="Skip automatic download of output files"
 )
-@click.option(
-    "--workflow-id", help="Override workflow ID from configuration"
-)
+@click.option("--workflow-id", help="Override workflow ID from configuration")
 @click.pass_context
 def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_id):
     """Run a workflow using text/number parameters only (no image input).
@@ -771,8 +905,10 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
             print_info("  - nodeId_image:value  → image field")
             print_info("")
             print_info("Examples:")
-            print_info("  runninghub run-text-workflow -p \"param_187_text:hello\"")
-            print_info("  runninghub run-text-workflow -p \"param_187_text:prompt\" -p \"param_386_value:720\"")
+            print_info('  runninghub run-text-workflow -p "param_187_text:hello"')
+            print_info(
+                '  runninghub run-text-workflow -p "param_187_text:prompt" -p "param_386_value:720"'
+            )
             sys.exit(1)
 
         # Step 1: Parse all text/number parameters
@@ -780,19 +916,23 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
         for param in params:
             try:
                 # First try explicit format: nodeId:fieldName:value
-                parts_explicit = param.split(':', 2)
+                parts_explicit = param.split(":", 2)
                 if len(parts_explicit) == 3:
                     node_id, field_name, value = parts_explicit
-                    node_configs.append({
-                        "nodeId": node_id,
-                        "fieldName": field_name,
-                        "fieldValue": value,
-                    })
-                    print_success(f"  Added parameter: node {node_id} ({field_name}) = {value}")
+                    node_configs.append(
+                        {
+                            "nodeId": node_id,
+                            "fieldName": field_name,
+                            "fieldValue": value,
+                        }
+                    )
+                    print_success(
+                        f"  Added parameter: node {node_id} ({field_name}) = {value}"
+                    )
                     continue
 
                 # Fallback: suffix-based inference (nodeId:value)
-                parts = param.split(':', 1)
+                parts = param.split(":", 1)
                 if len(parts) != 2:
                     print_error(f"Invalid parameter format: {param}")
                     print_info("Expected format: nodeId:type:value or nodeId:value")
@@ -802,40 +942,48 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
 
                 # Auto-detect type from nodeId suffix if present
                 # Supports formats like: 187_text, 386_value, param_187_text, etc.
-                if node_id.endswith('_text'):
-                    field_type = 'text'
-                    field_name = 'text'
+                if node_id.endswith("_text"):
+                    field_type = "text"
+                    field_name = "text"
                     # Extract node ID by removing type suffix
-                    actual_node_id = node_id.rsplit('_', 1)[0]
-                elif node_id.endswith('_value'):
-                    field_type = 'value'
-                    field_name = 'value'
+                    actual_node_id = node_id.rsplit("_", 1)[0]
+                elif node_id.endswith("_value"):
+                    field_type = "value"
+                    field_name = "value"
                     # Extract node ID by removing type suffix
-                    actual_node_id = node_id.rsplit('_', 1)[0]
-                elif node_id.endswith('_image'):
-                    field_type = 'image'
-                    field_name = 'image'
+                    actual_node_id = node_id.rsplit("_", 1)[0]
+                elif node_id.endswith("_image"):
+                    field_type = "image"
+                    field_name = "image"
                     # Extract node ID by removing type suffix
-                    actual_node_id = node_id.rsplit('_', 1)[0]
+                    actual_node_id = node_id.rsplit("_", 1)[0]
                 else:
                     # No type suffix in nodeId, use default
-                    field_type = 'value'
-                    field_name = 'value'
+                    field_type = "value"
+                    field_name = "value"
                     actual_node_id = node_id
 
-                node_configs.append({
-                    "nodeId": actual_node_id,
-                    "fieldName": field_name,
-                    "fieldValue": value,
-                })
-                print_success(f"  Added parameter: node {actual_node_id} ({field_name}) = {value}")
+                node_configs.append(
+                    {
+                        "nodeId": actual_node_id,
+                        "fieldName": field_name,
+                        "fieldValue": value,
+                    }
+                )
+                print_success(
+                    f"  Added parameter: node {actual_node_id} ({field_name}) = {value}"
+                )
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
         # Step 2: Submit task using workflow endpoint
-        print_info(f"Submitting task to workflow {active_workflow_id}...")
+        if not output_json:
+            print_info(f"Submitting task to workflow {active_workflow_id}...")
         task_id = client.submit_workflow_task(active_workflow_id, node_configs)
-        print_success(f"Task submitted successfully! Task ID: {task_id}")
+        if output_json:
+            print(json.dumps({"taskId": task_id, "status": "submitted"}))
+        else:
+            print_success(f"Task submitted successfully! Task ID: {task_id}")
 
         # Step 3: Wait for completion
         print_info("Waiting for task completion...")
@@ -872,7 +1020,13 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
     "input_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True)
 )
 @click.option("--node", required=True, help="Node ID to use")
-@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
+@click.option(
+    "-p",
+    "--param",
+    "params",
+    multiple=True,
+    help="Additional node parameters (format: nodeId:type:value)",
+)
 @click.option(
     "--pattern",
     default="*",
@@ -944,28 +1098,34 @@ def batch(
             node_configs = []
 
             # Add image node config
-            node_configs.append({
-                "nodeId": node,
-                "fieldName": "image",
-                "fieldValue": file_id,
-                "description": "image",
-            })
+            node_configs.append(
+                {
+                    "nodeId": node,
+                    "fieldName": "image",
+                    "fieldValue": file_id,
+                    "description": "image",
+                }
+            )
 
             # Add additional parameter node configs
             for param in params:
                 try:
-                    parts = param.split(':', 2)
+                    parts = param.split(":", 2)
                     if len(parts) != 3:
-                        print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                        print_error(
+                            f"Invalid parameter format: {param}. Expected format: nodeId:type:value"
+                        )
                         continue
 
                     node_id, field_type, value = parts
-                    node_configs.append({
-                        "nodeId": node_id,
-                        "fieldName": "input" if field_type == "text" else "value",
-                        "fieldValue": value,
-                        "description": field_type,
-                    })
+                    node_configs.append(
+                        {
+                            "nodeId": node_id,
+                            "fieldName": "input" if field_type == "text" else "value",
+                            "fieldValue": value,
+                            "description": field_type,
+                        }
+                    )
                 except Exception as e:
                     print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -1042,7 +1202,13 @@ def batch(
 
 @cli.command()
 @click.option("--node", required=True, help="Node ID to use")
-@click.option("-p", "--param", "params", multiple=True, help="Additional node parameters (format: nodeId:type:value)")
+@click.option(
+    "-p",
+    "--param",
+    "params",
+    multiple=True,
+    help="Additional node parameters (format: nodeId:type:value)",
+)
 @click.option(
     "--pattern",
     default="*.png *.jpg *.jpeg",
@@ -1107,28 +1273,34 @@ def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, pa
             node_configs = []
 
             # Add image node config
-            node_configs.append({
-                "nodeId": node,
-                "fieldName": "image",
-                "fieldValue": file_id,
-                "description": "image",
-            })
+            node_configs.append(
+                {
+                    "nodeId": node,
+                    "fieldName": "image",
+                    "fieldValue": file_id,
+                    "description": "image",
+                }
+            )
 
             # Add additional parameter node configs
             for param in params:
                 try:
-                    parts = param.split(':', 2)
+                    parts = param.split(":", 2)
                     if len(parts) != 3:
-                        print_error(f"Invalid parameter format: {param}. Expected format: nodeId:type:value")
+                        print_error(
+                            f"Invalid parameter format: {param}. Expected format: nodeId:type:value"
+                        )
                         continue
 
                     node_id, field_type, value = parts
-                    node_configs.append({
-                        "nodeId": node_id,
-                        "fieldName": "input" if field_type == "text" else "value",
-                        "fieldValue": value,
-                        "description": field_type,
-                    })
+                    node_configs.append(
+                        {
+                            "nodeId": node_id,
+                            "fieldName": "input" if field_type == "text" else "value",
+                            "fieldValue": value,
+                            "description": field_type,
+                        }
+                    )
                 except Exception as e:
                     print_error(f"Failed to parse parameter '{param}': {e}")
 
@@ -1206,15 +1378,11 @@ def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, pa
 
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
-@click.option(
-    "--timeout",
-    default=3600,
-    help="Timeout in seconds (default: 3600)"
-)
+@click.option("--timeout", default=3600, help="Timeout in seconds (default: 3600)")
 @click.option(
     "--no-overwrite",
     is_flag=True,
-    help="Keep original file (default: overwrites with converted .mp4)"
+    help="Keep original file (default: overwrites with converted .mp4)",
 )
 @click.pass_context
 def convert_video(ctx, file_path, timeout, no_overwrite):
@@ -1223,7 +1391,7 @@ def convert_video(ctx, file_path, timeout, no_overwrite):
         is_video_file,
         convert_video_to_mp4,
         check_ffmpeg_available,
-        SUPPORTED_VIDEO_FORMATS
+        SUPPORTED_VIDEO_FORMATS,
     )
 
     video_path = Path(file_path)
@@ -1248,9 +1416,7 @@ def convert_video(ctx, file_path, timeout, no_overwrite):
             print_warning("Original file will be replaced with converted MP4 version")
 
         success, stdout, stderr = convert_video_to_mp4(
-            video_path,
-            overwrite=overwrite,
-            timeout=timeout
+            video_path, overwrite=overwrite, timeout=timeout
         )
 
         if success:
@@ -1272,8 +1438,7 @@ def convert_video(ctx, file_path, timeout, no_overwrite):
 
 @cli.command()
 @click.argument(
-    "input_dir",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True)
+    "input_dir", type=click.Path(exists=True, file_okay=False, dir_okay=True)
 )
 @click.option(
     "--pattern",
@@ -1283,12 +1448,12 @@ def convert_video(ctx, file_path, timeout, no_overwrite):
 @click.option(
     "--timeout",
     default=3600,
-    help="Timeout per video in seconds (default: 3600 = 1 hour)"
+    help="Timeout per video in seconds (default: 3600 = 1 hour)",
 )
 @click.option(
     "--no-overwrite",
     is_flag=True,
-    help="Keep original files (default: overwrites with converted .mp4)"
+    help="Keep original files (default: overwrites with converted .mp4)",
 )
 @click.pass_context
 def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
@@ -1297,7 +1462,7 @@ def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
         find_videos_in_directory,
         convert_video_to_mp4,
         check_ffmpeg_available,
-        SUPPORTED_VIDEO_FORMATS
+        SUPPORTED_VIDEO_FORMATS,
     )
 
     input_path = Path(input_dir)
@@ -1345,9 +1510,7 @@ def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
 
         try:
             success, stdout, stderr = convert_video_to_mp4(
-                video_path,
-                overwrite=overwrite,
-                timeout=timeout
+                video_path, overwrite=overwrite, timeout=timeout
             )
 
             if success:
@@ -1380,44 +1543,27 @@ def convert_videos(ctx, input_dir, pattern, timeout, no_overwrite):
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option(
     "--mode",
-    type=click.Choice(['left', 'right', 'center', 'top', 'bottom', 'custom'],
-                      case_sensitive=False),
-    default='left',
-    help="Crop mode: left, right, center, top, bottom, or custom"
+    type=click.Choice(
+        ["left", "right", "center", "top", "bottom", "custom"], case_sensitive=False
+    ),
+    default="left",
+    help="Crop mode: left, right, center, top, bottom, or custom",
 )
 @click.option(
     "--output-suffix",
     default="_cropped",
-    help="Suffix for output file (default: _cropped)"
+    help="Suffix for output file (default: _cropped)",
 )
-@click.option(
-    "--width",
-    help="Custom width (for custom mode, e.g., iw*0.5 for 50%)"
-)
-@click.option(
-    "--height",
-    help="Custom height (for custom mode, e.g., ih*0.5 for 50%)"
-)
-@click.option(
-    "--x",
-    help="Custom X position (for custom mode, e.g., iw*0.25 for 25%)"
-)
-@click.option(
-    "--y",
-    help="Custom Y position (for custom mode, e.g., ih*0.25 for 25%)"
-)
-@click.option(
-    "--preserve-audio",
-    is_flag=True,
-    help="Preserve audio track"
-)
-@click.option(
-    "--timeout",
-    default=3600,
-    help="Timeout in seconds (default: 3600)"
-)
+@click.option("--width", help="Custom width (for custom mode, e.g., iw*0.5 for 50%)")
+@click.option("--height", help="Custom height (for custom mode, e.g., ih*0.5 for 50%)")
+@click.option("--x", help="Custom X position (for custom mode, e.g., iw*0.25 for 25%)")
+@click.option("--y", help="Custom Y position (for custom mode, e.g., ih*0.25 for 25%)")
+@click.option("--preserve-audio", is_flag=True, help="Preserve audio track")
+@click.option("--timeout", default=3600, help="Timeout in seconds (default: 3600)")
 @click.pass_context
-def crop(ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audio, timeout):
+def crop(
+    ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audio, timeout
+):
     """Crop a single video file using FFmpeg."""
     from .video_utils import crop_video, check_ffmpeg_available
 
@@ -1430,7 +1576,7 @@ def crop(ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audi
         sys.exit(1)
 
     # Validate custom mode parameters
-    if mode == 'custom':
+    if mode == "custom":
         if not all([width, height]):
             print_error("Custom mode requires --width and --height")
             sys.exit(1)
@@ -1448,7 +1594,7 @@ def crop(ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audi
             x=x,
             y=y,
             preserve_audio=preserve_audio,
-            timeout=timeout
+            timeout=timeout,
         )
 
         if success:
@@ -1471,18 +1617,44 @@ def crop(ctx, file_path, mode, output_suffix, width, height, x, y, preserve_audi
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option("--mode", default="last_frame", help="Extraction mode")
-@click.option("--format", "image_format", default="png", type=click.Choice(["png", "jpg"]), help="Output image format")
+@click.option(
+    "--format",
+    "image_format",
+    default="png",
+    type=click.Choice(["png", "jpg"]),
+    help="Output image format",
+)
 @click.option("--quality", default=95, type=int, help="Image quality (for JPG)")
-@click.option("--frame-count", default=5, type=int, help="Number of frames (for last_frames mode)")
-@click.option("--interval", "interval_seconds", default=10, type=float, help="Interval in seconds")
+@click.option(
+    "--frame-count", default=5, type=int, help="Number of frames (for last_frames mode)"
+)
+@click.option(
+    "--interval", "interval_seconds", default=10, type=float, help="Interval in seconds"
+)
 @click.option("--frame-interval", default=1, type=int, help="Interval in frames")
-@click.option("--organize/--no-organize", default=True, help="Organize images by video name")
-@click.option("--delete/--no-delete", default=False, help="Delete video after processing")
+@click.option(
+    "--organize/--no-organize", default=True, help="Organize images by video name"
+)
+@click.option(
+    "--delete/--no-delete", default=False, help="Delete video after processing"
+)
 @click.option("--output-dir", type=click.Path(), required=True, help="Output directory")
 @click.option("--timeout", default=3600, help="Timeout in seconds")
 @click.pass_context
-def clip(ctx, file_path, mode, image_format, quality, frame_count, interval_seconds, 
-         frame_interval, organize, delete, output_dir, timeout):
+def clip(
+    ctx,
+    file_path,
+    mode,
+    image_format,
+    quality,
+    frame_count,
+    interval_seconds,
+    frame_interval,
+    organize,
+    delete,
+    output_dir,
+    timeout,
+):
     """Extract frames from a video file."""
     from .video_utils import clip_video
 
@@ -1490,22 +1662,19 @@ def clip(ctx, file_path, mode, image_format, quality, frame_count, interval_seco
     out_dir = Path(output_dir)
 
     clip_config = {
-        'mode': mode,
-        'imageFormat': image_format,
-        'quality': quality,
-        'frameCount': frame_count,
-        'intervalSeconds': interval_seconds,
-        'intervalFrames': frame_interval,
-        'organizeByVideo': organize,
-        'deleteOriginal': delete
+        "mode": mode,
+        "imageFormat": image_format,
+        "quality": quality,
+        "frameCount": frame_count,
+        "intervalSeconds": interval_seconds,
+        "intervalFrames": frame_interval,
+        "organizeByVideo": organize,
+        "deleteOriginal": delete,
     }
 
     try:
         success, stdout, stderr = clip_video(
-            video_path,
-            clip_config,
-            out_dir,
-            timeout=timeout
+            video_path, clip_config, out_dir, timeout=timeout
         )
 
         if success:
@@ -1523,24 +1692,12 @@ def clip(ctx, file_path, mode, image_format, quality, frame_count, interval_seco
 
 @cli.command("duck-decode")
 @click.argument("duck_image", type=click.Path(exists=True))
+@click.option("--password", help="Password for decryption (if required)")
 @click.option(
-    "--password",
-    help="Password for decryption (if required)"
+    "--out", "output", help="Output file path or directory (default: auto-generate)"
 )
-@click.option(
-    "--out",
-    "output",
-    help="Output file path or directory (default: auto-generate)"
-)
-@click.option(
-    "--output-dir",
-    help="Output directory (alternative to --out)"
-)
-@click.option(
-    "--quiet",
-    is_flag=True,
-    help="Suppress verbose output"
-)
+@click.option("--output-dir", help="Output directory (alternative to --out)")
+@click.option("--quiet", is_flag=True, help="Suppress verbose output")
 @click.pass_context
 def duck_decode(ctx, duck_image, password, output, output_dir, quiet):
     """Decode hidden media from a duck image.
@@ -1562,10 +1719,10 @@ def duck_decode(ctx, duck_image, password, output, output_dir, quiet):
             password=password or "",
             output=output,
             output_dir=output_dir,
-            quiet=quiet
+            quiet=quiet,
         )
 
-        if result['success']:
+        if result["success"]:
             if not quiet:
                 print_success(f"Successfully decoded duck image!")
                 print(f"Output file: {result['output_path']}")

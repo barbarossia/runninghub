@@ -384,7 +384,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   // Handle re-query task status (without submitting new job)
   const handleReQueryStatus = async () => {
     if (!job.runninghubTaskId) {
-      toast.error('No RunningHub task ID found for this job');
+      toast.error('No RunningHub task ID found for this job. Task may have failed during submission.');
       return;
     }
 
@@ -738,12 +738,13 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         </div>
 
         <div className="flex gap-2">
-          {job.runninghubTaskId && (
+          {(job.runninghubTaskId || job.status === 'failed') && (
             <Button
               onClick={handleReQueryStatus}
-              disabled={isReQuerying}
+              disabled={isReQuerying || !job.runninghubTaskId}
               variant="outline"
               size="sm"
+              title={!job.runninghubTaskId ? 'No RunningHub task ID available (task failed during submission)' : undefined}
             >
               <RefreshCw
                 className={cn('h-4 w-4 mr-1', isReQuerying && 'animate-spin')}
