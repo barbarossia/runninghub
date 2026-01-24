@@ -1158,6 +1158,12 @@ export default function WorkspacePage() {
   const handleClipVideos = async (selectedPaths: string[]) => {
     const { clipConfig } = useVideoClipStore.getState();
 
+    // Log the config being sent for debugging
+    console.log('[Workspace] Starting clip with config:', {
+      saveToWorkspace: clipConfig.saveToWorkspace,
+      organizeByVideo: clipConfig.organizeByVideo,
+    });
+
     try {
       const response = await fetch(API_ENDPOINTS.VIDEOS_CLIP, {
         method: 'POST',
@@ -1166,6 +1172,8 @@ export default function WorkspacePage() {
           videos: selectedPaths,
           clip_config: clipConfig,
           timeout: 3600,
+          // Pass current workspace folder path if saving to workspace is enabled
+          outputDir: clipConfig.saveToWorkspace ? selectedFolder?.folder_path : undefined,
         }),
       });
 
@@ -1320,13 +1328,6 @@ export default function WorkspacePage() {
       const data = await response.json();
 
       if (data.success) {
-        if (data.movedCount > 0) {
-          filesToExport.forEach(file => {
-            removeMediaFile(file.id);
-          });
-        }
-        deselectAllMediaFiles();
-
         const skippedMsg = data.skippedCount > 0
           ? ` (${data.skippedCount} skipped - already exist)`
           : '';
@@ -1334,6 +1335,8 @@ export default function WorkspacePage() {
           ? ` (${data.errorCount} failed)`
           : '';
         toast.success(`Moved ${data.movedCount} file${data.movedCount !== 1 ? 's' : ''} to "${dataset.name}"${skippedMsg}${errorMsg}`);
+
+        filesToExport.forEach(file => removeMediaFileByPath(file.path));
 
         if (selectedDataset && selectedDataset.path === dataset.path) {
           await selectDataset(selectedDataset);

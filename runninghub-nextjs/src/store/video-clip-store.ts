@@ -78,12 +78,17 @@ export const useVideoClipStore = create<VideoClipState>()(
           },
         })),
       toggleSaveToWorkspace: () =>
-        set((state) => ({
-          clipConfig: {
-            ...state.clipConfig,
-            saveToWorkspace: !state.clipConfig.saveToWorkspace,
-          },
-        })),
+        set((state) => {
+          const newSaveToWorkspace = !state.clipConfig.saveToWorkspace;
+          return {
+            clipConfig: {
+              ...state.clipConfig,
+              saveToWorkspace: newSaveToWorkspace,
+              // If we are enabling saveToWorkspace, disable organizeByVideo to ensure mutual exclusivity
+              organizeByVideo: newSaveToWorkspace ? false : state.clipConfig.organizeByVideo,
+            },
+          };
+        }),
 
       // Reset
       resetConfig: () => set({ clipConfig: DEFAULT_CLIP_CONFIG }),

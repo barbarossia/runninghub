@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Video, Image as ImageIcon, Settings2 } from 'lucide-react';
 import { ClipMode } from '@/types/video-clip';
 import { useVideoClipStore } from '@/store/video-clip-store';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ConfigurationCard } from '@/components/ui/ConfigurationCard';
 import { cn } from '@/lib/utils';
@@ -132,7 +131,7 @@ export function VideoClipConfiguration({
           </div>
 
           {/* File Organization Options */}
-          <div className="space-y-3 pt-4 border-t border-gray-200">
+          <div className="space-y-3 pt-4 border-t border-gray-200 md:pt-0 md:border-t-0">
             <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <Settings2 className="h-4 w-4" />
               File Organization
@@ -186,87 +185,10 @@ export function VideoClipConfiguration({
               </div>
             )}
           </div>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-200">
-          {/* Image Output Settings */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <ImageIcon className="h-4 w-4" />
-              Output Settings
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Format</label>
-                <div className="flex p-1 bg-gray-100 rounded-lg border border-gray-200">
-                  <button
-                    onClick={() => setImageFormat('png')}
-                    className={cn(
-                      "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                      clipConfig.imageFormat === 'png'
-                        ? "bg-purple-500 text-white shadow-sm"
-                        : "text-gray-600 hover:text-gray-900"
-                    )}
-                  >
-                    PNG
-                  </button>
-                  <button
-                    onClick={() => setImageFormat('jpg')}
-                    className={cn(
-                      "flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                      clipConfig.imageFormat === 'jpg'
-                        ? "bg-purple-500 text-white shadow-sm"
-                        : "text-gray-600 hover:text-gray-900"
-                    )}
-                  >
-                    JPG
-                  </button>
-                </div>
-              </div>
-
-              {clipConfig.imageFormat === 'jpg' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">Quality (1-100)</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={clipConfig.quality}
-                    onChange={(e) => setQuality(parseInt(e.target.value) || 95)}
-                    className="border-gray-300 bg-white text-gray-900 focus:border-purple-500 focus:ring-purple-500"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <div className="relative flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={clipConfig.organizeByVideo}
-                    onChange={toggleOrganizeByVideo}
-                    className="w-4 h-4 rounded border-gray-300 bg-white text-purple-600 focus:ring-purple-500 focus:ring-offset-2 transition-all cursor-pointer"
-                  />
-                </div>
-                <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Organize images by video name</span>
-              </label>
-
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <div className="relative flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={clipConfig.deleteOriginal}
-                    onChange={toggleDeleteOriginal}
-                    className="w-4 h-4 rounded border-gray-300 bg-white text-red-600 focus:ring-red-500 focus:ring-offset-2 transition-all cursor-pointer"
-                  />
-                </div>
-                <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Delete video after processing</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Mode Specific Settings */}
+        {/* Mode Specific Settings - Extraction Parameters */}
+        <div className="pt-4 border-t border-gray-200">
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <Settings2 className="h-4 w-4" />
