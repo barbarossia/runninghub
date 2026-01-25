@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Loader2, AlertCircle, Settings2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle, Settings2, GripVertical, User } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,7 +125,7 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
     setSteps(newSteps);
   };
   
-  const updateParameterType = (stepId: string, paramId: string, valueType: 'static' | 'dynamic') => {
+  const updateParameterType = (stepId: string, paramId: string, valueType: 'static' | 'dynamic' | 'user-input') => {
     setSteps(steps.map(step => {
       if (step.id === stepId) {
         return {
@@ -406,51 +406,81 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
                 const selectedWorkflow = availableWorkflows.find(w => w.id === step.workflowId);
                 return (
                   <div key={step.id} className="border rounded-md p-4 bg-card shadow-sm">
-                    <div className="flex items-center gap-2 mb-4 border-b pb-2">
-                      <Badge variant="outline">{step.stepNumber}</Badge>
-                      <div className="flex-1">
-                        <h3 className="font-medium">{step.workflowName}</h3>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                          <span>Type: {selectedWorkflow?.executionType || "workflow"}</span>
-                          {selectedWorkflow?.description && (
-                            <>
-                              <span>•</span>
-                              <span className="truncate max-w-[300px]">{selectedWorkflow.description}</span>
-                            </>
+                    <div className="flex items-start gap-3 mb-4 border-b pb-3">
+                      <Badge variant="outline" className="mt-0.5">{step.stepNumber}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-medium text-base">{step.workflowName}</h3>
+                          {selectedWorkflow?.executionType && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 h-5">
+                              {selectedWorkflow.executionType}
+                            </Badge>
+                          )}
+                          {selectedWorkflow?.sourceType && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 h-5">
+                              {selectedWorkflow.sourceType}
+                            </Badge>
                           )}
                         </div>
+                        {selectedWorkflow?.description && (
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                            {selectedWorkflow.description}
+                          </p>
+                        )}
+                        {!selectedWorkflow && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Workflow not found - may have been deleted
+                          </p>
+                        )}
                       </div>
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="flex-shrink-0">
                         {step.parameters.length} params
                       </Badge>
                     </div>
                     
                     <div className="grid gap-4">
-                      {step.parameters.map((param) => (
-                        <div key={param.parameterId} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start bg-muted/20 p-3 rounded-md">
-                          <div className="md:col-span-4">
-                            <Label className="text-xs font-medium text-foreground">{param.parameterName}</Label>
-                            {param.required && <span className="text-destructive ml-1">*</span>}
-                            <p className="text-[10px] text-muted-foreground mt-1 truncate" title={param.parameterId}>
-                              ID: {param.parameterId}
-                            </p>
-                          </div>
+                      {step.parameters.map((param) => {
+                        // Find original parameter definition from workflow to get type and description
+                        const originalParam = selectedWorkflow?.inputs.find(input => input.id === param.parameterId);
+
+                        return (
+                          <div key={param.parameterId} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start bg-muted/20 p-3 rounded-md">
+                            <div className="md:col-span-4">
+                              {originalParam?.description && (
+                                <p className="text-xs font-medium text-foreground mb-0.5 line-clamp-1">
+                                  {originalParam.description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] text-muted-foreground">{param.parameterName}</span>
+                                {originalParam?.type && (
+                                  <Badge variant="outline" className="text-[10px] px-1 h-4.5">
+                                    {originalParam.type}
+                                  </Badge>
+                                )}
+                                {param.required && <span className="text-destructive">*</span>}
+                              </div>
+                              <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate" title={param.parameterId}>
+                                ID: {param.parameterId}
+                              </p>
+                            </div>
                           
                           <div className="md:col-span-3">
-                            <Select 
-                              value={param.valueType} 
-                              onValueChange={(value: 'static' | 'dynamic') => updateParameterType(step.id, param.parameterId, value)}
+                            <Select
+                              value={param.valueType}
+                              onValueChange={(value: 'static' | 'dynamic' | 'user-input') => updateParameterType(step.id, param.parameterId, value)}
                             >
                               <SelectTrigger className="h-8">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="static">Static Value</SelectItem>
+                                <SelectItem value="user-input">User Input</SelectItem>
                                 {step.stepNumber > 1 && <SelectItem value="dynamic">From Previous Step</SelectItem>}
                               </SelectContent>
                             </Select>
                           </div>
-                          
+
                           <div className="md:col-span-5">
                             {param.valueType === 'static' ? (
                               <Input
@@ -459,6 +489,11 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
                                 placeholder={param.placeholder || 'Enter value'}
                                 className="h-8"
                               />
+                            ) : param.valueType === 'user-input' ? (
+                              <div className="flex items-center gap-2 h-8 px-3 bg-muted/50 rounded-md border border-dashed text-muted-foreground text-sm">
+                                <User className="h-3.5 w-3.5" />
+                                <span>Required at execution</span>
+                              </div>
                             ) : (
                               <Select
                                 value={param.dynamicMapping?.sourceParameterId || ''}
@@ -478,7 +513,8 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
                             )}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );

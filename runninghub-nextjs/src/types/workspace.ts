@@ -388,6 +388,14 @@ export interface Job {
   parentJobId?: string; // ID of job this was recreated from
   seriesId?: string; // Groups related jobs (auto-generated)
   runNumber?: number; // Position in series (1, 2, 3, ...)
+
+  // Complex workflow fields
+  complexWorkflowId?: string;
+  complexExecutionId?: string;
+  stepNumber?: number;
+  totalSteps?: number;
+  isComplexWorkflowStep?: boolean;
+  stepStatus?: 'pending' | 'running' | 'completed' | 'failed';
 }
 
 // ============================================================================
@@ -541,5 +549,105 @@ export interface ValidateFileRequest {
  */
 export interface ValidateFileResponse {
   valid: boolean;
+  error?: string;
+}
+
+// ============================================================================
+// COMPLEX WORKFLOW TYPES
+// ============================================================================
+
+export interface ComplexWorkflow {
+  id: string;
+  name: string;
+  description?: string;
+  steps: WorkflowStep[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WorkflowStep {
+  id: string;
+  stepNumber: number;
+  workflowId: string;
+  workflowName: string;
+  parameters: StepParameterConfig[];
+}
+
+export interface StepParameterConfig {
+  parameterId: string;
+  parameterName: string;
+  valueType: 'static' | 'dynamic' | 'user-input';
+  staticValue?: string | number | boolean;
+  required?: boolean;
+  placeholder?: string;
+  dynamicMapping?: {
+    sourceStepNumber: number;
+    sourceParameterId: string;
+    sourceOutputName: string;
+  };
+}
+
+export interface ComplexWorkflowExecution {
+  id: string;
+  complexWorkflowId: string;
+  name: string;
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed';
+  currentStep: number;
+  steps: ExecutionStep[];
+  createdAt: number;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+export interface ExecutionStep {
+  stepNumber: number;
+  workflowId: string;
+  workflowName?: string;
+  jobId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  inputs: Record<string, any>;
+  outputs?: JobResult;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+export interface SaveComplexWorkflowRequest {
+  workflow: ComplexWorkflow;
+}
+
+export interface SaveComplexWorkflowResponse {
+  success: boolean;
+  workflowId: string;
+  error?: string;
+}
+
+export interface ExecuteComplexWorkflowRequest {
+  complexWorkflowId: string;
+  initialParameters?: Record<string, any>;
+}
+
+export interface ExecuteComplexWorkflowResponse {
+  success: boolean;
+  executionId: string;
+  message: string;
+  error?: string;
+}
+
+export interface ContinueComplexWorkflowRequest {
+  executionId: string;
+  stepNumber: number;
+  parameters: Record<string, any>;
+}
+
+export interface ContinueComplexWorkflowResponse {
+  success: boolean;
+  message: string;
+  jobId: string;
+  error?: string;
+}
+
+export interface GetComplexWorkflowExecutionResponse {
+  success: boolean;
+  execution?: ComplexWorkflowExecution;
   error?: string;
 }
