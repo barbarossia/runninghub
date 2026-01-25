@@ -47,6 +47,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BaseSelectionToolbar } from '@/components/selection/BaseSelectionToolbar';
 import { QuickRunWorkflowDialog } from '@/components/workspace/QuickRunWorkflowDialog';
+import { ComplexWorkflowRunDialog } from '@/components/workspace/ComplexWorkflowRunDialog';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import type { MediaFile, Workflow } from '@/types/workspace';
 
@@ -110,6 +111,7 @@ export function MediaSelectionToolbar({
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showDecodeDialog, setShowDecodeDialog] = useState(false);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
+  const [showComplexWorkflowDialog, setShowComplexWorkflowDialog] = useState(false);
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [decodePassword, setDecodePassword] = useState('');
@@ -387,6 +389,19 @@ export function MediaSelectionToolbar({
                   </Button>
                 )}
 
+                {/* Run Complex Workflow */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowComplexWorkflowDialog(true)}
+                  disabled={toolbarDisabled}
+                  className="h-9 border-2 border-indigo-500 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold"
+                  title="Run complex workflow on selected files"
+                >
+                  <Zap className="h-4 w-4 mr-2 fill-indigo-700" />
+                  Run Complex Workflow
+                </Button>
+
                 {/* Preview - when image or video files are selected */}
                 {onPreview && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
                   <Button
@@ -585,6 +600,19 @@ export function MediaSelectionToolbar({
                     <span className="text-xs">Run Workflow</span>
                   </Button>
                 )}
+
+                {/* Run Complex Workflow - floating mode */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowComplexWorkflowDialog(true)}
+                  disabled={toolbarDisabled}
+                  className="h-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/30 rounded-full px-3"
+                  title="Run Complex Workflow"
+                >
+                  <Zap className="h-3.5 w-3.5 mr-2 fill-indigo-400" />
+                  <span className="text-xs font-bold">Complex</span>
+                </Button>
 
                 {/* Preview - floating mode */}
                 {onPreview && selectedFiles.some(f => f.type === 'image' || f.type === 'video') && (
@@ -1052,6 +1080,13 @@ export function MediaSelectionToolbar({
           onConfirm={handleQuickRunConfirm}
         />
       )}
+
+      {/* Complex Workflow Run Dialog */}
+      <ComplexWorkflowRunDialog
+        open={showComplexWorkflowDialog}
+        onOpenChange={setShowComplexWorkflowDialog}
+        selectedFiles={selectedFiles}
+      />
     </>
   );
 }

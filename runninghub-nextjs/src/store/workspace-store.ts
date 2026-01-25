@@ -81,6 +81,8 @@ interface WorkspaceState {
   isLoadingJobs: boolean;
   // Active job series for tracking related jobs
   activeSeriesId: string | null;
+  // Currently active complex workflow execution (for runner tab)
+  activeComplexExecutionId: string | null;
 
   // ============================================================
   // NEW STATE - UI State
@@ -222,6 +224,7 @@ interface WorkspaceActions extends WorkspaceState {
   getJobsBySeriesId: (seriesId: string) => Job[];
   getRecentJobsForWorkflow: (workflowId: string, limit?: number) => Job[];
   setActiveSeriesId: (seriesId: string | null) => void;
+  setActiveComplexExecutionId: (executionId: string | null) => void;
 
   // ============================================================
   // NEW ACTIONS - UI State
@@ -274,6 +277,7 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
       selectedJobId: null,
       isLoadingJobs: false,
       activeSeriesId: null,
+      activeComplexExecutionId: null,
 
       // New state - UI State
       viewMode: 'grid',
@@ -1049,6 +1053,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
       setActiveSeriesId: (seriesId) =>
         set({ activeSeriesId: seriesId }),
+
+      setActiveComplexExecutionId: (executionId) =>
+        set({ activeComplexExecutionId: executionId }),
 
       // ============================================================
       // NEW ACTIONS - UI State

@@ -45,6 +45,7 @@ import { JobList } from '@/components/workspace/JobList';
 import { JobDetail } from '@/components/workspace/JobDetail';
 import { ComplexWorkflowBuilder } from '@/components/workspace/ComplexWorkflowBuilder';
 import { ComplexWorkflowList } from '@/components/workspace/ComplexWorkflowList';
+import { ComplexWorkflowRunner } from '@/components/workspace/ComplexWorkflowRunner';
 import { YoutubeDownloader } from '@/components/workspace/YoutubeDownloader';
 import { VideoClipConfiguration } from '@/components/videos/VideoClipConfiguration';
 import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectionToolbar';
@@ -127,6 +128,7 @@ export default function WorkspacePage() {
     removeDatasetFile,
     updateDatasetFile,
     getSelectedDatasetFiles,
+    activeComplexExecutionId,
   } = useWorkspaceStore();
 
   // Stable actions for effects
@@ -139,7 +141,7 @@ export default function WorkspacePage() {
   // Local state
   const [error, setError] = useState<string>('');
   // Default active tab to media
-  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'dataset' | 'run-workflow' | 'workflows' | 'jobs'>('media');
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'dataset' | 'run-workflow' | 'run-complex-workflow' | 'workflows' | 'jobs'>('media');
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
   const [viewingComplexWorkflows, setViewingComplexWorkflows] = useState(false);
@@ -155,6 +157,31 @@ export default function WorkspacePage() {
   useEffect(() => {
     useWorkspaceStore.getState().setSelectedJob(null);
   }, []);
+
+  // Handle URL parameters for job selection and tab switching
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get('job');
+    const tabParam = params.get('tab');
+
+    if (jobId) {
+      // Select the job and switch to jobs tab
+      setSelectedJob(jobId);
+      setActiveTab('jobs');
+
+      // Clear URL params without reloading
+      window.history.replaceState({}, '', '/workspace');
+    } else if (tabParam && ['media', 'youtube', 'clip', 'convert', 'dataset', 'run-workflow', 'run-complex-workflow', 'workflows', 'jobs'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, []);
+
+  // Auto-switch to complex workflow runner if active
+  useEffect(() => {
+    if (activeComplexExecutionId) {
+      setActiveTab('run-complex-workflow');
+    }
+  }, [activeComplexExecutionId]);
 
   // Dataset-related state
   const [datasets, setDatasets] = useState<Array<{ name: string; path: string; fileCount: number }>>([]);
@@ -1841,6 +1868,10 @@ export default function WorkspacePage() {
                   <Play className="h-4 w-4" />
                   Run Workflow
                 </TabsTrigger>
+                <TabsTrigger value="run-complex-workflow" className="flex items-center gap-2 min-w-fit px-4">
+                  <Zap className="h-4 w-4" />
+                  Run Complex Workflow
+                </TabsTrigger>
                 <TabsTrigger value="workflows" className="flex items-center gap-2 min-w-fit px-4">
                   <WorkflowIcon className="h-4 w-4" />
                   Workflows
@@ -2190,6 +2221,11 @@ export default function WorkspacePage() {
                     )}
                   </div>
                 </div>
+              </TabsContent>
+
+              {/* Run Complex Workflow Tab */}
+              <TabsContent value="run-complex-workflow" className="space-y-6 mt-6">
+                <ComplexWorkflowRunner />
               </TabsContent>
 
               {/* Workflows Tab */}

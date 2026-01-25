@@ -44,9 +44,19 @@ export interface WorkflowInputBuilderProps {
     deleteSourceFiles?: boolean;
   }) => void;
   className?: string;
+  runLabel?: string;
+  isExecuting?: boolean;
+  extraActions?: React.ReactNode;
 }
 
-export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: WorkflowInputBuilderProps) {
+export function WorkflowInputBuilder({ 
+  workflow, 
+  onRunJob, 
+  className = '',
+  runLabel = 'Run Job',
+  isExecuting = false,
+  extraActions
+}: WorkflowInputBuilderProps) {
   const {
     mediaFiles,
     jobFiles,
@@ -697,15 +707,19 @@ export function WorkflowInputBuilder({ workflow, onRunJob, className = '' }: Wor
         </Alert>
       )}
 
-      {/* Run button */}
-      <Button
-        onClick={handleRunJob}
-        disabled={!validationResult.valid}
-        className="w-full"
-        size="lg"
-      >
-        Run Job
-      </Button>
+      {/* Actions */}
+      <div className="flex gap-3">
+        <Button
+          onClick={handleRunJob}
+          disabled={!validationResult.valid || isExecuting}
+          className="flex-1"
+          size="lg"
+        >
+          {isExecuting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {runLabel}
+        </Button>
+        {extraActions}
+      </div>
     </div>
   );
 }
