@@ -1,23 +1,23 @@
-import { useEffect, useRef } from 'react';
-import { useFolderStore, type PageType } from '@/store/folder-store';
-import { API_ENDPOINTS } from '@/constants';
-import { toast } from 'sonner';
-import type { FolderSelectionResponse } from '@/types';
+import { useEffect, useRef } from "react";
+import { useFolderStore, type PageType } from "@/store/folder-store";
+import { API_ENDPOINTS } from "@/constants";
+import { toast } from "sonner";
+import type { FolderSelectionResponse } from "@/types";
 
-export type FolderType = 'images' | 'videos' | 'workspace' | 'clip' | 'crop';
+export type FolderType = "images" | "videos" | "workspace" | "clip" | "crop";
 
 interface UseAutoLoadFolderOptions {
-  folderType: FolderType;
-  onFolderLoaded?: (folder: FolderSelectionResponse, contents?: any) => void;
-  enabled?: boolean;
+	folderType: FolderType;
+	onFolderLoaded?: (folder: FolderSelectionResponse, contents?: any) => void;
+	enabled?: boolean;
 }
 
 const folderTypeToPageType: Record<FolderType, PageType> = {
-  images: 'images',
-  videos: 'videos',
-  workspace: 'workspace',
-  clip: 'clip',
-  crop: 'crop',
+	images: "images",
+	videos: "videos",
+	workspace: "workspace",
+	clip: "clip",
+	crop: "crop",
 };
 
 /**
@@ -25,85 +25,108 @@ const folderTypeToPageType: Record<FolderType, PageType> = {
  * The folder state is persisted per-page, so we just validate and restore.
  */
 export function useAutoLoadFolder({
-  folderType,
-  onFolderLoaded,
-  enabled = true,
+	folderType,
+	onFolderLoaded,
+	enabled = true,
 }: UseAutoLoadFolderOptions) {
-  const pageType = folderTypeToPageType[folderType];
-  const { getSelectedFolder, setSelectedFolder, clearPageFolder } = useFolderStore();
+	const pageType = folderTypeToPageType[folderType];
+	const { getSelectedFolder, setSelectedFolder, clearPageFolder } =
+		useFolderStore();
 
-  const hasLoadedRef = useRef(false);
+	const hasLoadedRef = useRef(false);
 
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
+	useEffect(() => {
+		if (!enabled) {
+			return;
+		}
 
-    // Get the persisted folder for this page
-    const lastFolder = getSelectedFolder(pageType);
+		// Get the persisted folder for this page
+		const lastFolder = getSelectedFolder(pageType);
 
-    // Only attempt load if we haven't loaded yet AND we have a folder to load
-    if (hasLoadedRef.current || !lastFolder) {
-      return;
-    }
+		// Only attempt load if we haven't loaded yet AND we have a folder to load
+		if (hasLoadedRef.current || !lastFolder) {
+			return;
+		}
 
-    hasLoadedRef.current = true;
+		hasLoadedRef.current = true;
 
-    // Validate and load the last folder
-    const validateAndLoadFolder = async () => {
-      console.log(`[useAutoLoadFolder] Attempting to auto-load folder for ${pageType}:`, lastFolder.folder_path);
-      try {
-        // Check if folder still exists by listing its contents
-        const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            folder_path: lastFolder.folder_path,
-            session_id: lastFolder.session_id,
-          }),
-        });
+		// Validate and load the last folder
+		const validateAndLoadFolder = async () => {
+			console.log(
+				`[useAutoLoadFolder] Attempting to auto-load folder for ${pageType}:`,
+				lastFolder.folder_path,
+			);
+			try {
+				// Check if folder still exists by listing its contents
+				const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						folder_path: lastFolder.folder_path,
+						session_id: lastFolder.session_id,
+					}),
+				});
 
-        const currentFolder = getSelectedFolder(pageType);
-        if (currentFolder && currentFolder.folder_path !== lastFolder.folder_path) {
-          console.warn('[useAutoLoadFolder] Folder changed during validation, aborting auto-load', {
-            validating: lastFolder.folder_path,
-            current: currentFolder.folder_path
-          });
-          return;
-        }
+				const currentFolder = getSelectedFolder(pageType);
+				if (
+					currentFolder &&
+					currentFolder.folder_path !== lastFolder.folder_path
+				) {
+					console.warn(
+						"[useAutoLoadFolder] Folder changed during validation, aborting auto-load",
+						{
+							validating: lastFolder.folder_path,
+							current: currentFolder.folder_path,
+						},
+					);
+					return;
+				}
 
-        const text = await response.text();
-        let data;
-        try {
-          data = text ? JSON.parse(text) : { success: false };
-        } catch (e) {
-          console.error('Failed to parse auto-load response:', text);
-          data = { success: false };
-        }
+				const text = await response.text();
+				let data;
+				try {
+					data = text ? JSON.parse(text) : { success: false };
+				} catch (e) {
+					console.error("Failed to parse auto-load response:", text);
+					data = { success: false };
+				}
 
-        if (data.success || data.images || data.videos) {
-          // Folder exists, set it as selected
-          setSelectedFolder(pageType, lastFolder);
-          onFolderLoaded?.(lastFolder, data);
-        } else {
-          // Folder no longer exists or is inaccessible
-          console.warn(`Last ${folderType} folder is no longer accessible:`, lastFolder.folder_path);
+				if (data.success || data.images || data.videos) {
+					// Folder exists, set it as selected
+					setSelectedFolder(pageType, lastFolder);
+					onFolderLoaded?.(lastFolder, data);
+				} else {
+					// Folder no longer exists or is inaccessible
+					console.warn(
+						`Last ${folderType} folder is no longer accessible:`,
+						lastFolder.folder_path,
+					);
 
-          // Clear the invalid folder from storage
-          clearPageFolder(pageType);
+					// Clear the invalid folder from storage
+					clearPageFolder(pageType);
 
-          toast.info(`Previous folder is no longer accessible. Please select a folder.`);
-        }
-      } catch (error) {
-        console.error('Error validating last folder:', error);
+					toast.info(
+						`Previous folder is no longer accessible. Please select a folder.`,
+					);
+				}
+			} catch (error) {
+				console.error("Error validating last folder:", error);
 
-        // Clear the invalid folder from storage
-        clearPageFolder(pageType);
+				// Clear the invalid folder from storage
+				clearPageFolder(pageType);
 
-        toast.info('Could not access previous folder. Please select a folder.');
-      }
-    };
+				toast.info("Could not access previous folder. Please select a folder.");
+			}
+		};
 
-    validateAndLoadFolder();
-  }, [enabled, folderType, pageType, getSelectedFolder, setSelectedFolder, clearPageFolder, onFolderLoaded]);
+		validateAndLoadFolder();
+	}, [
+		enabled,
+		folderType,
+		pageType,
+		getSelectedFolder,
+		setSelectedFolder,
+		clearPageFolder,
+		onFolderLoaded,
+	]);
 }

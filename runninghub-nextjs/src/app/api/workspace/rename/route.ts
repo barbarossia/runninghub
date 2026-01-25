@@ -4,86 +4,91 @@ import path from "path";
 import { writeLog } from "@/lib/logger";
 
 interface RenameRequest {
-  path: string;
-  newName: string;
+	path: string;
+	newName: string;
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const data: RenameRequest = await request.json();
-    const { path: currentPath, newName } = data;
+	try {
+		const data: RenameRequest = await request.json();
+		const { path: currentPath, newName } = data;
 
-    if (!currentPath || !newName) {
-      return NextResponse.json(
-        { error: "File path and new name are required" },
-        { status: 400 }
-      );
-    }
+		if (!currentPath || !newName) {
+			return NextResponse.json(
+				{ error: "File path and new name are required" },
+				{ status: 400 },
+			);
+		}
 
-    // Resolve directory
-    const directory = path.dirname(currentPath);
-    
-    // Ensure new name has extension if not provided, or preserve extension of original
-    let finalNewName = newName;
-    const originalExt = path.extname(currentPath);
-    const newExt = path.extname(finalNewName);
-    
-    // If new name doesn't have an extension, append the original one
-    if (!newExt && originalExt) {
-        finalNewName += originalExt;
-    }
+		// Resolve directory
+		const directory = path.dirname(currentPath);
 
-    const newPath = path.join(directory, finalNewName);
+		// Ensure new name has extension if not provided, or preserve extension of original
+		let finalNewName = newName;
+		const originalExt = path.extname(currentPath);
+		const newExt = path.extname(finalNewName);
 
-    // Prevent renaming to same path
-    if (currentPath === newPath) {
-        return NextResponse.json({
-            success: true,
-            message: `Renamed to ${finalNewName}`,
-            newPath,
-            newName: finalNewName
-        });
-    }
+		// If new name doesn't have an extension, append the original one
+		if (!newExt && originalExt) {
+			finalNewName += originalExt;
+		}
 
-    // Check if source exists
-    try {
-        await fs.access(currentPath);
-    } catch {
-         return NextResponse.json(
-        { error: "Source file not found" },
-        { status: 404 }
-      );
-    }
+		const newPath = path.join(directory, finalNewName);
 
-    // Check if destination exists
-    try {
-        await fs.access(newPath);
-        return NextResponse.json(
-            { error: "A file with that name already exists" },
-            { status: 409 }
-        );
-    } catch {
-        // Destination does not exist, safe to rename
-    }
+		// Prevent renaming to same path
+		if (currentPath === newPath) {
+			return NextResponse.json({
+				success: true,
+				message: `Renamed to ${finalNewName}`,
+				newPath,
+				newName: finalNewName,
+			});
+		}
 
-    // Rename
-    await fs.rename(currentPath, newPath);
-    
-    // Log
-    await writeLog(`Renamed file: ${path.basename(currentPath)} -> ${finalNewName}`, "info", "file_operation");
+		// Check if source exists
+		try {
+			await fs.access(currentPath);
+		} catch {
+			return NextResponse.json(
+				{ error: "Source file not found" },
+				{ status: 404 },
+			);
+		}
 
-    return NextResponse.json({
-      success: true,
-      message: `Renamed to ${finalNewName}`,
-      newPath,
-      newName: finalNewName
-    });
+		// Check if destination exists
+		try {
+			await fs.access(newPath);
+			return NextResponse.json(
+				{ error: "A file with that name already exists" },
+				{ status: 409 },
+			);
+		} catch {
+			// Destination does not exist, safe to rename
+		}
 
-  } catch (error) {
-    console.error("Error renaming file:", error);
-    return NextResponse.json(
-      { error: `Failed to rename file: ${error instanceof Error ? error.message : String(error)}` },
-      { status: 500 }
-    );
-  }
+		// Rename
+		await fs.rename(currentPath, newPath);
+
+		// Log
+		await writeLog(
+			`Renamed file: ${path.basename(currentPath)} -> ${finalNewName}`,
+			"info",
+			"file_operation",
+		);
+
+		return NextResponse.json({
+			success: true,
+			message: `Renamed to ${finalNewName}`,
+			newPath,
+			newName: finalNewName,
+		});
+	} catch (error) {
+		console.error("Error renaming file:", error);
+		return NextResponse.json(
+			{
+				error: `Failed to rename file: ${error instanceof Error ? error.message : String(error)}`,
+			},
+			{ status: 500 },
+		);
+	}
 }

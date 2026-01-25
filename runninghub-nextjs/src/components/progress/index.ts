@@ -1,1 +1,1 @@
-export { ProgressModal } from './ProgressModal';
+export { ProgressModal } from "./ProgressModal";
