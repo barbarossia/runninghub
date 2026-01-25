@@ -100,6 +100,10 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	const [debouncedTimers, setDebouncedTimers] = useState<
 		Record<string, NodeJS.Timeout>
 	>({});
+	const [resultOverrides, setResultOverrides] = useState<JobResult | null>(
+		null,
+	);
+	const [hasLoadedResults, setHasLoadedResults] = useState(false);
 
 	// State for tracking decoded files from duck images
 	const [decodedFiles, setDecodedFiles] = useState<
@@ -171,19 +175,34 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 		}
 	}, [job?.complexWorkflowId]);
 
+	const resolvedResults = useMemo(() => {
+		if (!job?.results && !resultOverrides) return null;
+		if (!job?.results) return resultOverrides;
+		if (!resultOverrides) return job.results;
+		return {
+			...job.results,
+			outputs:
+				job.results.outputs?.length ? job.results.outputs : resultOverrides.outputs,
+			textOutputs:
+				job.results.textOutputs?.length
+					? job.results.textOutputs
+					: resultOverrides.textOutputs,
+		};
+	}, [job?.results, resultOverrides]);
+
 	// Initialize editedText when job results load
 	useEffect(() => {
-		if (job?.results?.textOutputs) {
+		if (resolvedResults?.textOutputs) {
 			const initial: Record<
 				string,
 				{ original: string; en?: string; zh?: string }
 			> = {};
-			job.results.textOutputs.forEach((output) => {
+			resolvedResults.textOutputs.forEach((output) => {
 				initial[output.filePath] = { ...output.content };
 			});
 			setEditedText(initial);
 		}
-	}, [job?.results?.textOutputs]);
+	}, [resolvedResults?.textOutputs]);
 
 	// Fetch fresh job data from local job.json when jobId changes
 	useEffect(() => {
@@ -195,6 +214,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 				if (response.ok) {
 					const data = await response.json();
 					if (data.success && data.job) {
+						setResultOverrides(data.job.results || null);
 						// Update store with fresh data from disk
 						updateJob(jobId, data.job);
 					}
@@ -204,6 +224,8 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 			}
 		};
 
+		setResultOverrides(null);
+		setHasLoadedResults(false);
 		fetchJobFromDisk();
 	}, [jobId]);
 
@@ -263,25 +285,48 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 			}
 
 			if (data.success && data.results) {
+				const existingTextOutputs = resolvedResults?.textOutputs;
+				const mergedResults = {
+					...data.results,
+					textOutputs:
+						existingTextOutputs && existingTextOutputs.length > 0
+							? existingTextOutputs
+							: data.results.textOutputs,
+				};
+				setResultOverrides(mergedResults);
 				// Update job with results
-				updateJob(jobId, { results: data.results });
+				updateJob(jobId, { results: mergedResults });
 			}
 		} catch (error) {
 			console.error("Failed to fetch job results:", error);
 		} finally {
 			setIsLoadingResults(false);
+			setHasLoadedResults(true);
 		}
-	}, [jobId, job?.status, updateJob, isLoadingResults]);
+	}, [
+		jobId,
+		job?.status,
+		updateJob,
+		isLoadingResults,
+		resolvedResults,
+	]);
 
 	useEffect(() => {
+		if (job?.status === "completed" && !hasLoadedResults) {
+			fetchResults();
+			return;
+		}
 		if (
 			job &&
 			job.status === "completed" &&
-			(!job.results || !job.results.textOutputs)
+			(!resolvedResults ||
+				!resolvedResults.textOutputs ||
+				!resolvedResults.outputs ||
+				resolvedResults.outputs.length === 0)
 		) {
 			fetchResults();
 		}
-	}, [job, fetchResults]);
+	}, [job, resolvedResults, fetchResults, hasLoadedResults]);
 
 	if (!job) {
 		return (
@@ -756,8 +801,8 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 			toast.success("File updated successfully");
 
 			// Update local store state too so it's persistent across re-renders
-			if (job.results?.textOutputs) {
-				const newTextOutputs = job.results.textOutputs.map((output) => {
+			if (resolvedResults?.textOutputs) {
+				const newTextOutputs = resolvedResults.textOutputs.map((output) => {
 					if (output.filePath === filePath) {
 						return {
 							...output,
@@ -772,7 +817,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 
 				updateJob(jobId, {
 					results: {
-						...job.results,
+						...resolvedResults,
 						textOutputs: newTextOutputs,
 					},
 				});
@@ -837,6 +882,9 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 				return "bg-red-100 text-red-800";
 		}
 	};
+
+	const hasTextOutputs = Boolean(resolvedResults?.textOutputs?.length);
+	const hasFileOutputs = Boolean(resolvedResults?.outputs?.length);
 
 	return (
 		<div className={cn("space-y-4 h-full flex flex-col", className)}>
@@ -1065,242 +1113,14 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 							</div>
 						)}
 
-						{/* Text Outputs - Split View */}
-						{job.results?.textOutputs && job.results.textOutputs.length > 0 ? (
-							<div className="flex-1 flex flex-col min-h-0">
-								<div className="flex items-center justify-between mb-2 shrink-0">
-									<h3 className="text-sm font-medium text-gray-500">
-										Translation Result
-									</h3>
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleSwapLanguages}
-										title="Swap languages"
-									>
-										<ArrowRightLeft className="h-4 w-4" />
-									</Button>
-								</div>
-
-								<div className="flex-1 grid grid-cols-2 gap-4 min-h-[500px]">
-									{/* Left Pane */}
-									<Card className="flex flex-col overflow-hidden bg-white">
-										<div className="p-2 border-b bg-gray-50 flex justify-between items-center text-xs font-medium text-gray-500">
-											<Select
-												value={leftLang}
-												onValueChange={(value: any) => setLeftLang(value)}
-											>
-												<SelectTrigger className="h-6 w-20 text-xs">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="original">Original</SelectItem>
-													<SelectItem value="en">English</SelectItem>
-													<SelectItem value="zh">中文</SelectItem>
-												</SelectContent>
-											</Select>
-											<div className="flex gap-1">
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6 text-blue-600 hover:text-blue-700"
-													title="Save changes to original file"
-													onClick={() => {
-														// Find the first output for now - in reality might need more complex UI
-														const output = job.results?.textOutputs?.[0];
-														if (output)
-															handleSaveText(output.filePath, leftLang);
-													}}
-												>
-													<Save className="h-3 w-3" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6"
-													onClick={() => {
-														const content =
-															job.results?.textOutputs
-																?.map(
-																	(t) =>
-																		editedText[t.filePath]?.[leftLang] ||
-																		t.content[
-																			leftLang as keyof typeof t.content
-																		] ||
-																		"",
-																)
-																.join("\n\n") || "";
-														navigator.clipboard.writeText(content);
-														toast.success("Copied");
-													}}
-												>
-													<Copy className="h-3 w-3" />
-												</Button>
-											</div>
-										</div>
-										<div className="flex-1 p-0 overflow-hidden flex flex-col">
-											{job.results.textOutputs.map((output, idx) => {
-												const originalContent =
-													leftLang === "original"
-														? output.content.original
-														: output.content[
-																leftLang as keyof typeof output.content
-															] || "";
-												const currentVal =
-													editedText[output.filePath]?.[leftLang] ??
-													originalContent;
-												const isPaneTranslating =
-													translating[output.filePath] === "left";
-
-												return (
-													<div
-														key={idx}
-														className="flex-1 flex flex-col min-h-0 relative"
-													>
-														<Textarea
-															value={currentVal}
-															onChange={(e) =>
-																handleTextEdit(
-																	output.filePath,
-																	leftLang,
-																	e.target.value,
-																	"left",
-																)
-															}
-															className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm"
-															placeholder="No content available..."
-														/>
-														{isPaneTranslating && (
-															<div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-																<Loader2 className="h-3 w-3 animate-spin" />
-																Translating...
-															</div>
-														)}
-														{output.translationError &&
-															leftLang !== "original" && (
-																<div className="p-2 text-xs text-red-500 italic bg-red-50">
-																	Error: {output.translationError}
-																</div>
-															)}
-													</div>
-												);
-											})}
-										</div>
-									</Card>
-
-									{/* Right Pane */}
-									<Card className="flex flex-col overflow-hidden bg-gray-50">
-										<div className="p-2 border-b bg-gray-100 flex justify-between items-center text-xs font-medium text-gray-500">
-											<Select
-												value={rightLang}
-												onValueChange={(value: any) => setRightLang(value)}
-											>
-												<SelectTrigger className="h-6 w-20 text-xs">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="original">Original</SelectItem>
-													<SelectItem value="en">English</SelectItem>
-													<SelectItem value="zh">中文</SelectItem>
-												</SelectContent>
-											</Select>
-											<div className="flex gap-1">
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6 text-blue-600 hover:text-blue-700"
-													title="Save changes to original file"
-													onClick={() => {
-														const output = job.results?.textOutputs?.[0];
-														if (output)
-															handleSaveText(output.filePath, rightLang);
-													}}
-												>
-													<Save className="h-3 w-3" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6"
-													onClick={() => {
-														const content =
-															job.results?.textOutputs
-																?.map(
-																	(t) =>
-																		editedText[t.filePath]?.[rightLang] ||
-																		t.content[
-																			rightLang as keyof typeof t.content
-																		] ||
-																		"",
-																)
-																.join("\n\n") || "";
-														navigator.clipboard.writeText(content);
-														toast.success("Copied");
-													}}
-												>
-													<Copy className="h-3 w-3" />
-												</Button>
-											</div>
-										</div>
-										<div className="flex-1 p-0 overflow-hidden flex flex-col">
-											{job.results.textOutputs.map((output, idx) => {
-												const originalContent =
-													rightLang === "original"
-														? output.content.original
-														: output.content[
-																rightLang as keyof typeof output.content
-															] || "";
-												const currentVal =
-													editedText[output.filePath]?.[rightLang] ??
-													originalContent;
-												const isPaneTranslating =
-													translating[output.filePath] === "right";
-
-												return (
-													<div
-														key={idx}
-														className="flex-1 flex flex-col min-h-0 relative"
-													>
-														<Textarea
-															value={currentVal}
-															onChange={(e) =>
-																handleTextEdit(
-																	output.filePath,
-																	rightLang,
-																	e.target.value,
-																	"right",
-																)
-															}
-															className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm bg-transparent"
-															placeholder="No content available..."
-														/>
-														{isPaneTranslating && (
-															<div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-																<Loader2 className="h-3 w-3 animate-spin" />
-																Translating...
-															</div>
-														)}
-														{output.translationError &&
-															rightLang !== "original" && (
-																<div className="p-2 text-xs text-red-500 italic bg-red-50">
-																	Error: {output.translationError}
-																</div>
-															)}
-													</div>
-												);
-											})}
-										</div>
-									</Card>
-								</div>
-							</div>
-						) : /* File Outputs / No Text Output Case */
-						job.results?.outputs && job.results.outputs.length > 0 ? (
-							<div className="space-y-2">
+						{/* File Outputs */}
+						{hasFileOutputs && (
+							<div className="space-y-2 shrink-0">
 								<h3 className="text-sm font-medium text-gray-500">
 									Output Files
 								</h3>
 								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-									{job.results.outputs.map((output, idx) => {
+									{resolvedResults?.outputs?.map((output, idx) => {
 										const decodedFile = output.path
 											? decodedFiles[output.path]
 											: null;
@@ -1469,7 +1289,239 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 									})}
 								</div>
 							</div>
-						) : job.status === "completed" ? (
+						)}
+
+						{/* Text Outputs - Split View */}
+						{hasTextOutputs && (
+							<div className="flex flex-col min-h-0 shrink-0">
+								<div className="flex items-center justify-between mb-2 shrink-0">
+									<h3 className="text-sm font-medium text-gray-500">
+										Translation Result
+									</h3>
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={handleSwapLanguages}
+										title="Swap languages"
+									>
+										<ArrowRightLeft className="h-4 w-4" />
+									</Button>
+								</div>
+
+								<div className="flex-1 grid grid-cols-2 gap-4 min-h-[500px]">
+									{/* Left Pane */}
+									<Card className="flex flex-col overflow-hidden bg-white">
+										<div className="p-2 border-b bg-gray-50 flex justify-between items-center text-xs font-medium text-gray-500">
+											<Select
+												value={leftLang}
+												onValueChange={(value: any) => setLeftLang(value)}
+											>
+												<SelectTrigger className="h-6 w-20 text-xs">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="original">Original</SelectItem>
+													<SelectItem value="en">English</SelectItem>
+													<SelectItem value="zh">中文</SelectItem>
+												</SelectContent>
+											</Select>
+											<div className="flex gap-1">
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-6 w-6 text-blue-600 hover:text-blue-700"
+													title="Save changes to original file"
+													onClick={() => {
+														// Find the first output for now - in reality might need more complex UI
+														const output = resolvedResults?.textOutputs?.[0];
+														if (output)
+															handleSaveText(output.filePath, leftLang);
+													}}
+												>
+													<Save className="h-3 w-3" />
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-6 w-6"
+													onClick={() => {
+														const content =
+															resolvedResults?.textOutputs
+																?.map(
+																	(t) =>
+																		editedText[t.filePath]?.[leftLang] ||
+																		t.content[
+																			leftLang as keyof typeof t.content
+																		] ||
+																		"",
+																)
+																.join("\n\n") || "";
+														navigator.clipboard.writeText(content);
+														toast.success("Copied");
+													}}
+												>
+													<Copy className="h-3 w-3" />
+												</Button>
+											</div>
+										</div>
+										<div className="flex-1 p-0 overflow-hidden flex flex-col">
+											{resolvedResults?.textOutputs?.map((output, idx) => {
+												const originalContent =
+													leftLang === "original"
+														? output.content.original
+														: output.content[
+																leftLang as keyof typeof output.content
+															] || "";
+												const currentVal =
+													editedText[output.filePath]?.[leftLang] ??
+													originalContent;
+												const isPaneTranslating =
+													translating[output.filePath] === "left";
+
+												return (
+													<div
+														key={idx}
+														className="flex-1 flex flex-col min-h-0 relative"
+													>
+														<Textarea
+															value={currentVal}
+															onChange={(e) =>
+																handleTextEdit(
+																	output.filePath,
+																	leftLang,
+																	e.target.value,
+																	"left",
+																)
+															}
+															className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm"
+															placeholder="No content available..."
+														/>
+														{isPaneTranslating && (
+															<div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+																<Loader2 className="h-3 w-3 animate-spin" />
+																Translating...
+															</div>
+														)}
+														{output.translationError &&
+															leftLang !== "original" && (
+																<div className="p-2 text-xs text-red-500 italic bg-red-50">
+																	Error: {output.translationError}
+																</div>
+															)}
+													</div>
+												);
+											})}
+										</div>
+									</Card>
+
+									{/* Right Pane */}
+									<Card className="flex flex-col overflow-hidden bg-gray-50">
+										<div className="p-2 border-b bg-gray-100 flex justify-between items-center text-xs font-medium text-gray-500">
+											<Select
+												value={rightLang}
+												onValueChange={(value: any) => setRightLang(value)}
+											>
+												<SelectTrigger className="h-6 w-20 text-xs">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="original">Original</SelectItem>
+													<SelectItem value="en">English</SelectItem>
+													<SelectItem value="zh">中文</SelectItem>
+												</SelectContent>
+											</Select>
+											<div className="flex gap-1">
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-6 w-6 text-blue-600 hover:text-blue-700"
+													title="Save changes to original file"
+													onClick={() => {
+														const output = resolvedResults?.textOutputs?.[0];
+														if (output)
+															handleSaveText(output.filePath, rightLang);
+													}}
+												>
+													<Save className="h-3 w-3" />
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-6 w-6"
+													onClick={() => {
+														const content =
+															resolvedResults?.textOutputs
+																?.map(
+																	(t) =>
+																		editedText[t.filePath]?.[rightLang] ||
+																		t.content[
+																			rightLang as keyof typeof t.content
+																		] ||
+																		"",
+																)
+																.join("\n\n") || "";
+														navigator.clipboard.writeText(content);
+														toast.success("Copied");
+													}}
+												>
+													<Copy className="h-3 w-3" />
+												</Button>
+											</div>
+										</div>
+										<div className="flex-1 p-0 overflow-hidden flex flex-col">
+											{resolvedResults?.textOutputs?.map((output, idx) => {
+												const originalContent =
+													rightLang === "original"
+														? output.content.original
+														: output.content[
+																rightLang as keyof typeof output.content
+															] || "";
+												const currentVal =
+													editedText[output.filePath]?.[rightLang] ??
+													originalContent;
+												const isPaneTranslating =
+													translating[output.filePath] === "right";
+
+												return (
+													<div
+														key={idx}
+														className="flex-1 flex flex-col min-h-0 relative"
+													>
+														<Textarea
+															value={currentVal}
+															onChange={(e) =>
+																handleTextEdit(
+																	output.filePath,
+																	rightLang,
+																	e.target.value,
+																	"right",
+																)
+															}
+															className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm bg-transparent"
+															placeholder="No content available..."
+														/>
+														{isPaneTranslating && (
+															<div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+																<Loader2 className="h-3 w-3 animate-spin" />
+																Translating...
+															</div>
+														)}
+														{output.translationError &&
+															rightLang !== "original" && (
+																<div className="p-2 text-xs text-red-500 italic bg-red-50">
+																	Error: {output.translationError}
+																</div>
+															)}
+													</div>
+												);
+											})}
+										</div>
+									</Card>
+								</div>
+							</div>
+						)}
+
+						{!hasTextOutputs && !hasFileOutputs && job.status === "completed" ? (
 							<div className="text-center py-12 text-gray-500">
 								No outputs generated
 							</div>
@@ -1491,7 +1543,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 					previousOutputs={
 						complexWorkflow.steps[complexWorkflow.currentStep - 1]?.outputs
 					}
-					currentJobOutputs={job.results}
+					currentJobOutputs={resolvedResults || job.results}
 				/>
 			)}
 		</div>
