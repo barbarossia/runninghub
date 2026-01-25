@@ -145,7 +145,7 @@ async function downloadVideoInBackground(
   cookieFilePath: string | undefined,
   taskId: string
 ) {
-  let cookieFileToDelete: string | null = null;
+  const cookieFileToDelete: string | null = null;
 
   try {
     await writeLog(`Starting YouTube download: ${url}`, 'info', taskId);

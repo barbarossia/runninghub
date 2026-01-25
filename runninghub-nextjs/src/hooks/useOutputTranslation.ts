@@ -32,7 +32,7 @@ function splitTextIntoChunks(text: string): string[] {
     }
 
     // Take a chunk of MYMEMORY_LIMIT - CHUNK_OVERLAP characters
-    let chunkEnd = MYMEMORY_LIMIT - CHUNK_OVERLAP;
+    const chunkEnd = MYMEMORY_LIMIT - CHUNK_OVERLAP;
 
     // Try to find a sentence boundary near the chunk end
     const sentenceEnds = ['.', '!', '?', '\n'];

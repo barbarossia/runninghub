@@ -199,12 +199,15 @@ async function updateJobFile(jobId: string, updates: Partial<Job>) {
 /**
  * Helper to parse RunningHub task ID from CLI output
  * Looks for patterns like "Task ID: 1234567890" or "Task submitted successfully! Task ID: 1234567890"
+ * Also parses task ID from CLI client print statement: "taskId": "12345"
  */
 function parseRunningHubTaskId(stdout: string): string | null {
-  // Try multiple patterns to find the task ID
   const patterns = [
-    /Task ID:\s*(\d+)/i,           // "Task ID: 1234567890"
-    /task.*?id[:\s]+(\d+)/i,       // "task id: 1234567890" (case insensitive)
+    /Task ID:\s*(\d+)/i,
+    /task.*?id[:\s]+(\d+)/i,
+    /taskid:\s*(\d+)/i,
+    /"taskId"\s*:\s*"(\d+)"/i,
+    /"taskId"\s*:\s*(\d+)/i,
   ];
 
   for (const pattern of patterns) {
@@ -374,12 +377,14 @@ async function processJobOutputs(
         // Write to workspace outputs directory
         await fs.writeFile(workspacePath, uint8Array);
 
-        // Determine file type based on extension
-        const ext = path.extname(fileName).toLowerCase();
-        let determinedFileType: 'image' | 'text' | 'file' = 'file';
+         // Determine file type based on extension
+         const ext = path.extname(fileName).toLowerCase();
+         let determinedFileType: 'image' | 'text' | 'video' | 'file' = 'file';
         
         if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'].includes(ext)) {
             determinedFileType = 'image';
+        } else if (['.mp4', '.mov', '.avi', '.webm'].includes(ext)) {
+            determinedFileType = 'video';
         } else if (['.txt', '.md', '.json', '.log', '.xml', '.csv'].includes(ext)) {
             determinedFileType = 'text';
         }
@@ -405,7 +410,7 @@ async function processJobOutputs(
             type: determinedFileType === 'text' ? 'text' : 'file',
             path: workspacePath,
             fileName: fileName,
-            fileType: determinedFileType === 'image' ? 'image' : 'text', // Keeping limited types for now as per UI support
+            fileType: determinedFileType,
             workspacePath: path.join(jobId, 'result', fileName)
         });
 
@@ -623,7 +628,7 @@ async function processWorkflowInBackground(
     }
 
     // Force unbuffered output (-u) so logs appear in real-time
-    let args: string[] = ["-u", "-m", "runninghub_cli.cli"];
+    const args: string[] = ["-u", "-m", "runninghub_cli.cli"];
 
     // Helper to extract node ID from parameter ID (e.g., "param_203" -> "203", "param_69_image" -> "69")
     const getNodeId = (paramId: string) => {

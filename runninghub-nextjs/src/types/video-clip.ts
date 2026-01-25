@@ -11,4 +11,5 @@ export interface VideoClipConfig {
   intervalFrames: number;
   organizeByVideo: boolean;
   deleteOriginal: boolean;
+  saveToWorkspace: boolean;
 }

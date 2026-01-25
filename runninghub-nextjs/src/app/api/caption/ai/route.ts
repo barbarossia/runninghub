@@ -81,8 +81,8 @@ async function processCaptionsInBackground(
   // 3. Download the generated caption
   // 4. Save as .txt file
 
-  let successCount = 0;
-  let failureCount = mediaFiles.length;
+  const successCount = 0;
+  const failureCount = mediaFiles.length;
 
   for (let i = 0; i < mediaFiles.length; i++) {
     const filePath = mediaFiles[i];

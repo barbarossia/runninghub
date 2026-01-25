@@ -7,11 +7,13 @@ import { ENVIRONMENT_VARIABLES } from "@/constants";
 import path from "path";
 import fs from "fs/promises";
 import os from "os";
+import { useWorkspaceStore } from "@/store/workspace-store";
 
 interface ClipRequest {
   videos: string[];
   clip_config: VideoClipConfig;
   timeout?: number;
+  outputDir?: string;
 }
 
 /**
@@ -31,6 +33,7 @@ export async function POST(request: NextRequest) {
       videos,
       clip_config,
       timeout = 3600,
+      outputDir,
     } = data;
 
     if (!videos || videos.length === 0) {
@@ -67,7 +70,8 @@ export async function POST(request: NextRequest) {
       videos,
       clip_config,
       timeout,
-      taskId
+      taskId,
+      outputDir
     );
 
     const response = {
@@ -109,7 +113,8 @@ function clipSingleVideo(
   videoPath: string,
   clipConfig: VideoClipConfig,
   timeout: number,
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  customOutputDir?: string
 ): Promise<{
   success: boolean;
   stdout: string;
@@ -117,7 +122,17 @@ function clipSingleVideo(
   error?: string;
 }> {
   return new Promise(async (resolve) => {
-    const outputDir = resolvePath(ENVIRONMENT_VARIABLES.CLIP_OUTPUT_FOLDER);
+    let outputDir = resolvePath(ENVIRONMENT_VARIABLES.CLIP_OUTPUT_FOLDER);
+
+    // If saveToWorkspace is enabled, use provided output directory
+    let organizeByVideo = clipConfig.organizeByVideo;
+    const deleteOriginal = clipConfig.deleteOriginal;
+
+    if (clipConfig.saveToWorkspace && customOutputDir) {
+      outputDir = customOutputDir;
+      // Force no-organize when saving to workspace (conflicting option)
+      organizeByVideo = false;
+    }
 
     const args = [
       "-m", "runninghub_cli.cli",
@@ -127,8 +142,8 @@ function clipSingleVideo(
       "--format", clipConfig.imageFormat,
       "--quality", String(clipConfig.quality),
       "--output-dir", outputDir,
-      clipConfig.organizeByVideo ? "--organize" : "--no-organize",
-      clipConfig.deleteOriginal ? "--delete" : "--no-delete",
+      organizeByVideo ? "--organize" : "--no-organize",
+      deleteOriginal ? "--delete" : "--no-delete",
       "--timeout", String(timeout),
     ];
 
@@ -198,7 +213,8 @@ async function clipVideosInBackground(
   videos: string[],
   clipConfig: VideoClipConfig,
   timeout: number,
-  taskId: string
+  taskId: string,
+  outputDir?: string
 ) {
   await writeLog(
     `=== BACKGROUND VIDEO CLIPPING STARTED for task: ${taskId} ===`,
@@ -231,7 +247,8 @@ async function clipVideosInBackground(
         videoPath,
         clipConfig,
         timeout,
-        env
+        env,
+        outputDir
       );
 
       if (result.success) {

@@ -46,7 +46,9 @@ import { DuckDecodeButton } from './DuckDecodeButton';
 import { JobInputEditor } from './JobInputEditor';
 import { JobSeriesNav } from './JobSeriesNav';
 import { VideoPreview } from './VideoPreview';
-import type { FileInputAssignment } from '@/types/workspace';
+import type { FileInputAssignment, ComplexWorkflowExecution, ComplexWorkflow } from '@/types/workspace';
+import { ComplexWorkflowContext } from './ComplexWorkflowContext';
+import { ComplexWorkflowContinueDialog } from './ComplexWorkflowContinueDialog';
 
 // Helper to get filename from path (client-side safe)
 const getBasename = (filePath: string) => {
@@ -112,10 +114,44 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   });
   const [relatedJobs, setRelatedJobs] = useState<Job[]>([]);
 
+  // Complex Workflow State
+  const [complexWorkflow, setComplexWorkflow] = useState<ComplexWorkflowExecution | null>(null);
+  const [complexWorkflowDefinition, setComplexWorkflowDefinition] = useState<ComplexWorkflow | null>(null);
+  const [showContinueDialog, setShowContinueDialog] = useState(false);
+
   // Auto-translate outputs (uses server-side API)
   const { isTranslating, translatedCount } = useOutputTranslation(jobId);
 
   const job = getJobById(jobId);
+
+  // Fetch complex workflow execution if applicable
+  useEffect(() => {
+    if (job?.complexWorkflowId) {
+      const loadComplexExecutionDetails = async () => {
+        try {
+          const response = await fetch(`/api/workspace/complex-workflow/execution/${job.complexWorkflowId}`);
+          const data = await response.json();
+          
+          if (data.success && data.execution) {
+            setComplexWorkflow(data.execution);
+            
+            // Also fetch definition to get step parameters
+            if (data.execution.complexWorkflowId) {
+              const defResponse = await fetch(`/api/workspace/complex-workflow/${data.execution.complexWorkflowId}`);
+              const defData = await defResponse.json();
+              if (defData.success && defData.workflow) {
+                setComplexWorkflowDefinition(defData.workflow);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load complex workflow execution:', error);
+        }
+      };
+
+      loadComplexExecutionDetails();
+    }
+  }, [job?.complexWorkflowId]);
 
   // Initialize editedText when job results load
   useEffect(() => {
@@ -384,7 +420,7 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
   // Handle re-query task status (without submitting new job)
   const handleReQueryStatus = async () => {
     if (!job.runninghubTaskId) {
-      toast.error('No RunningHub task ID found for this job');
+      toast.error('No RunningHub task ID found for this job. Task may have failed during submission.');
       return;
     }
 
@@ -475,6 +511,40 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
     } catch (error) {
       console.error('Save to workspace failed:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save to workspace');
+    }
+  };
+
+  // Handle continue complex workflow
+  const handleContinueComplexWorkflow = async (parameters: Record<string, any>) => {
+    if (!complexWorkflow) {
+      toast.error('No complex workflow execution found');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/workspace/complex-workflow/continue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          executionId: complexWorkflow.id,
+          stepNumber: complexWorkflow.currentStep,
+          parameters,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        toast.success('Continuing to next step...');
+        setShowContinueDialog(false);
+        // Refresh page to show new state
+        window.location.reload();
+      } else {
+        toast.error(data.error || 'Failed to continue complex workflow');
+      }
+    } catch (error) {
+      console.error('Failed to continue complex workflow:', error);
+      toast.error('Failed to continue complex workflow');
     }
   };
 
@@ -738,12 +808,13 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
         </div>
 
         <div className="flex gap-2">
-          {job.runninghubTaskId && (
+          {(job.runninghubTaskId || job.status === 'failed') && (
             <Button
               onClick={handleReQueryStatus}
-              disabled={isReQuerying}
+              disabled={isReQuerying || !job.runninghubTaskId}
               variant="outline"
               size="sm"
+              title={!job.runninghubTaskId ? 'No RunningHub task ID available (task failed during submission)' : undefined}
             >
               <RefreshCw
                 className={cn('h-4 w-4 mr-1', isReQuerying && 'animate-spin')}
@@ -820,6 +891,27 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
                 jobs={relatedJobs}
                 currentJobId={job.id}
                 onSelectJob={(jobId) => setSelectedJob(jobId)}
+              />
+            </div>
+          )}
+
+          {/* Complex Workflow Context */}
+          {job?.complexWorkflowId && complexWorkflow && (
+            <div className="animate-in fade-in duration-300">
+              <ComplexWorkflowContext
+                execution={complexWorkflow}
+                onContinue={() => setShowContinueDialog(true)}
+                onStopExecution={async () => {
+                  if (!confirm('Stop complex workflow execution?')) return;
+                  try {
+                    await fetch(`/api/workspace/complex-workflow/execution/${complexWorkflow.id}/stop`, {
+                      method: 'POST',
+                    });
+                    window.location.reload();
+                  } catch (e) {
+                    toast.error('Failed to stop execution');
+                  }
+                }}
               />
             </div>
           )}
@@ -1182,6 +1274,17 @@ export function JobDetail({ jobId, onBack, className = '' }: JobDetailProps) {
           </div>
         </div>
       </div>
+      {/* Complex Workflow Continue Dialog */}
+      {showContinueDialog && complexWorkflow && complexWorkflowDefinition && (
+        <ComplexWorkflowContinueDialog
+          open={showContinueDialog}
+          onClose={() => setShowContinueDialog(false)}
+          onContinue={handleContinueComplexWorkflow}
+          nextStep={complexWorkflowDefinition.steps.find(s => s.stepNumber === complexWorkflow.currentStep + 1)!}
+          previousOutputs={complexWorkflow.steps[complexWorkflow.currentStep - 1]?.outputs}
+          currentJobOutputs={job.results}
+        />
+      )}
     </div>
   );
 }

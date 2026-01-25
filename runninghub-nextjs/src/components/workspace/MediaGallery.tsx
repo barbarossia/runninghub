@@ -1009,7 +1009,7 @@ export function MediaGallery({
                                 className="text-purple-600 focus:text-purple-700 focus:bg-purple-50"
                               >
                                 <Database className="h-4 w-4 mr-2" />
-                                Database
+                                Dataset
                               </DropdownMenuItem>
                             )}
                             {file.type === 'video' && onConvertFps && (

@@ -79,7 +79,7 @@ async function processSingleImageWithRetry(
   error?: string;
 }> {
   let attempt = 0;
-  let baseDelay = 2000; // Start with 2 seconds
+  const baseDelay = 2000; // Start with 2 seconds
   const maxDelay = 30000; // Cap at 30 seconds between retries
 
   while (true) { // Infinite retry for TASK_QUEUE_MAXED

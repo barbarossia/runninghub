@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Video, Image as ImageIcon, Settings2 } from 'lucide-react';
 import { ClipMode } from '@/types/video-clip';
 import { useVideoClipStore } from '@/store/video-clip-store';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ConfigurationCard } from '@/components/ui/ConfigurationCard';
 import { cn } from '@/lib/utils';
@@ -30,7 +29,8 @@ export function VideoClipConfiguration({
     setIntervalSeconds,
     setIntervalFrames,
     toggleOrganizeByVideo,
-    toggleDeleteOriginal
+    toggleDeleteOriginal,
+    toggleSaveToWorkspace,
   } = useVideoClipStore();
 
   // Notify parent of config changes
@@ -51,11 +51,6 @@ export function VideoClipConfiguration({
       iconColor="text-purple-600"
       disabled={disabled}
       className={className}
-      subtitle={
-        <>
-          Mode: {clipConfig.mode.replace('_', ' ')} • Format: {clipConfig.imageFormat.toUpperCase()} {clipConfig.organizeByVideo && '• Organized'} {clipConfig.deleteOriginal && '• Auto-delete'}
-        </>
-      }
     >
       <div className="space-y-4">
         {/* Clip Mode Presets */}
@@ -133,8 +128,16 @@ export function VideoClipConfiguration({
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="space-y-3 pt-2">
+          {/* File Organization Options */}
+          <div className="space-y-3 pt-4 border-t border-gray-200 md:pt-0 md:border-t-0">
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Settings2 className="h-4 w-4" />
+              File Organization
+            </div>
+
+            <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer group">
                 <div className="relative flex items-center">
                   <input
@@ -142,6 +145,7 @@ export function VideoClipConfiguration({
                     checked={clipConfig.organizeByVideo}
                     onChange={toggleOrganizeByVideo}
                     className="w-4 h-4 rounded border-gray-300 bg-white text-purple-600 focus:ring-purple-500 focus:ring-offset-2 transition-all cursor-pointer"
+                    disabled={clipConfig.saveToWorkspace}
                   />
                 </div>
                 <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Organize images by video name</span>
@@ -158,10 +162,33 @@ export function VideoClipConfiguration({
                 </div>
                 <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Delete video after processing</span>
               </label>
-            </div>
-          </div>
 
-          {/* Mode Specific Settings */}
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={clipConfig.saveToWorkspace}
+                    onChange={toggleSaveToWorkspace}
+                    className="w-4 h-4 rounded border-gray-300 bg-blue-600 focus:ring-blue-500 focus:ring-offset-2 transition-all cursor-pointer"
+                  />
+                </div>
+                <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">Save to workspace</span>
+              </label>
+            </div>
+
+            {clipConfig.organizeByVideo && clipConfig.saveToWorkspace && (
+              <div className="mt-3 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <span className="text-yellow-600 text-sm">⚠️</span>
+                <span className="text-sm text-yellow-800">
+                  <strong>Conflicting options:</strong> Cannot organize by video name and save to workspace simultaneously.
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mode Specific Settings - Extraction Parameters */}
+        <div className="pt-4 border-t border-gray-200">
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
               <Settings2 className="h-4 w-4" />

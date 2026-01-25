@@ -24,22 +24,23 @@ export async function GET(request: NextRequest) {
     const workspacePath = process.env.WORKSPACE_PATH || '~/Downloads/workspace';
     const expandedPath = expandHomePath(workspacePath);
     const workflowsDir = join(expandedPath, 'workflows');
-
+    
     // Check if workflows directory exists
     try {
       await access(workflowsDir);
     } catch {
       // Directory doesn't exist, return empty list
       return NextResponse.json({
+        success: true,
         workflows: [],
         count: 0,
       });
     }
-
+    
     // Read all files in workflows directory
     const files = await readdir(workflowsDir);
     const workflows: Workflow[] = [];
-
+    
     // Process each JSON file
     for (const file of files) {
       if (file.endsWith('.json')) {
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
           const filepath = join(workflowsDir, file);
           const content = await readFile(filepath, 'utf-8');
           const workflow = JSON.parse(content) as Workflow;
-
+          
           // Validate basic structure
           if (workflow.id && workflow.name) {
             workflows.push(workflow);
@@ -58,19 +59,21 @@ export async function GET(request: NextRequest) {
         }
       }
     }
-
+    
     // Sort by updatedAt (most recent first)
     workflows.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
+    
     return NextResponse.json({
+      success: true,
       workflows,
       count: workflows.length,
     });
   } catch (error) {
     console.error('Failed to list workflows:', error);
-
+    
     return NextResponse.json(
       {
+        success: false,
         error: 'Failed to list workflows',
         details: error instanceof Error ? error.message : String(error),
       },
