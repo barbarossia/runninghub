@@ -127,7 +127,7 @@ function detectNodes(jsonContent: any): DetectedNode[] {
 
     const valueObj = value as any;
     let inputs: Record<string, any> | null = null;
-    let nodeId = key;
+    const nodeId = key;
 
     // Case 1: value has "inputs" property (ComfyUI/RunningHub format)
     if (valueObj.inputs && typeof valueObj.inputs === 'object') {

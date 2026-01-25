@@ -126,7 +126,7 @@ function clipSingleVideo(
 
     // If saveToWorkspace is enabled, use provided output directory
     let organizeByVideo = clipConfig.organizeByVideo;
-    let deleteOriginal = clipConfig.deleteOriginal;
+    const deleteOriginal = clipConfig.deleteOriginal;
 
     if (clipConfig.saveToWorkspace && customOutputDir) {
       outputDir = customOutputDir;

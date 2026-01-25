@@ -29,9 +29,11 @@ def test_get_node_info_success(mock_get):
     mock_response = Mock()
     mock_response.json.return_value = {
         "code": 0,
-        "nodeInfoList": [
-            {"nodeId": "node1", "nodeName": "Test Node", "nodeType": "STRING"}
-        ]
+        "data": {
+            "nodeInfoList": [
+                {"nodeId": "node1", "nodeName": "Test Node", "nodeType": "STRING"}
+            ]
+        }
     }
     mock_response.raise_for_status.return_value = None
     mock_get.return_value = mock_response

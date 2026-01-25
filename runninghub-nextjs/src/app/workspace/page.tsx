@@ -43,6 +43,8 @@ import { WorkflowSelector } from '@/components/workspace/WorkflowSelector';
 import { WorkflowInputBuilder } from '@/components/workspace/WorkflowInputBuilder';
 import { JobList } from '@/components/workspace/JobList';
 import { JobDetail } from '@/components/workspace/JobDetail';
+import { ComplexWorkflowBuilder } from '@/components/workspace/ComplexWorkflowBuilder';
+import { ComplexWorkflowList } from '@/components/workspace/ComplexWorkflowList';
 import { YoutubeDownloader } from '@/components/workspace/YoutubeDownloader';
 import { VideoClipConfiguration } from '@/components/videos/VideoClipConfiguration';
 import { VideoClipSelectionToolbar } from '@/components/videos/VideoClipSelectionToolbar';
@@ -73,6 +75,7 @@ import {
   Loader2,
   Wifi,
   WifiOff,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
@@ -135,22 +138,23 @@ export default function WorkspacePage() {
 
   // Local state
   const [error, setError] = useState<string>('');
-  // Persist active tab to localStorage
-  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'dataset' | 'run-workflow' | 'workflows' | 'jobs'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('workspace-active-tab');
-      return (saved as any) || 'media';
-    }
-    return 'media';
-  });
+  // Default active tab to media
+  const [activeTab, setActiveTab] = useState<'media' | 'youtube' | 'clip' | 'convert' | 'dataset' | 'run-workflow' | 'workflows' | 'jobs'>('media');
   const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | undefined>();
+  const [viewingComplexWorkflows, setViewingComplexWorkflows] = useState(false);
+  const [isCreatingComplexWorkflow, setIsCreatingComplexWorkflow] = useState(false);
   const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(null);
   const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
   const [previewVideo, setPreviewVideo] = useState<MediaFile | null>(null);
   const [previewImage, setPreviewImage] = useState<MediaFile | null>(null);
   const [convertTaskId, setConvertTaskId] = useState<string | null>(null);
   const [isConvertProgressModalOpen, setIsConvertProgressModalOpen] = useState(false);
+
+  // Clear selectedJobId on mount to ensure we start fresh
+  useEffect(() => {
+    useWorkspaceStore.getState().setSelectedJob(null);
+  }, []);
 
   // Dataset-related state
   const [datasets, setDatasets] = useState<Array<{ name: string; path: string; fileCount: number }>>([]);
@@ -1811,9 +1815,6 @@ export default function WorkspacePage() {
             <Tabs value={activeTab} onValueChange={(v) => {
               setActiveTab(v as any);
               setManualLiveOverride(null); // Reset override on tab switch (batched update)
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('workspace-active-tab', v);
-              }
             }}>
               <TabsList className="flex w-full justify-start overflow-x-auto h-auto p-1 bg-muted/50 scrollbar-none">
                 <TabsTrigger value="media" className="flex items-center gap-2 min-w-fit px-4">
@@ -2193,7 +2194,55 @@ export default function WorkspacePage() {
 
               {/* Workflows Tab */}
               <TabsContent value="workflows" className="mt-6">
-                <WorkflowList />
+                {isCreatingComplexWorkflow ? (
+                  <div className="bg-white rounded-lg p-6 border shadow-sm">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-semibold">Create Complex Workflow</h3>
+                      <Button variant="outline" onClick={() => setIsCreatingComplexWorkflow(false)}>
+                        Cancel
+                      </Button>
+                    </div>
+                    <ComplexWorkflowBuilder
+                      onSave={() => setIsCreatingComplexWorkflow(false)}
+                      onCancel={() => setIsCreatingComplexWorkflow(false)}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex gap-2 p-1 bg-gray-100 rounded-lg w-fit">
+                      <Button
+                        variant={!viewingComplexWorkflows ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewingComplexWorkflows(false)}
+                        className={cn(!viewingComplexWorkflows && 'bg-white shadow-sm')}
+                      >
+                        Simple Workflows
+                      </Button>
+                      <Button
+                        variant={viewingComplexWorkflows ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setViewingComplexWorkflows(true)}
+                        className={cn(viewingComplexWorkflows && 'bg-white shadow-sm')}
+                      >
+                        Complex Workflows
+                      </Button>
+                    </div>
+
+                    {viewingComplexWorkflows ? (
+                      <div className="space-y-4">
+                        <div className="flex justify-end">
+                          <Button onClick={() => setIsCreatingComplexWorkflow(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Complex Workflow
+                          </Button>
+                        </div>
+                        <ComplexWorkflowList />
+                      </div>
+                    ) : (
+                      <WorkflowList />
+                    )}
+                  </div>
+                )}
               </TabsContent>
 
               {/* Jobs Tab */}
