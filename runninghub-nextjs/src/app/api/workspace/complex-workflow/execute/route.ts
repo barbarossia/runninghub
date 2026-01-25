@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
 					textInputs: textInputs,
 					folderPath: "",
 					deleteSourceFiles: deleteSourceFiles,
+					seriesId: executionId, // Identify as part of complex workflow
 				}),
 			},
 		);

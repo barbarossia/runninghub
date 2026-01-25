@@ -106,21 +106,70 @@ export async function POST(request: NextRequest) {
 			JSON.stringify(initialJob, null, 2),
 		);
 
+		// Filter and validate file inputs
 		if (body.fileInputs && body.fileInputs.length > 0) {
-			const missingFiles: string[] = [];
+			const missingRequiredFiles: string[] = [];
+			const validFileInputs: FileInputAssignment[] = [];
+			
+			// Load workflow definition to check for required parameters
+			const workflow = await getWorkflowById(body.workflowId);
+
+			if (!workflow) {
+				await writeLog(
+					`Warning: Could not load workflow definition for ${body.workflowId}. Defaulting to strict existence check.`,
+					"warning",
+					taskId
+				);
+			}
 
 			for (const input of body.fileInputs) {
 				const exists = await fs
 					.stat(input.filePath)
 					.then(() => true)
 					.catch(() => false);
-				if (!exists) {
-					missingFiles.push(input.filePath);
+
+				if (workflow) {
+					// STRICT MODE: Validate against workflow definition
+					const param = workflow.inputs.find(p => p.id === input.parameterId);
+
+					if (!param) {
+						// Ghost input: Assigned in UI but not in workflow definition
+						await writeLog(
+							`Ignoring ghost input: ${input.parameterId} (not in workflow definition)`,
+							"warning",
+							taskId
+						);
+						continue; // Skip this input completely
+					}
+
+					if (exists) {
+						validFileInputs.push(input);
+					} else {
+						// File is missing, check requirement from workflow
+						if (param.required) {
+							missingRequiredFiles.push(input.filePath);
+						} else {
+							await writeLog(
+								`Skipping missing optional file: ${path.basename(input.filePath)} (param: ${input.parameterId})`,
+								"warning",
+								taskId
+							);
+						}
+					}
+				} else {
+					// FALLBACK MODE: Workflow not loaded
+					// Assume everything is required if it's missing (safety first)
+					// If it exists, we keep it (can't determine if it's a ghost input)
+					if (exists) {
+						validFileInputs.push(input);
+					} else {
+						missingRequiredFiles.push(input.filePath);
+					}
 				}
 			}
 
-			if (missingFiles.length > 0) {
-				const errorMessage = `Missing input file(s): ${missingFiles.join(", ")}`;
+			if (missingRequiredFiles.length > 0) {
+				const errorMessage = `Missing input file(s): ${missingRequiredFiles.join(", ")}`;
 				await updateTask(taskId, { status: "failed", error: errorMessage });
 				await updateJobFile(jobId, {
 					status: "failed",
@@ -135,6 +184,9 @@ export async function POST(request: NextRequest) {
 					{ status: 400 },
 				);
 			}
+
+			// Update body.fileInputs with only the valid ones
+			body.fileInputs = validFileInputs;
 		}
 
 		// Start background processing
@@ -146,6 +198,7 @@ export async function POST(request: NextRequest) {
 			body.textInputs || {},
 			body.deleteSourceFiles || false,
 			env,
+			body.seriesId,
 		);
 
 		return NextResponse.json({
@@ -644,6 +697,7 @@ async function processWorkflowInBackground(
 	textInputs: Record<string, string>,
 	deleteSourceFiles: boolean,
 	env: NodeJS.ProcessEnv,
+	seriesId?: string,
 ) {
 	try {
 		await writeLog(`=== WORKFLOW JOB STARTED: ${taskId} ===`, "info", taskId);
@@ -711,49 +765,60 @@ async function processWorkflowInBackground(
 
 		// Clean up temporary uploads immediately after ensuring they are in the job folder
 		// This prevents accumulation of files in ~/Downloads/workspace/uploads
-		try {
-			const fs = await import("fs/promises");
-			const path = await import("path");
-			// Check for uploads folder in path (platform agnostic)
-			const uploadsDirMarker = path.join("workspace", "uploads");
+		// SKIP if this is part of a complex workflow execution (files might be needed by subsequent steps)
+		const isComplexExecution = seriesId && seriesId.startsWith("exec_");
+		
+		if (isComplexExecution) {
+			await writeLog(
+				"Skipping uploads cleanup (complex workflow execution detected)",
+				"info",
+				taskId,
+			);
+		} else {
+			try {
+				const fs = await import("fs/promises");
+				const path = await import("path");
+				// Check for uploads folder in path (platform agnostic)
+				const uploadsDirMarker = path.join("workspace", "uploads");
 
-			for (let i = 0; i < fileInputs.length; i++) {
-				const originalPath = fileInputs[i].filePath;
-				const newPath = jobFileInputs[i].filePath;
+				for (let i = 0; i < fileInputs.length; i++) {
+					const originalPath = fileInputs[i].filePath;
+					const newPath = jobFileInputs[i].filePath;
 
-				// Only delete if:
-				// 1. File was successfully copied (path changed)
-				// 2. Original file is in the uploads directory
-				// 3. We didn't already delete it in the deleteSourceFiles block above
-				if (
-					originalPath !== newPath &&
-					originalPath.includes(uploadsDirMarker)
-				) {
-					try {
-						// Check existence first to avoid errors if already deleted
-						const exists = await fs
-							.stat(originalPath)
-							.then(() => true)
-							.catch(() => false);
-						if (exists) {
-							await fs.unlink(originalPath);
-							await writeLog(
-								`Cleaned up temporary upload: ${path.basename(originalPath)}`,
-								"info",
-								taskId,
+					// Only delete if:
+					// 1. File was successfully copied (path changed)
+					// 2. Original file is in the uploads directory
+					// 3. We didn't already delete it in the deleteSourceFiles block above
+					if (
+						originalPath !== newPath &&
+						originalPath.includes(uploadsDirMarker)
+					) {
+						try {
+							// Check existence first to avoid errors if already deleted
+							const exists = await fs
+								.stat(originalPath)
+								.then(() => true)
+								.catch(() => false);
+							if (exists) {
+								await fs.unlink(originalPath);
+								await writeLog(
+									`Cleaned up temporary upload: ${path.basename(originalPath)}`,
+									"info",
+									taskId,
+								);
+							}
+						} catch (cleanupError) {
+							// Log but don't fail the job
+							console.warn(
+								`Failed to cleanup temporary file ${originalPath}:`,
+								cleanupError,
 							);
 						}
-					} catch (cleanupError) {
-						// Log but don't fail the job
-						console.warn(
-							`Failed to cleanup temporary file ${originalPath}:`,
-							cleanupError,
-						);
 					}
 				}
+			} catch (e) {
+				console.error("Error during temporary file cleanup:", e);
 			}
-		} catch (e) {
-			console.error("Error during temporary file cleanup:", e);
 		}
 
 		// Before executing CLI, get workflow info

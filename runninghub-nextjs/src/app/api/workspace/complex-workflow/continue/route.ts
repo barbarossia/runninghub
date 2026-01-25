@@ -8,6 +8,7 @@ import {
 	loadComplexWorkflowExecution,
 	loadComplexWorkflow,
 	mapOutputsToInputs,
+	mapPreviousInputsToInputs,
 	validateStepParameter,
 	ensureExecutionIdentity,
 } from "@/lib/complex-workflow-utils";
@@ -196,9 +197,15 @@ export async function POST(request: NextRequest) {
 			nextWorkflow?.inputs,
 		);
 
+		const previousInputs = await mapPreviousInputsToInputs(
+			normalizedExecution.steps,
+			nextStepDef.parameters,
+			nextWorkflow?.inputs,
+		);
+
 		// Extract parameters from request
 		const userParams = body.parameters || {};
-		const fileInputs = Array.isArray(userParams.fileInputs)
+		const userFileInputs = Array.isArray(userParams.fileInputs)
 			? userParams.fileInputs
 			: [];
 		const textInputs =
@@ -207,17 +214,62 @@ export async function POST(request: NextRequest) {
 				: {};
 		const deleteSourceFiles = userParams.deleteSourceFiles || false;
 
-		// Merge user-provided inputs with mapped inputs
-		// User inputs take precedence over mapped inputs
-		const mergedTextInputs = { ...mappedInputs.textInputs, ...textInputs };
-		const existingFileParams = new Set(
-			fileInputs.map((input: FileInputAssignment) => input.parameterId),
+		// Validation & Recovery: Check user inputs for missing files and try to recover from previousInputs
+		const validatedFileInputs: FileInputAssignment[] = [];
+		const previousInputMap = new Map(
+			previousInputs.fileInputs.map(p => [p.parameterId, p])
 		);
+
+		for (const input of userFileInputs) {
+			let finalInput = input;
+			let exists = false;
+			try {
+				await fs.stat(input.filePath);
+				exists = true;
+			} catch (e) {
+				exists = false;
+			}
+
+			if (!exists) {
+				// User input file is missing, check if we have a recovered version
+				const recovered = previousInputMap.get(input.parameterId);
+				if (recovered) {
+					console.log(`[ComplexWorkflow] Overriding broken user input for ${input.parameterId}.`);
+					console.log(`[ComplexWorkflow] Broken: ${input.filePath}`);
+					console.log(`[ComplexWorkflow] Recovered: ${recovered.filePath}`);
+					finalInput = recovered;
+				}
+			}
+			validatedFileInputs.push(finalInput);
+		}
+
+		// Merge user-provided inputs (validated/recovered) with mapped inputs
+		// User inputs take precedence over mapped inputs, then previous inputs, then dynamic outputs
+		const mergedTextInputs = {
+			...mappedInputs.textInputs,
+			...previousInputs.textInputs,
+			...textInputs,
+		};
+		
+		const existingFileParams = new Set(
+			validatedFileInputs.map((input: FileInputAssignment) => input.parameterId),
+		);
+		
+		// Helper to filter inputs that haven't been assigned yet
+		const filterNewInputs = (inputs: FileInputAssignment[]) => 
+			inputs.filter(input => !existingFileParams.has(input.parameterId));
+
+		// Add mapped previous inputs (if not overridden by user)
+		const newPreviousInputs = filterNewInputs(previousInputs.fileInputs);
+		newPreviousInputs.forEach(input => existingFileParams.add(input.parameterId));
+
+		// Add mapped dynamic outputs (if not overridden by user or previous input)
+		const newMappedInputs = filterNewInputs(mappedInputs.fileInputs);
+
 		const mergedFileInputs = [
-			...fileInputs,
-			...mappedInputs.fileInputs.filter(
-				(input) => !existingFileParams.has(input.parameterId),
-			),
+			...validatedFileInputs,
+			...newPreviousInputs,
+			...newMappedInputs,
 		];
 
 		// Validate all parameters
@@ -248,6 +300,7 @@ export async function POST(request: NextRequest) {
 					textInputs: mergedTextInputs,
 					folderPath: "",
 					deleteSourceFiles: deleteSourceFiles,
+					seriesId: body.executionId, // Identify as part of complex workflow
 				}),
 			},
 		);
