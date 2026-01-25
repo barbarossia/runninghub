@@ -576,7 +576,7 @@ export interface WorkflowStep {
 export interface StepParameterConfig {
   parameterId: string;
   parameterName: string;
-  valueType: 'static' | 'dynamic' | 'user-input';
+  valueType: 'static' | 'dynamic' | 'user-input' | 'previous-input';
   staticValue?: string | number | boolean;
   required?: boolean;
   placeholder?: string;
@@ -584,6 +584,11 @@ export interface StepParameterConfig {
     sourceStepNumber: number;
     sourceParameterId: string;
     sourceOutputName: string;
+  };
+  previousInputMapping?: {
+    sourceStepNumber: number;
+    sourceParameterId: string;
+    sourceParameterName: string;
   };
 }
 

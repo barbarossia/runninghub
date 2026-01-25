@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Loader2, AlertCircle, Settings2, GripVertical, User } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle, Settings2, GripVertical, User, ArrowLeft } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,7 +125,7 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
     setSteps(newSteps);
   };
   
-  const updateParameterType = (stepId: string, paramId: string, valueType: 'static' | 'dynamic' | 'user-input') => {
+  const updateParameterType = (stepId: string, paramId: string, valueType: 'static' | 'dynamic' | 'user-input' | 'previous-input') => {
     setSteps(steps.map(step => {
       if (step.id === stepId) {
         return {
@@ -136,6 +136,7 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
                 ...param,
                 valueType,
                 dynamicMapping: valueType === 'dynamic' ? param.dynamicMapping : undefined,
+                previousInputMapping: valueType === 'previous-input' ? param.previousInputMapping : undefined,
               };
             }
             return param;
@@ -198,7 +199,69 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
       return step;
     }));
   };
-  
+
+  const updatePreviousInputMapping = (stepId: string, paramId: string, mappingKey: string) => {
+    // mappingKey format: "stepNumber-parameterId-parameterName"
+    const match = mappingKey.match(/^(\d+)-(.+)-(.+)$/);
+    if (!match) return;
+
+    const sourceStepNumber = parseInt(match[1], 10);
+    const sourceParameterId = match[2];
+    const sourceParameterName = decodeURIComponent(match[3]);
+
+    setSteps(steps.map(step => {
+      if (step.id === stepId) {
+        return {
+          ...step,
+          parameters: step.parameters.map(param => {
+            if (param.parameterId === paramId) {
+              return {
+                ...param,
+                valueType: 'previous-input' as const,
+                previousInputMapping: {
+                  sourceStepNumber,
+                  sourceParameterId,
+                  sourceParameterName,
+                },
+              };
+            }
+            return param;
+          }),
+        };
+      }
+      return step;
+    }));
+  };
+
+  const getPreviousStepInputs = (currentStepNumber: number) => {
+    const inputs: {
+      id: string;
+      stepNumber: number;
+      workflowName: string;
+      parameterId: string;
+      parameterName: string;
+      parameterDescription?: string;
+    }[] = [];
+
+    steps.filter(s => s.stepNumber < currentStepNumber).forEach(step => {
+      const workflow = availableWorkflows.find(w => w.id === step.workflowId);
+      if (workflow) {
+        workflow.inputs.forEach(input => {
+          inputs.push({
+            id: `${step.stepNumber}-${input.id}-${encodeURIComponent(input.name)}`,
+            stepNumber: step.stepNumber,
+            workflowName: step.workflowName,
+            parameterId: input.id,
+            parameterName: input.name,
+            parameterDescription: input.description,
+          });
+        });
+      }
+    });
+
+    return inputs;
+  };
+
   const handleSave = async () => {
     if (steps.length === 0) {
       toast.error('Add at least one workflow to the chain');
@@ -468,7 +531,7 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
                           <div className="md:col-span-3">
                             <Select
                               value={param.valueType}
-                              onValueChange={(value: 'static' | 'dynamic' | 'user-input') => updateParameterType(step.id, param.parameterId, value)}
+                              onValueChange={(value: 'static' | 'dynamic' | 'user-input' | 'previous-input') => updateParameterType(step.id, param.parameterId, value)}
                             >
                               <SelectTrigger className="h-8">
                                 <SelectValue />
@@ -476,6 +539,7 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
                               <SelectContent>
                                 <SelectItem value="static">Static Value</SelectItem>
                                 <SelectItem value="user-input">User Input</SelectItem>
+                                {step.stepNumber > 1 && <SelectItem value="previous-input">Previous Workflow Input</SelectItem>}
                                 {step.stepNumber > 1 && <SelectItem value="dynamic">From Previous Step</SelectItem>}
                               </SelectContent>
                             </Select>
@@ -494,6 +558,27 @@ export function ComplexWorkflowBuilder({ onSave, onCancel }: ComplexWorkflowBuil
                                 <User className="h-3.5 w-3.5" />
                                 <span>Required at execution</span>
                               </div>
+                            ) : param.valueType === 'previous-input' ? (
+                              <Select
+                                value={param.previousInputMapping ? `${param.previousInputMapping.sourceStepNumber}-${param.previousInputMapping.sourceParameterId}-${encodeURIComponent(param.previousInputMapping.sourceParameterName)}` : ''}
+                                onValueChange={(value) => updatePreviousInputMapping(step.id, param.parameterId, value)}
+                              >
+                                <SelectTrigger className="h-8">
+                                  <SelectValue placeholder="Select previous input" />
+                                </SelectTrigger>
+                                <SelectContent className="min-w-[200px] max-w-[300px]">
+                                  {getPreviousStepInputs(step.stepNumber).map((input) => (
+                                    <SelectItem key={input.id} value={input.id} className="pr-8">
+                                      <div className="flex flex-col items-start gap-0.5">
+                                        <span className="text-xs font-medium">Step {input.stepNumber}: {input.parameterName}</span>
+                                        {input.workflowName && (
+                                          <span className="text-[10px] text-muted-foreground truncate max-w-full">from {input.workflowName}</span>
+                                        )}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             ) : (
                               <Select
                                 value={param.dynamicMapping?.sourceParameterId || ''}
