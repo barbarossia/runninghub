@@ -96,12 +96,16 @@ export async function POST(request: NextRequest) {
 
     // Prepare next step inputs
     const inputs = mapOutputsToInputs(previousJobResult, nextStepDef.parameters);
+    
+    // Extract parameters from request
+    const userParams = body.parameters || {};
+    const fileInputs = userParams.fileInputs || [];
+    const textInputs = userParams.textInputs || {};
+    const deleteSourceFiles = userParams.deleteSourceFiles || false;
 
-    // Validate user-provided parameters
-    if (body.parameters) {
-      // Merge user-provided parameters with mapped inputs
-      Object.assign(inputs, body.parameters);
-    }
+    // Merge user-provided text inputs with mapped inputs
+    // User inputs take precedence over mapped inputs
+    Object.assign(inputs, textInputs);
 
     // Validate all parameters
     for (const param of nextStepDef.parameters) {
@@ -114,18 +118,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Load next step workflow definition to get RunningHub ID
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    const nextWorkflowPath = path.join(
+      process.env.HOME || '~',
+      'Downloads',
+      'workspace',
+      'workflows',
+      `${nextStepDef.workflowId}.json`
+    );
+    
+    let sourceWorkflowId = '';
+    try {
+      const nextWorkflowContent = await fs.readFile(nextWorkflowPath, 'utf-8');
+      const nextWorkflow = JSON.parse(nextWorkflowContent);
+      sourceWorkflowId = nextWorkflow.sourceWorkflowId;
+    } catch (e) {
+      console.error(`Failed to load workflow ${nextStepDef.workflowId}:`, e);
+      return NextResponse.json({
+        success: false,
+        error: `Failed to load workflow definition for step ${nextStepDef.stepNumber}: ${nextStepDef.workflowId}`,
+      } as ContinueComplexWorkflowResponse, { status: 500 });
+    }
+
     // Execute next step via existing execute API
     const executeResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/workspace/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workflowId: nextStepDef.workflowId,
-        sourceWorkflowId: execution.complexWorkflowId,
+        sourceWorkflowId: sourceWorkflowId, // Use correct RunningHub ID
         workflowName: nextStepDef.workflowName,
-        fileInputs: [], // Will be filled by API from file paths
-        textInputs: inputs,
+        fileInputs: fileInputs, // Use file inputs from user
+        textInputs: inputs, // Combined mapped + user text inputs
         folderPath: '',
-        deleteSourceFiles: false,
+        deleteSourceFiles: deleteSourceFiles,
       }),
     });
 
@@ -139,9 +167,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Update execution state
-    const fs = await import('fs/promises');
-    const path = await import('path');
-
     const executionDir = path.join(EXECUTION_DIR, body.executionId);
     const executionFile = path.join(executionDir, 'execution.json');
 

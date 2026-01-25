@@ -10,6 +10,7 @@ import {
   Loader2,
   Eye,
   Download,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +35,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { BaseSelectionToolbar } from './BaseSelectionToolbar';
 import { DuckDecodeDialog } from '@/components/images/DuckDecodeDialog';
+import { ComplexWorkflowRunDialog } from '@/components/workspace/ComplexWorkflowRunDialog';
 
 interface SelectionToolbarProps {
   onProcess?: (selectedPaths: string[]) => void;
@@ -46,6 +48,8 @@ interface SelectionToolbarProps {
   disabled?: boolean;
   className?: string;
   showDuckDecodeButton?: boolean;
+  showComplexWorkflowButton?: boolean;
+  selectedImagePaths?: string[];
 }
 
 export function SelectionToolbar({
@@ -59,15 +63,21 @@ export function SelectionToolbar({
   disabled = false,
   className = '',
   showDuckDecodeButton = false,
+  showComplexWorkflowButton = false,
+  selectedImagePaths = [],
 }: SelectionToolbarProps) {
   const store = useSelectionStore();
   const selectedCount = store.selectedImages.size;
   const { images, getDuckEncodedImages } = useImageStore();
 
+  // Debug logging
+  console.log('[SelectionToolbar] showComplexWorkflowButton:', showComplexWorkflowButton, 'selectedImagePaths:', selectedImagePaths.length);
+
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showDecodeDialog, setShowDecodeDialog] = useState(false);
+  const [showComplexWorkflowDialog, setShowComplexWorkflowDialog] = useState(false);
 
   // Get selected duck-encoded images
   const selectedDuckEncodedImages = useMemo(() => {
@@ -241,6 +251,24 @@ export function SelectionToolbar({
                   </Button>
                 )}
 
+                {/* Complex Workflow button */}
+                {showComplexWorkflowButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowComplexWorkflowDialog(true)}
+                    disabled={toolbarDisabled || selectedImagePaths.length === 0}
+                    className={cn(
+                      "h-9 border-2 border-indigo-500 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold",
+                      selectedImagePaths.length === 0 && 'opacity-40 cursor-not-allowed'
+                    )}
+                    title="Run complex workflow on selected images"
+                  >
+                    <Zap className="h-4 w-4 mr-2 fill-indigo-700" />
+                    Run Complex Workflow
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
                   size="icon"
@@ -357,6 +385,25 @@ export function SelectionToolbar({
                     <Eye className="h-3.5 w-3.5" />
                   </Button>
                 )}
+
+                {/* Complex Workflow button */}
+                {showComplexWorkflowButton && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowComplexWorkflowDialog(true)}
+                    disabled={toolbarDisabled || selectedImagePaths.length === 0}
+                    className={cn(
+                      "h-8 w-8 rounded-full",
+                      selectedImagePaths.length > 0
+                        ? "text-purple-400 hover:text-purple-300 hover:bg-purple-950/30"
+                        : "text-gray-500 cursor-not-allowed"
+                    )}
+                    title={selectedImagePaths.length > 0 ? "Run complex workflow on selected images" : "Select images to run complex workflow"}
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </>
             );
           }
@@ -393,6 +440,28 @@ export function SelectionToolbar({
           onDuckDecodeOpen?.();
         }}
       />
+
+      {/* Complex Workflow dialog */}
+      {showComplexWorkflowButton && (
+        <ComplexWorkflowRunDialog
+          open={showComplexWorkflowDialog}
+          onOpenChange={setShowComplexWorkflowDialog}
+          selectedFiles={selectedImagePaths.map(path => {
+            const img = images.find(i => i.path === path);
+            if (img) {
+              return { ...img, id: path } as any;
+            }
+            return {
+              id: path,
+              path,
+              name: path.split('/').pop() || 'Unknown',
+              type: 'image',
+              extension: path.split('.').pop() || '',
+              size: 0
+            } as any;
+          })}
+        />
+      )}
     </>
   );
 }

@@ -53,8 +53,33 @@ export async function POST(request: NextRequest) {
       } as ExecuteComplexWorkflowResponse, { status: 400 });
     }
 
+    // Load first step workflow definition to get RunningHub ID
+    const firstWorkflowPath = path.join(
+      process.env.HOME || '~',
+      'Downloads',
+      'workspace',
+      'workflows',
+      `${firstStep.workflowId}.json`
+    );
+    
+    let sourceWorkflowId = '';
+    try {
+      const firstWorkflowContent = await fs.readFile(firstWorkflowPath, 'utf-8');
+      const firstWorkflow = JSON.parse(firstWorkflowContent);
+      sourceWorkflowId = firstWorkflow.sourceWorkflowId;
+    } catch (e) {
+      console.error(`Failed to load workflow ${firstStep.workflowId}:`, e);
+      return NextResponse.json({
+        success: false,
+        error: `Failed to load workflow definition for step 1: ${firstStep.workflowId}`,
+      } as ExecuteComplexWorkflowResponse, { status: 500 });
+    }
+
     // Prepare inputs for first step
-    const inputs = body.initialParameters || {};
+    const initialParams = body.initialParameters || {};
+    const fileInputs = initialParams.fileInputs || [];
+    const textInputs = initialParams.textInputs || {};
+    const deleteSourceFiles = initialParams.deleteSourceFiles || false;
 
     // Create execution state
     const execution: Omit<ComplexWorkflowExecution, 'id' | 'createdAt'> = {
@@ -67,7 +92,7 @@ export async function POST(request: NextRequest) {
         workflowId: step.workflowId,
         jobId: '',
         status: 'pending',
-        inputs: idx === 0 ? inputs : {},
+        inputs: idx === 0 ? textInputs : {},
         startedAt: undefined,
         completedAt: undefined,
       })),
@@ -82,12 +107,12 @@ export async function POST(request: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workflowId: firstStep.workflowId,
-        sourceWorkflowId: complexWorkflow.id,
+        sourceWorkflowId: sourceWorkflowId, // Use correct RunningHub ID
         workflowName: firstStep.workflowName,
-        fileInputs: [],
-        textInputs: inputs,
+        fileInputs: fileInputs,
+        textInputs: textInputs,
         folderPath: '',
-        deleteSourceFiles: false,
+        deleteSourceFiles: deleteSourceFiles,
       }),
     });
 
@@ -117,6 +142,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       executionId,
+      jobId: executeData.jobId,  // Return the first step's job ID
       message: 'Complex workflow execution started',
     } as ExecuteComplexWorkflowResponse);
   } catch (error) {
