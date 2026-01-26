@@ -65,7 +65,6 @@ import {
 	Settings,
 	FolderOpen,
 	Workflow as WorkflowIcon,
-	Clock,
 	AlertCircle,
 	Play,
 	Scissors,
@@ -77,6 +76,7 @@ import {
 	Wifi,
 	WifiOff,
 	Plus,
+	Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/utils/logger";

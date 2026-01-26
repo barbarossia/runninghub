@@ -17,6 +17,8 @@ import {
 	RefreshCcw,
 	RefreshCw,
 	Trash2,
+	ChevronLeft,
+	ChevronRight,
 } from "lucide-react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { Card } from "@/components/ui/card";
@@ -39,6 +41,8 @@ export interface JobListProps {
 	className?: string;
 }
 
+const PAGE_SIZE = 20;
+
 export function JobList({ onJobClick, className = "" }: JobListProps) {
 	const {
 		jobs,
@@ -58,6 +62,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		new Set(),
 	);
 	const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+	const [page, setPage] = useState(1);
 
 	// Fetch jobs on mount
 	useEffect(() => {
@@ -110,21 +115,52 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		}
 	};
 
-	// Get unique workflow IDs
-	const workflowIds = useMemo(() => {
-		const ids = new Set(jobs.map((j) => j.workflowId));
-		return Array.from(ids);
+	// Get unique workflow names
+	const workflowNames = useMemo(() => {
+		const names = new Set(
+			jobs.map((job) => job.workflowName || job.workflowId),
+		);
+		return Array.from(names);
 	}, [jobs]);
 
 	// Filter jobs
 	const filteredJobs = useMemo(() => {
 		return jobs.filter((job) => {
 			if (statusFilter !== "all" && job.status !== statusFilter) return false;
-			if (workflowFilter !== "all" && job.workflowId !== workflowFilter)
+			if (
+				workflowFilter !== "all" &&
+				(job.workflowName || job.workflowId) !== workflowFilter
+			)
 				return false;
 			return true;
 		});
 	}, [jobs, statusFilter, workflowFilter]);
+
+	useEffect(() => {
+		setPage(1);
+	}, [statusFilter, workflowFilter]);
+
+	const totalPages = Math.max(1, Math.ceil(filteredJobs.length / PAGE_SIZE));
+
+	useEffect(() => {
+		if (page > totalPages) {
+			setPage(totalPages);
+		}
+	}, [page, totalPages]);
+
+	const pagedJobs = useMemo(() => {
+		const startIndex = (page - 1) * PAGE_SIZE;
+		return filteredJobs.slice(startIndex, startIndex + PAGE_SIZE);
+	}, [filteredJobs, page]);
+
+	const paginationSummary = useMemo(() => {
+		if (filteredJobs.length === 0) {
+			return "Showing 0 of 0";
+		}
+		const start = (page - 1) * PAGE_SIZE + 1;
+		const end = Math.min(page * PAGE_SIZE, filteredJobs.length);
+		return `Showing ${start}-${end} of ${filteredJobs.length}`;
+	}, [filteredJobs.length, page]);
 
 	// Get status icon and color
 	const getStatusIcon = (status: JobStatus) => {
@@ -275,16 +311,16 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 					</Select>
 
 					{/* Workflow filter */}
-					{workflowIds.length > 1 && (
+					{workflowNames.length > 1 && (
 						<Select value={workflowFilter} onValueChange={setWorkflowFilter}>
 							<SelectTrigger className="w-40">
 								<SelectValue placeholder="All Workflows" />
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="all">All Workflows</SelectItem>
-								{workflowIds.map((id) => (
-									<SelectItem key={id} value={id}>
-										{id}
+								{workflowNames.map((name) => (
+									<SelectItem key={name} value={name}>
+										{name}
 									</SelectItem>
 								))}
 							</SelectContent>
@@ -319,7 +355,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 			) : (
 				<div className="space-y-3">
 					<AnimatePresence mode="popLayout">
-						{filteredJobs.map((job) => {
+						{pagedJobs.map((job) => {
 							const isSelected = selectedJobId === job.id;
 							const isChecked = selectedJobIds.has(job.id);
 							return (
@@ -463,6 +499,36 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 							);
 						})}
 					</AnimatePresence>
+					{filteredJobs.length > 0 && (
+						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<p className="text-xs text-gray-500">{paginationSummary}</p>
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+									disabled={page === 1}
+								>
+									<ChevronLeft className="h-4 w-4 mr-1" />
+									Prev
+								</Button>
+								<span className="text-xs text-gray-600">
+									Page {page} of {totalPages}
+								</span>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() =>
+										setPage((prev) => Math.min(totalPages, prev + 1))
+									}
+									disabled={page === totalPages}
+								>
+									Next
+									<ChevronRight className="h-4 w-4 ml-1" />
+								</Button>
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 		</div>
