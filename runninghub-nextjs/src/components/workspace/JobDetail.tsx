@@ -546,10 +546,18 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	};
 
 	// Handle delete job
-	const handleDelete = () => {
-		if (confirm("Delete this job? This action cannot be undone.")) {
-			deleteJob(jobId);
+	const handleDelete = async () => {
+		if (!confirm("Delete this job? This action cannot be undone.")) {
+			return;
+		}
+		try {
+			await deleteJob(jobId);
+			toast.success("Job deleted");
 			onBack?.();
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : "Failed to delete job";
+			toast.error(errorMessage);
 		}
 	};
 

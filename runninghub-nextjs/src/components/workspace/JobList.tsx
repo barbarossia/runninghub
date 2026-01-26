@@ -16,11 +16,13 @@ import {
 	FileText,
 	RefreshCcw,
 	RefreshCw,
+	Trash2,
 } from "lucide-react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
 	Select,
@@ -43,7 +45,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		selectedJobId,
 		setSelectedJob,
 		deleteJob,
-		getJobById,
+		deleteJobs,
 		fetchJobs,
 		isLoadingJobs,
 		updateJob,
@@ -52,6 +54,10 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 	const [statusFilter, setStatusFilter] = useState<JobStatus | "all">("all");
 	const [workflowFilter, setWorkflowFilter] = useState<string>("all");
 	const [reQueryingIds, setReQueryingIds] = useState<Set<string>>(new Set());
+	const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(
+		new Set(),
+	);
+	const [isDeletingSelected, setIsDeletingSelected] = useState(false);
 
 	// Fetch jobs on mount
 	useEffect(() => {
@@ -165,6 +171,69 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		return new Date(timestamp).toLocaleString();
 	};
 
+	const toggleJobSelection = (jobId: string, checked: boolean) => {
+		setSelectedJobIds((prev) => {
+			const next = new Set(prev);
+			if (checked) {
+				next.add(jobId);
+			} else {
+				next.delete(jobId);
+			}
+			return next;
+		});
+	};
+
+	const handleDeleteSelected = async () => {
+		if (selectedJobIds.size === 0) return;
+		if (!confirm("Delete selected jobs? This action cannot be undone.")) {
+			return;
+		}
+		setIsDeletingSelected(true);
+		try {
+			const jobIds = Array.from(selectedJobIds);
+			const result = await deleteJobs(jobIds);
+			if (result.deletedIds.length > 0) {
+				toast.success(
+					`Deleted ${result.deletedIds.length} job${
+						result.deletedIds.length !== 1 ? "s" : ""
+					}`,
+				);
+			}
+			if (result.failedIds.length > 0) {
+				toast.error(
+					`Failed to delete ${result.failedIds.length} job${
+						result.failedIds.length !== 1 ? "s" : ""
+					}`,
+				);
+			}
+			setSelectedJobIds(new Set(result.failedIds));
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : "Failed to delete jobs";
+			toast.error(errorMessage);
+		} finally {
+			setIsDeletingSelected(false);
+		}
+	};
+
+	const handleDeleteSingle = async (e: React.MouseEvent, jobId: string) => {
+		e.stopPropagation();
+		if (!confirm("Delete this job?")) return;
+		try {
+			await deleteJob(jobId);
+			toast.success("Job deleted");
+			setSelectedJobIds((prev) => {
+				const next = new Set(prev);
+				next.delete(jobId);
+				return next;
+			});
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : "Failed to delete job";
+			toast.error(errorMessage);
+		}
+	};
+
 	return (
 		<div className={cn("space-y-4", className)}>
 			{/* Header and filters */}
@@ -187,7 +256,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 					</Button>
 				</div>
 
-				<div className="flex gap-2">
+				<div className="flex flex-wrap gap-2">
 					{/* Status filter */}
 					<Select
 						value={statusFilter}
@@ -221,6 +290,18 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 							</SelectContent>
 						</Select>
 					)}
+
+					<Button
+						variant="destructive"
+						size="sm"
+						onClick={handleDeleteSelected}
+						disabled={selectedJobIds.size === 0 || isDeletingSelected}
+						className="gap-2"
+					>
+						<Trash2 className="h-4 w-4" />
+						Delete Selected
+						{selectedJobIds.size > 0 ? ` (${selectedJobIds.size})` : ""}
+					</Button>
 				</div>
 			</div>
 
@@ -240,6 +321,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 					<AnimatePresence mode="popLayout">
 						{filteredJobs.map((job) => {
 							const isSelected = selectedJobId === job.id;
+							const isChecked = selectedJobIds.has(job.id);
 							return (
 								<motion.div
 									key={job.id}
@@ -259,6 +341,15 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 										<div className="flex items-start justify-between gap-4">
 											{/* Left: Status icon and info */}
 											<div className="flex items-start gap-3 flex-1 min-w-0">
+												<Checkbox
+													checked={isChecked}
+													onClick={(e) => e.stopPropagation()}
+													onCheckedChange={(checked) =>
+														toggleJobSelection(job.id, checked === true)
+													}
+													aria-label={`Select job ${job.workflowName}`}
+													className="mt-1"
+												/>
 												<div
 													className={cn(
 														"p-2 rounded-lg",
@@ -348,12 +439,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 													variant="ghost"
 													size="icon"
 													className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-													onClick={(e) => {
-														e.stopPropagation();
-														if (confirm("Delete this job?")) {
-															deleteJob(job.id);
-														}
-													}}
+													onClick={(e) => handleDeleteSingle(e, job.id)}
 													title="Delete job"
 												>
 													<svg

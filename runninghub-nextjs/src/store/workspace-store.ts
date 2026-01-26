@@ -220,7 +220,12 @@ interface WorkspaceActions extends WorkspaceState {
 	removeDatasetFile: (fileId: string) => void;
 	updateDatasetFile: (fileId: string, updates: Partial<MediaFile>) => void;
 	getSelectedDatasetFiles: () => MediaFile[];
-	deleteJob: (jobId: string) => void;
+	deleteJob: (jobId: string) => Promise<void>;
+	deleteJobs: (jobIds: string[]) => Promise<{
+		deletedIds: string[];
+		failedIds: string[];
+		message?: string;
+	}>;
 	clearJobs: () => void;
 	getJobsByWorkflow: (workflowId: string) => Job[];
 	getJobsByStatus: (status: JobStatus) => Job[];
@@ -1049,12 +1054,49 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 				return newJob;
 			},
 
-			deleteJob: (jobId) =>
-				set((state) => ({
-					jobs: state.jobs.filter((j) => j.id !== jobId),
-					selectedJobId:
-						state.selectedJobId === jobId ? null : state.selectedJobId,
-				})),
+	deleteJob: async (jobId) => {
+		const response = await fetch(`/api/workspace/jobs/${jobId}`, {
+			method: "DELETE",
+		});
+		const data = await response.json();
+		if (!response.ok || !data.success) {
+			throw new Error(data.error || "Failed to delete job");
+		}
+		set((state) => ({
+			jobs: state.jobs.filter((j) => j.id !== jobId),
+			selectedJobId:
+				state.selectedJobId === jobId ? null : state.selectedJobId,
+		}));
+	},
+
+	deleteJobs: async (jobIds) => {
+		if (jobIds.length === 0) {
+			return { deletedIds: [], failedIds: [] };
+		}
+		const response = await fetch("/api/workspace/jobs/batch-delete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ jobIds }),
+		});
+		const data = await response.json();
+		if (!response.ok) {
+			throw new Error(data.error || "Failed to delete jobs");
+		}
+		const deletedIds: string[] = data.deleted || [];
+		const failedIds: string[] = data.failed || [];
+		set((state) => ({
+			jobs: state.jobs.filter((job) => !deletedIds.includes(job.id)),
+			selectedJobId:
+				state.selectedJobId && deletedIds.includes(state.selectedJobId)
+					? null
+					: state.selectedJobId,
+		}));
+		return {
+			deletedIds,
+			failedIds,
+			message: data.message,
+		};
+	},
 
 			clearJobs: () => set({ jobs: [], selectedJobId: null }),
 
