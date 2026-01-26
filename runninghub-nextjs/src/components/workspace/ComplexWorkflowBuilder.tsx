@@ -40,21 +40,24 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-import type { Workflow, WorkflowStep } from "@/types/workspace";
+import type { ComplexWorkflow, Workflow, WorkflowStep } from "@/types/workspace";
 
 type BuilderStep = 1 | 2 | 3;
 
 interface ComplexWorkflowBuilderProps {
+	workflow?: ComplexWorkflow;
 	onSave?: () => void;
 	onCancel?: () => void;
 }
 
 export function ComplexWorkflowBuilder({
+	workflow,
 	onSave,
 	onCancel,
 }: ComplexWorkflowBuilderProps) {
 	const [currentStep, setCurrentStep] = useState<BuilderStep>(1);
 	const [isSaving, setIsSaving] = useState(false);
+	const isEditing = Boolean(workflow);
 
 	// Workflow data
 	const [name, setName] = useState("");
@@ -68,6 +71,28 @@ export function ComplexWorkflowBuilder({
 	useEffect(() => {
 		loadWorkflows();
 	}, []);
+
+	useEffect(() => {
+		if (!workflow) {
+			setName("");
+			setDescription("");
+			setSteps([]);
+			setCurrentStep(1);
+			return;
+		}
+
+		const normalizedSteps = [...workflow.steps]
+			.sort((a, b) => a.stepNumber - b.stepNumber)
+			.map((step, index) => ({
+				...step,
+				stepNumber: index + 1,
+			}));
+
+		setName(workflow.name);
+		setDescription(workflow.description || "");
+		setSteps(normalizedSteps);
+		setCurrentStep(1);
+	}, [workflow]);
 
 	// Handle reorder with step number update
 	const handleReorder = (newSteps: WorkflowStep[]) => {
@@ -330,37 +355,69 @@ export function ComplexWorkflowBuilder({
 			return;
 		}
 
-		if (!name.trim()) {
-			toast.error("Please enter a name for the complex workflow");
-			return;
-		}
+	if (!name.trim()) {
+		toast.error("Please enter a name for the complex workflow");
+		return;
+	}
 
-		setIsSaving(true);
+	if (isEditing && !workflow?.id) {
+		toast.error("Missing workflow ID for update");
+		return;
+	}
+
+	setIsSaving(true);
 
 		try {
-			const response = await fetch("/api/workspace/complex-workflow/save", {
-				method: "POST",
+			const endpoint = isEditing
+				? `/api/workspace/complex-workflow/${workflow?.id ?? ""}`
+				: "/api/workspace/complex-workflow/save";
+			const method = isEditing ? "PUT" : "POST";
+
+			const response = await fetch(endpoint, {
+				method,
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					workflow: {
-						name,
-						description,
-						steps,
-					},
+					workflow: isEditing
+						? {
+								id: workflow?.id,
+								name,
+								description,
+								steps,
+								createdAt: workflow?.createdAt,
+								updatedAt: workflow?.updatedAt,
+							}
+						: {
+								name,
+								description,
+								steps,
+							},
 				}),
 			});
 
 			const data = await response.json();
 
 			if (data.success) {
-				toast.success("Complex workflow saved successfully");
+				toast.success(
+					isEditing
+						? "Complex workflow updated successfully"
+						: "Complex workflow saved successfully",
+				);
 				if (onSave) onSave();
 			} else {
-				toast.error(data.error || "Failed to save complex workflow");
+				toast.error(
+					data.error ||
+						(isEditing
+							? "Failed to update complex workflow"
+							: "Failed to save complex workflow"),
+				);
 			}
 		} catch (error) {
 			console.error("Failed to save complex workflow:", error);
-			toast.error("Failed to save complex workflow");
+			toast.error(
+				isEditing
+					? "Failed to update complex workflow"
+					: "Failed to save complex workflow",
+			);
 		} finally {
 			setIsSaving(false);
 		}

@@ -98,6 +98,7 @@ import type {
 	Job,
 	MediaFile,
 	FileInputAssignment,
+	ComplexWorkflow,
 } from "@/types/workspace";
 
 export default function WorkspacePage() {
@@ -170,6 +171,9 @@ export default function WorkspacePage() {
 	const [viewingComplexWorkflows, setViewingComplexWorkflows] = useState(false);
 	const [isCreatingComplexWorkflow, setIsCreatingComplexWorkflow] =
 		useState(false);
+	const [editingComplexWorkflow, setEditingComplexWorkflow] =
+		useState<ComplexWorkflow | null>(null);
+	const [complexWorkflowListKey, setComplexWorkflowListKey] = useState(0);
 	const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(
 		null,
 	);
@@ -179,6 +183,17 @@ export default function WorkspacePage() {
 	const [convertTaskId, setConvertTaskId] = useState<string | null>(null);
 	const [isConvertProgressModalOpen, setIsConvertProgressModalOpen] =
 		useState(false);
+
+	const handleEditComplexWorkflow = (workflow: ComplexWorkflow) => {
+		setEditingComplexWorkflow(workflow);
+		setIsCreatingComplexWorkflow(false);
+	};
+
+	const handleComplexWorkflowSaved = () => {
+		setIsCreatingComplexWorkflow(false);
+		setEditingComplexWorkflow(null);
+		setComplexWorkflowListKey((prev) => prev + 1);
+	};
 
 	// Clear selectedJobId on mount to ensure we start fresh
 	useEffect(() => {
@@ -2628,22 +2643,31 @@ export default function WorkspacePage() {
 
 							{/* Workflows Tab */}
 							<TabsContent value="workflows" className="mt-6">
-								{isCreatingComplexWorkflow ? (
+								{isCreatingComplexWorkflow || editingComplexWorkflow ? (
 									<div className="bg-white rounded-lg p-6 border shadow-sm">
 										<div className="flex justify-between items-center mb-6">
 											<h3 className="text-xl font-semibold">
-												Create Complex Workflow
+												{editingComplexWorkflow
+													? "Edit Complex Workflow"
+													: "Create Complex Workflow"}
 											</h3>
 											<Button
 												variant="outline"
-												onClick={() => setIsCreatingComplexWorkflow(false)}
+												onClick={() => {
+													setIsCreatingComplexWorkflow(false);
+													setEditingComplexWorkflow(null);
+												}}
 											>
 												Cancel
 											</Button>
 										</div>
 										<ComplexWorkflowBuilder
-											onSave={() => setIsCreatingComplexWorkflow(false)}
-											onCancel={() => setIsCreatingComplexWorkflow(false)}
+											workflow={editingComplexWorkflow || undefined}
+											onSave={handleComplexWorkflowSaved}
+											onCancel={() => {
+												setIsCreatingComplexWorkflow(false);
+												setEditingComplexWorkflow(null);
+											}}
 										/>
 									</div>
 								) : (
@@ -2679,13 +2703,19 @@ export default function WorkspacePage() {
 											<div className="space-y-4">
 												<div className="flex justify-end">
 													<Button
-														onClick={() => setIsCreatingComplexWorkflow(true)}
+														onClick={() => {
+															setIsCreatingComplexWorkflow(true);
+															setEditingComplexWorkflow(null);
+														}}
 													>
 														<Plus className="h-4 w-4 mr-2" />
 														Create Complex Workflow
 													</Button>
 												</div>
-												<ComplexWorkflowList />
+												<ComplexWorkflowList
+													key={complexWorkflowListKey}
+													onEdit={handleEditComplexWorkflow}
+												/>
 											</div>
 										) : (
 											<WorkflowList />

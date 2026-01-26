@@ -6,7 +6,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Play, Loader2, AlertCircle } from "lucide-react";
+import {
+	Plus,
+	Trash2,
+	Play,
+	Loader2,
+	AlertCircle,
+	Edit,
+	Settings,
+	Calendar,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +31,11 @@ import { toast } from "sonner";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import type { ComplexWorkflow } from "@/types/workspace";
 
-export function ComplexWorkflowList() {
+type ComplexWorkflowListProps = {
+	onEdit?: (workflow: ComplexWorkflow) => void;
+};
+
+export function ComplexWorkflowList({ onEdit }: ComplexWorkflowListProps) {
 	const [workflows, setWorkflows] = useState<ComplexWorkflow[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [selectedWorkflow, setSelectedWorkflow] =
@@ -134,45 +147,83 @@ export function ComplexWorkflowList() {
 				</div>
 			)}
 
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+			<div className="grid gap-3">
 				{workflows.map((workflow) => (
-					<Card key={workflow.id} className="flex flex-col">
-						<div className="flex-1 flex flex-col">
-							<div className="flex items-start justify-between mb-2">
-								<div className="flex-1">
-									<h3 className="font-semibold text-gray-900">
-										{workflow.name}
-									</h3>
+					<Card
+						key={workflow.id}
+						className="p-4 transition-all hover:shadow-md"
+					>
+						<div className="flex items-start justify-between gap-4">
+							<div className="flex items-start gap-3 flex-1 min-w-0">
+								<div className="p-2 bg-blue-50 rounded-lg">
+									<Settings className="h-5 w-5 text-blue-600" />
+								</div>
+								<div className="flex-1 min-w-0">
+									<div className="flex items-center gap-2 mb-1">
+										<h3 className="font-semibold text-sm truncate">
+											{workflow.name}
+										</h3>
+										<Badge variant="secondary" className="text-xs">
+											{workflow.steps.length} steps
+										</Badge>
+									</div>
+
 									{workflow.description && (
-										<p className="text-sm text-gray-600 mt-1">
+										<p className="text-xs text-gray-500 line-clamp-2 mb-2">
 											{workflow.description}
 										</p>
 									)}
+
+									<div className="flex items-center gap-2 text-xs text-gray-500">
+										<Calendar className="h-3 w-3" />
+										<span>
+											Updated{" "}
+											{new Date(workflow.updatedAt).toLocaleDateString(
+												"en-US",
+												{
+													month: "short",
+													day: "numeric",
+													year: "numeric",
+												},
+											)}
+										</span>
+									</div>
 								</div>
-								<Badge className="text-xs">{workflow.steps.length} steps</Badge>
 							</div>
 
-							<div className="flex gap-2">
+							<div className="flex items-center gap-1">
 								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => handleExecute(workflow.id)}
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									onClick={() => onEdit?.(workflow)}
 									disabled={isDeleting === workflow.id}
+									aria-label="Edit complex workflow"
 								>
-									<Play className="h-4 w-4 mr-1" />
-									Execute
+									<Edit className="h-4 w-4" />
 								</Button>
 								<Button
-									variant="destructive"
-									size="sm"
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8"
+									onClick={() => handleExecute(workflow.id)}
+									disabled={isDeleting === workflow.id}
+									aria-label="Execute complex workflow"
+								>
+									<Play className="h-4 w-4" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 text-red-600 hover:text-red-700"
 									onClick={() => {
 										setSelectedWorkflow(workflow);
 										setShowDeleteDialog(true);
 									}}
 									disabled={isDeleting === workflow.id}
+									aria-label="Delete complex workflow"
 								>
-									<Trash2 className="h-4 w-4 mr-1" />
-									Delete
+									<Trash2 className="h-4 w-4" />
 								</Button>
 							</div>
 						</div>
