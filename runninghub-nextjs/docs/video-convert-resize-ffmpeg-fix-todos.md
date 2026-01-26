@@ -1,0 +1,3 @@
+- [x] Escape commas inside FFmpeg `scale=if(...)` expressions for longest/shortest side mode.
+- [ ] Verify FFmpeg conversion succeeds with longest/shortest side resize.
+- [ ] Run `npm run build`.

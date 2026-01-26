@@ -1,0 +1,9 @@
+- [x] Review `VideoConvertConfiguration` and `useVideoConvertStore` usage.
+- [x] Add resize fields and persistence to `useVideoConvertStore`.
+- [x] Add resize UI (toggle, presets, custom inputs) in `VideoConvertConfiguration`.
+- [x] Update convert API route to pass resize params.
+- [x] Update CLI/ffmpeg arguments to use aspect-preserving scale and optional pad.
+- [x] Add longest-side resize mode to UI/store and conversion pipeline.
+- [x] Add shortest-side resize mode to UI/store and conversion pipeline.
+- [ ] Verify with portrait/landscape examples and custom sizing.
+- [ ] Run `npm run build`.
