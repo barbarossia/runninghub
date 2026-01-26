@@ -74,6 +74,29 @@ export async function saveComplexWorkflow(
 }
 
 /**
+ * Update complex workflow in file
+ */
+export async function updateComplexWorkflow(
+	workflow: ComplexWorkflow,
+): Promise<string> {
+	const existing = await loadComplexWorkflow(workflow.id);
+	const now = Date.now();
+
+	const fullWorkflow: ComplexWorkflow = {
+		...workflow,
+		createdAt: workflow.createdAt ?? existing?.createdAt ?? now,
+		updatedAt: now,
+	};
+
+	const filePath = join(COMPLEX_WORKFLOW_DIR, `${workflow.id}.json`);
+
+	await fs.mkdir(COMPLEX_WORKFLOW_DIR, { recursive: true });
+	await fs.writeFile(filePath, JSON.stringify(fullWorkflow, null, 2));
+
+	return workflow.id;
+}
+
+/**
  * Load complex workflow from file
  */
 export async function loadComplexWorkflow(
