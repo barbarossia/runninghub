@@ -14,6 +14,11 @@ interface FpsConvertRequest {
 	outputSuffix?: string;
 	crf?: number;
 	preset?: string;
+	resizeEnabled?: boolean;
+	resizeMode?: "fit" | "longest-side" | "shortest-side";
+	resizeWidth?: number;
+	resizeHeight?: number;
+	resizeLongestSide?: number;
 	timeout?: number;
 }
 
@@ -27,6 +32,11 @@ export async function POST(request: NextRequest) {
 			outputSuffix = "_converted",
 			crf = 20,
 			preset = "slow",
+			resizeEnabled = false,
+			resizeMode = "fit",
+			resizeWidth,
+			resizeHeight,
+			resizeLongestSide,
 			timeout = 3600,
 		} = data;
 
@@ -40,6 +50,41 @@ export async function POST(request: NextRequest) {
 		if (!targetFps || targetFps < 1 || targetFps > 120) {
 			return NextResponse.json(
 				{ error: "Invalid target FPS. Must be between 1 and 120." },
+				{ status: 400 },
+			);
+		}
+
+		if (
+			resizeEnabled &&
+			(resizeMode === "longest-side" || resizeMode === "shortest-side") &&
+			!resizeLongestSide
+		) {
+			return NextResponse.json(
+				{
+					error: "Resize longest-side enabled but no size provided",
+				},
+				{ status: 400 },
+			);
+		}
+
+		if (resizeEnabled && resizeMode === "fit" && !resizeWidth && !resizeHeight) {
+			return NextResponse.json(
+				{
+					error: "Resize enabled but no width or height provided",
+				},
+				{ status: 400 },
+			);
+		}
+
+		if (
+			(resizeWidth && resizeWidth < 1) ||
+			(resizeHeight && resizeHeight < 1) ||
+			(resizeLongestSide && resizeLongestSide < 1)
+		) {
+			return NextResponse.json(
+				{
+					error: "Invalid resize dimensions. Width/height must be positive.",
+				},
 				{ status: 400 },
 			);
 		}
@@ -70,6 +115,11 @@ export async function POST(request: NextRequest) {
 			outputSuffix,
 			crf,
 			preset,
+			resizeEnabled,
+			resizeMode,
+			resizeWidth,
+			resizeHeight,
+			resizeLongestSide,
 			timeout,
 			taskId,
 		);
@@ -127,6 +177,11 @@ function convertSingleVideo(
 	outputSuffix: string,
 	crf: number,
 	preset: string,
+	resizeEnabled: boolean,
+	resizeMode: "fit" | "longest-side" | "shortest-side",
+	resizeWidth: number | undefined,
+	resizeHeight: number | undefined,
+	resizeLongestSide: number | undefined,
 	timeout: number,
 ): Promise<{
 	success: boolean;
@@ -156,6 +211,36 @@ function convertSingleVideo(
 		// -c:a aac: AAC audio codec
 		// -b:a 128k: Audio bitrate
 		// -movflags +faststart: Enable web streaming
+		const filters: string[] = [];
+
+		if (resizeEnabled) {
+			if (
+				(resizeMode === "longest-side" ||
+					resizeMode === "shortest-side") &&
+				resizeLongestSide
+			) {
+				const comparator = resizeMode === "shortest-side" ? "lt" : "gt";
+				filters.push(
+					`scale=if(${comparator}(iw\\,ih)\\,${resizeLongestSide}\\,-2):if(${comparator}(iw\\,ih)\\,-2\\,${resizeLongestSide})`,
+				);
+			} else if (resizeWidth || resizeHeight) {
+				if (resizeWidth && resizeHeight) {
+					filters.push(
+						`scale=${resizeWidth}:${resizeHeight}:force_original_aspect_ratio=decrease`,
+					);
+					filters.push(
+						`pad=${resizeWidth}:${resizeHeight}:(ow-iw)/2:(oh-ih)/2`,
+					);
+				} else {
+					const width = resizeWidth ? resizeWidth.toString() : "-2";
+					const height = resizeHeight ? resizeHeight.toString() : "-2";
+					filters.push(`scale=${width}:${height}`);
+				}
+			}
+		}
+
+		filters.push("format=yuv420p");
+
 		const cmd = "ffmpeg";
 		const args = [
 			"-i",
@@ -169,7 +254,7 @@ function convertSingleVideo(
 			"-preset",
 			preset,
 			"-vf",
-			"format=yuv420p",
+			filters.join(","),
 			"-c:a",
 			"aac",
 			"-b:a",
@@ -318,9 +403,14 @@ async function convertVideosInBackground(
 	outputSuffix: string,
 	crf: number,
 	preset: string,
+	resizeEnabled: boolean,
+	resizeMode: "fit" | "longest-side" | "shortest-side",
+	resizeWidth: number | undefined,
+	resizeHeight: number | undefined,
+	resizeLongestSide: number | undefined,
 	timeout: number,
-	taskId: string,
-) {
+		taskId: string,
+	) {
 	await writeLog(
 		`=== BACKGROUND FPS CONVERSION STARTED for task: ${taskId} ===`,
 		"info",
@@ -331,6 +421,17 @@ async function convertVideosInBackground(
 		"info",
 		taskId,
 	);
+	if (resizeEnabled) {
+		await writeLog(
+			resizeMode === "longest-side"
+				? `Resize enabled: longest side ${resizeLongestSide || "auto"}px`
+				: resizeMode === "shortest-side"
+					? `Resize enabled: shortest side ${resizeLongestSide || "auto"}px`
+				: `Resize enabled: fit within ${resizeWidth || "auto"}x${resizeHeight || "auto"}`,
+			"info",
+			taskId,
+		);
+	}
 
 	let successCount = 0;
 	let failureCount = 0;
@@ -368,6 +469,11 @@ async function convertVideosInBackground(
 				outputSuffix,
 				crf,
 				preset,
+				resizeEnabled,
+				resizeMode,
+				resizeWidth,
+				resizeHeight,
+				resizeLongestSide,
 				timeout,
 			);
 

@@ -1270,10 +1270,34 @@ export default function WorkspacePage() {
 					: convertConfig.quality === "low"
 						? 23
 						: 20;
+		const resizeWidth = convertConfig.resizeWidth
+			? parseInt(convertConfig.resizeWidth, 10)
+			: undefined;
+		const resizeHeight = convertConfig.resizeHeight
+			? parseInt(convertConfig.resizeHeight, 10)
+			: undefined;
+		const resizeLongestSide = convertConfig.resizeLongestSide
+			? parseInt(convertConfig.resizeLongestSide, 10)
+			: undefined;
 
 		if (!targetFps || targetFps < 1 || targetFps > 120) {
 			toast.error("Invalid target FPS. Must be between 1 and 120.");
 			return;
+		}
+
+		if (convertConfig.resizeEnabled) {
+			if (
+				convertConfig.resizeMode === "longest-side" ||
+				convertConfig.resizeMode === "shortest-side"
+			) {
+				if (!resizeLongestSide) {
+					toast.error("Please provide a longest-side size");
+					return;
+				}
+			} else if (!resizeWidth && !resizeHeight) {
+				toast.error("Please provide a resize width or height");
+				return;
+			}
 		}
 
 		try {
@@ -1287,6 +1311,11 @@ export default function WorkspacePage() {
 					outputSuffix: convertConfig.outputSuffix,
 					crf,
 					preset: convertConfig.encodingPreset,
+					resizeEnabled: convertConfig.resizeEnabled,
+					resizeMode: convertConfig.resizeMode,
+					resizeWidth,
+					resizeHeight,
+					resizeLongestSide,
 					timeout: 3600,
 				}),
 			});
@@ -2417,6 +2446,7 @@ export default function WorkspacePage() {
 											selectedVideoFiles.map((v) => ({ ...v, id: v.path })),
 										);
 									}}
+									clipButtonText="Crop"
 									onConvertFps={async (selectedPaths) => {
 										const selectedVideoFiles = filteredVideos.filter((v) =>
 											selectedPaths.includes(v.path),

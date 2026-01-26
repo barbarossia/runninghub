@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Video, Zap, Settings, Sliders } from "lucide-react";
+import { Video, Zap, Settings, Sliders, Maximize2 } from "lucide-react";
 import {
 	useVideoConvertStore,
 	FpsOption,
 	QualityPreset,
 	EncodingPreset,
+	ResizePreset,
+	ResizeMode,
 	QUALITY_CRF,
 } from "@/store/video-convert-store";
 import { ConfigurationCard } from "@/components/ui/ConfigurationCard";
@@ -53,6 +55,27 @@ const ENCODING_PRESET_OPTIONS: {
 	{ value: "slower", label: "Slower", description: "Best compression" },
 ];
 
+const RESIZE_PRESETS: {
+	value: ResizePreset;
+	label: string;
+	description: string;
+}[] = [
+	{ value: "720x1280", label: "720×1280", description: "Portrait HD" },
+	{ value: "1080x1920", label: "1080×1920", description: "Portrait Full HD" },
+	{ value: "1280x720", label: "1280×720", description: "Landscape HD" },
+	{ value: "1920x1080", label: "1920×1080", description: "Landscape Full HD" },
+	{ value: "1080x1080", label: "1080×1080", description: "Square" },
+	{ value: "custom", label: "Custom", description: "Set width/height" },
+];
+
+const LONGEST_SIDE_PRESETS: { value: string; label: string }[] = [
+	{ value: "720", label: "720px" },
+	{ value: "832", label: "832px" },
+	{ value: "1080", label: "1080px" },
+	{ value: "1280", label: "1280px" },
+	{ value: "1920", label: "1920px" },
+];
+
 export function VideoConvertConfiguration({
 	onConfigChange,
 	disabled = false,
@@ -67,6 +90,12 @@ export function VideoConvertConfiguration({
 		setCustomCrf,
 		setEncodingPreset,
 		toggleDeleteOriginal,
+		setResizeEnabled,
+		setResizeMode,
+		setResizePreset,
+		setResizeWidth,
+		setResizeHeight,
+		setResizeLongestSide,
 	} = useVideoConvertStore();
 
 	// Local state for output suffix
@@ -92,6 +121,13 @@ export function VideoConvertConfiguration({
 		convertConfig.quality === "custom"
 			? convertConfig.customCrf
 			: QUALITY_CRF[convertConfig.quality];
+	const resizeSummary = convertConfig.resizeEnabled
+		? convertConfig.resizeMode === "longest-side"
+			? `Longest ${convertConfig.resizeLongestSide || "auto"}px`
+			: convertConfig.resizeMode === "shortest-side"
+				? `Shortest ${convertConfig.resizeLongestSide || "auto"}px`
+				: `${convertConfig.resizeWidth || "auto"}×${convertConfig.resizeHeight || "auto"}`
+		: "Off";
 
 	// Handle output suffix change
 	const handleOutputSuffixChange = (value: string) => {
@@ -103,6 +139,26 @@ export function VideoConvertConfiguration({
 	const handleCustomCrfChange = (value: string) => {
 		const crf = parseInt(value) || 20;
 		setCustomCrf(Math.max(0, Math.min(51, crf)));
+	};
+
+	const handleResizeToggle = (enabled: boolean) => {
+		setResizeEnabled(enabled);
+		if (enabled && !convertConfig.resizeWidth && !convertConfig.resizeHeight) {
+			setResizePreset("720x1280");
+		}
+	};
+
+	const handleResizeModeChange = (mode: ResizeMode) => {
+		setResizeMode(mode);
+		if (
+			(mode === "longest-side" || mode === "shortest-side") &&
+			!convertConfig.resizeLongestSide
+		) {
+			setResizeLongestSide("1280");
+		}
+		if (mode === "fit" && !convertConfig.resizeWidth && !convertConfig.resizeHeight) {
+			setResizePreset("720x1280");
+		}
 	};
 
 	return (
@@ -117,7 +173,7 @@ export function VideoConvertConfiguration({
 			subtitle={
 				<>
 					Target: {displayFps} FPS • Quality: CRF {displayCrf} • Preset:{" "}
-					{convertConfig.encodingPreset}
+					{convertConfig.encodingPreset} • Resize: {resizeSummary}
 				</>
 			}
 		>
@@ -259,6 +315,186 @@ export function VideoConvertConfiguration({
 					</div>
 				</div>
 
+				{/* Resize */}
+				<div className="space-y-3 pt-3 border-t border-gray-200">
+					<div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+						<Maximize2 className="h-4 w-4" />
+						Resize
+					</div>
+
+					<label className="flex items-center gap-3 cursor-pointer group">
+						<input
+							type="checkbox"
+							checked={convertConfig.resizeEnabled}
+							onChange={(e) => handleResizeToggle(e.target.checked)}
+							disabled={disabled}
+							className="w-4 h-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500 focus:ring-offset-2 transition-all cursor-pointer"
+						/>
+						<div className="flex flex-col">
+							<span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors font-medium">
+								Resize video (preserve aspect ratio)
+							</span>
+							<span className="text-xs text-gray-500">
+								Scale to fit within the target size; no crop
+							</span>
+						</div>
+					</label>
+
+					{convertConfig.resizeEnabled && (
+						<div className="space-y-3">
+							<div className="flex flex-wrap gap-2">
+								<button
+									type="button"
+									onClick={() => handleResizeModeChange("fit")}
+									disabled={disabled}
+									className={cn(
+										"px-3 py-2 text-xs font-medium rounded-full border transition-all",
+										convertConfig.resizeMode === "fit"
+											? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
+									)}
+								>
+									Fit Within Target
+								</button>
+								<button
+									type="button"
+									onClick={() => handleResizeModeChange("longest-side")}
+									disabled={disabled}
+									className={cn(
+										"px-3 py-2 text-xs font-medium rounded-full border transition-all",
+										convertConfig.resizeMode === "longest-side"
+											? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
+									)}
+								>
+									Longest Side
+								</button>
+								<button
+									type="button"
+									onClick={() => handleResizeModeChange("shortest-side")}
+									disabled={disabled}
+									className={cn(
+										"px-3 py-2 text-xs font-medium rounded-full border transition-all",
+										convertConfig.resizeMode === "shortest-side"
+											? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
+									)}
+								>
+									Shortest Side
+								</button>
+							</div>
+
+							{convertConfig.resizeMode === "longest-side" ||
+							convertConfig.resizeMode === "shortest-side" ? (
+								<div className="space-y-3">
+									<div className="flex flex-wrap gap-2">
+										{LONGEST_SIDE_PRESETS.map((option) => (
+											<button
+												key={option.value}
+												type="button"
+												onClick={() =>
+													setResizeLongestSide(option.value)
+												}
+												disabled={disabled}
+												className={cn(
+													"px-3 py-2 text-xs font-medium rounded-full border transition-all",
+													convertConfig.resizeLongestSide === option.value
+														? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+														: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
+												)}
+											>
+												{option.label}
+											</button>
+										))}
+									</div>
+									<div className="max-w-[220px]">
+										<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
+											{convertConfig.resizeMode === "shortest-side"
+												? "Shortest Side (px)"
+												: "Longest Side (px)"}
+										</label>
+										<Input
+											type="number"
+											min="1"
+											value={convertConfig.resizeLongestSide}
+											onChange={(e) =>
+												setResizeLongestSide(e.target.value)
+											}
+											disabled={disabled}
+											placeholder="1280"
+											className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
+										/>
+									</div>
+								</div>
+							) : (
+								<>
+							<div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+								{RESIZE_PRESETS.map((option) => (
+									<button
+										key={option.value}
+										type="button"
+										onClick={() => setResizePreset(option.value)}
+										disabled={disabled}
+										className={cn(
+											"flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all",
+											convertConfig.resizePreset === option.value
+												? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+												: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
+										)}
+									>
+										<span className="text-sm font-medium">{option.label}</span>
+										<span
+											className={cn(
+												"text-xs mt-0.5",
+												convertConfig.resizePreset === option.value
+													? "text-blue-100"
+													: "text-gray-500",
+											)}
+										>
+											{option.description}
+										</span>
+									</button>
+								))}
+								</div>
+
+							{convertConfig.resizePreset === "custom" && (
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+									<div>
+										<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
+											Width (px)
+										</label>
+										<Input
+											type="number"
+											min="1"
+											value={convertConfig.resizeWidth}
+											onChange={(e) => setResizeWidth(e.target.value)}
+											disabled={disabled}
+											placeholder="Auto"
+											className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
+										/>
+									</div>
+									<div>
+										<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
+											Height (px)
+										</label>
+										<Input
+											type="number"
+											min="1"
+											value={convertConfig.resizeHeight}
+											onChange={(e) => setResizeHeight(e.target.value)}
+											disabled={disabled}
+											placeholder="Auto"
+											className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
+										/>
+									</div>
+								</div>
+							)}
+								</>
+							)}
+						</div>
+					)}
+				</div>
+
 				{/* Additional Options */}
 				<div className="space-y-4 pt-3 border-t border-gray-200">
 					{/* Output Suffix */}
@@ -314,6 +550,17 @@ export function VideoConvertConfiguration({
 									Video codec: libx264, CRF {displayCrf}, preset{" "}
 									{convertConfig.encodingPreset}
 								</li>
+								{convertConfig.resizeEnabled && (
+									<li>
+										Resize:{" "}
+								{convertConfig.resizeMode === "longest-side"
+											? `longest side ${convertConfig.resizeLongestSide || "auto"}px`
+											: convertConfig.resizeMode === "shortest-side"
+												? `shortest side ${convertConfig.resizeLongestSide || "auto"}px`
+											: `fit within ${resizeSummary}`}{" "}
+										(no crop)
+									</li>
+								)}
 								<li>Audio codec: AAC, 128kbps</li>
 								<li>Pixel format: yuv420p</li>
 								<li>Faststart: Enabled for web streaming</li>
