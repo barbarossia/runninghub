@@ -1,0 +1,4 @@
+- [x] Add pagination state and computed paged list in JobList.
+- [x] Add pagination controls (prev/next, page indicator).
+- [x] Reset/clamp page when filters or job count change.
+- [ ] Manual check: filters + paging + delete behavior.
