@@ -1,0 +1,9 @@
+- [x] Review existing complex workflow creation/list flows and confirm edit entry points.
+- [x] Add edit action to `ComplexWorkflowList` and expose selection callback.
+- [x] Add edit state in `src/app/workspace/page.tsx` to open builder inline with selected workflow.
+- [x] Extend `ComplexWorkflowBuilder` to accept a `workflow` prop and prefill state for edit mode.
+- [x] Add update API route (PUT) for `/api/workspace/complex-workflow/[workflowId]`.
+- [x] Add `updateComplexWorkflow` utility to overwrite workflow JSON and update timestamps.
+- [x] Wire builder save in edit mode to use update endpoint and refresh list state.
+- [ ] Verify create vs edit flows behave correctly; cancel returns to list.
+- [ ] Run `npm run build`.

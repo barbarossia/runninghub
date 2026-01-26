@@ -1,0 +1,4 @@
+- [x] Review `WorkflowList` card layout to mirror styling in complex workflow list.
+- [x] Update `ComplexWorkflowList` card structure and classes.
+- [ ] Verify actions (edit/execute/delete) and hover states still work.
+- [ ] Run `npm run build`.
