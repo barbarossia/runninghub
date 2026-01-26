@@ -6,6 +6,7 @@ import { Home, ArrowLeft, LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { ToastToggle } from "@/components/ui/ToastToggle";
 import { cn } from "@/lib/utils";
 
 type ColorVariant = "blue" | "purple" | "green";
@@ -98,6 +99,7 @@ export function PageHeader({
 					</Badge>
 				)}
 				<ThemeToggle />
+				<ToastToggle />
 			</div>
 		</div>
 	);

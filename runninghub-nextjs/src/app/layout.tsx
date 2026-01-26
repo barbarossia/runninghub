@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
+import { ToastGate } from "@/components/ui/ToastGate";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const inter = Inter({
@@ -33,7 +33,7 @@ export default function RootLayout({
 					<div className="min-h-screen bg-background text-foreground">
 						{children}
 					</div>
-					<Toaster />
+					<ToastGate />
 				</ThemeProvider>
 			</body>
 		</html>
