@@ -1,0 +1,2 @@
+- [x] Update Convert tab label to "Convert Configuration".
+- [ ] Manual check: Convert tab shows updated label.

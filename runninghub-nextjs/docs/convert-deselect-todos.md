@@ -1,0 +1,2 @@
+- [x] Clear video selection after successful convert start.
+- [ ] Manual check: selected videos deselect after clicking Convert.
