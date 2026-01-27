@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ToastGate } from "@/components/ui/ToastGate";
+import { AspectRatioTool } from "@/components/ui/AspectRatioTool";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const inter = Inter({
@@ -33,6 +34,7 @@ export default function RootLayout({
 					<div className="min-h-screen bg-background text-foreground">
 						{children}
 					</div>
+					<AspectRatioTool />
 					<ToastGate />
 				</ThemeProvider>
 			</body>
