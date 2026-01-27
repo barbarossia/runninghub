@@ -163,7 +163,7 @@ export function VideoConvertConfiguration({
 
 	return (
 		<ConfigurationCard
-			title="FPS Convert Configuration"
+			title="Convert Configuration"
 			icon={Zap}
 			variant="light"
 			iconBgColor="bg-blue-100"

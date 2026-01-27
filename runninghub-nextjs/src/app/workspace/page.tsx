@@ -706,8 +706,13 @@ export default function WorkspacePage() {
 					});
 				}
 			}
+
+			if (taskId === convertTaskId && status === "completed") {
+				handleRefresh(false);
+				setConvertTaskId(null);
+			}
 		},
-		[jobs, updateJob, handleRefresh, fetchJobs],
+		[jobs, updateJob, handleRefresh, fetchJobs, convertTaskId],
 	);
 
 	const handleStatusChange = useCallback(
@@ -1328,6 +1333,7 @@ export default function WorkspacePage() {
 				toast.success(
 					`Started converting ${videos.length} video${videos.length > 1 ? "s" : ""} to ${targetFps} FPS`,
 				);
+				useVideoSelectionStore.getState().deselectAll();
 
 				// Folder updates handled by subscription
 			} else {
@@ -2419,7 +2425,7 @@ export default function WorkspacePage() {
 									{/* Crop Configuration */}
 									<CropConfiguration />
 
-									{/* FPS Convert Configuration */}
+								{/* Convert Configuration */}
 									<VideoConvertConfiguration />
 								</div>
 
