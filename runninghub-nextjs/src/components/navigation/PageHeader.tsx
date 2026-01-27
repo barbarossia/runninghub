@@ -2,11 +2,12 @@
 
 import React from "react";
 import Link from "next/link";
-import { Home, ArrowLeft, LucideIcon } from "lucide-react";
+import { Calculator, Home, ArrowLeft, LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { ToastToggle } from "@/components/ui/ToastToggle";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 import { cn } from "@/lib/utils";
 
 type ColorVariant = "blue" | "purple" | "green";
@@ -53,6 +54,8 @@ export function PageHeader({
 	className = "",
 }: PageHeaderProps) {
 	const colors = COLOR_STYLES[colorVariant];
+	const { aspectToolCollapsed, setAspectToolCollapsed } =
+		useUiPreferencesStore();
 
 	return (
 		<div className={cn("flex items-center justify-between mb-8", className)}>
@@ -100,6 +103,17 @@ export function PageHeader({
 				)}
 				<ThemeToggle />
 				<ToastToggle />
+				{aspectToolCollapsed && (
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={() => setAspectToolCollapsed(false)}
+						aria-label="Open aspect ratio tool"
+						title="Open aspect ratio tool"
+					>
+						<Calculator className="h-4 w-4" />
+					</Button>
+				)}
 			</div>
 		</div>
 	);

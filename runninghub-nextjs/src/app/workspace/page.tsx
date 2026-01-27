@@ -725,7 +725,12 @@ export default function WorkspacePage() {
 
 			// Find and update job
 			const job = jobs.find((j) => j.taskId === taskId);
-			if (job && job.status !== jobStatus) {
+			if (
+				job &&
+				job.status !== jobStatus &&
+				job.status !== "failed" &&
+				job.status !== "completed"
+			) {
 				updateJob(job.id, {
 					status: jobStatus,
 					startedAt:

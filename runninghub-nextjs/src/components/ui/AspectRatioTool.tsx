@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calculator, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Calculator, Minimize2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { useVideoSelectionStore } from "@/store/video-selection-store";
@@ -40,14 +41,15 @@ export function AspectRatioTool() {
 	const lastSelectedVideoPath = useVideoSelectionStore(
 		(state) => state.lastSelectedVideoPath,
 	);
+	const { aspectToolCollapsed, setAspectToolCollapsed } =
+		useUiPreferencesStore();
 
 	const [mode, setMode] = useState<Mode>("width");
 	const [originalWidth, setOriginalWidth] = useState<string>("");
 	const [originalHeight, setOriginalHeight] = useState<string>("");
 	const [targetWidth, setTargetWidth] = useState<string>("");
 	const [targetHeight, setTargetHeight] = useState<string>("");
-	const [collapsed, setCollapsed] = useState(false);
-
+ 
 	const selectedWorkspaceFile = useMemo(() => {
 		return workspaceMediaFiles.find((file) => file.selected);
 	}, [workspaceMediaFiles]);
@@ -112,6 +114,10 @@ export function AspectRatioTool() {
 		setTargetHeight("");
 	};
 
+	if (aspectToolCollapsed) {
+		return null;
+	}
+
 	return (
 		<div className="fixed top-4 right-4 z-50 w-[280px]">
 			<Card className="border border-blue-100 bg-white/95 shadow-lg backdrop-blur">
@@ -134,91 +140,85 @@ export function AspectRatioTool() {
 							variant="ghost"
 							size="icon"
 							className="h-7 w-7"
-							onClick={() => setCollapsed((prev) => !prev)}
-							title={collapsed ? "Expand" : "Collapse"}
+							onClick={() => setAspectToolCollapsed(true)}
+							title="Minimize"
 						>
-							{collapsed ? (
-								<ChevronDown className="h-3.5 w-3.5" />
-							) : (
-								<ChevronUp className="h-3.5 w-3.5" />
-							)}
+							<Minimize2 className="h-3.5 w-3.5" />
 						</Button>
 					</div>
 				</div>
-				{!collapsed && (
-					<div className="space-y-3 px-3 py-3 text-xs text-gray-600">
-						<div className="flex gap-2">
-							<Button
-								variant={mode === "width" ? "secondary" : "ghost"}
-								size="sm"
-								className="flex-1 text-xs"
-								onClick={() => setMode("width")}
-							>
-								Width to Height
-							</Button>
-							<Button
-								variant={mode === "height" ? "secondary" : "ghost"}
-								size="sm"
-								className="flex-1 text-xs"
-								onClick={() => setMode("height")}
-							>
-								Height to Width
-							</Button>
-						</div>
+				<div className="space-y-3 px-3 py-3 text-xs text-gray-600">
+					<div className="flex gap-2">
+						<Button
+							variant={mode === "width" ? "secondary" : "ghost"}
+							size="sm"
+							className="flex-1 text-xs"
+							onClick={() => setMode("width")}
+						>
+							Width to Height
+						</Button>
+						<Button
+							variant={mode === "height" ? "secondary" : "ghost"}
+							size="sm"
+							className="flex-1 text-xs"
+							onClick={() => setMode("height")}
+						>
+							Height to Width
+						</Button>
+					</div>
 
-						<div className="grid grid-cols-2 gap-2">
-							<div className="space-y-1">
-								<label className="text-[11px] text-gray-500">Orig W</label>
-								<Input
-									value={originalWidth}
-									onChange={(e) => setOriginalWidth(e.target.value)}
-									placeholder="e.g. 480"
-									inputMode="numeric"
-								/>
-							</div>
-							<div className="space-y-1">
-								<label className="text-[11px] text-gray-500">Orig H</label>
-								<Input
-									value={originalHeight}
-									onChange={(e) => setOriginalHeight(e.target.value)}
-									placeholder="e.g. 650"
-									inputMode="numeric"
-								/>
-							</div>
+					<div className="grid grid-cols-2 gap-2">
+						<div className="space-y-1">
+							<label className="text-[11px] text-gray-500">Orig W</label>
+							<Input
+								value={originalWidth}
+								onChange={(e) => setOriginalWidth(e.target.value)}
+								placeholder="e.g. 480"
+								inputMode="numeric"
+							/>
 						</div>
-
-						<div className="grid grid-cols-2 gap-2">
-							<div className="space-y-1">
-								<label className="text-[11px] text-gray-500">
-									{mode === "width" ? "Target W" : "Target H"}
-								</label>
-								<Input
-									value={mode === "width" ? targetWidth : targetHeight}
-									onChange={(e) =>
-										mode === "width"
-											? setTargetWidth(e.target.value)
-											: setTargetHeight(e.target.value)
-									}
-									placeholder={mode === "width" ? "e.g. 720" : "e.g. 975"}
-									inputMode="numeric"
-								/>
-							</div>
-							<div className="space-y-1">
-								<label className="text-[11px] text-gray-500">
-									{mode === "width" ? "Result H" : "Result W"}
-								</label>
-								<Input value={computedValue} readOnly placeholder="-" />
-							</div>
-						</div>
-
-						<div className="flex items-center justify-between text-[11px] text-gray-500">
-							<span>{aspectText}</span>
-							{selectedMedia?.width && selectedMedia?.height && (
-								<span className="text-blue-600">Auto</span>
-							)}
+						<div className="space-y-1">
+							<label className="text-[11px] text-gray-500">Orig H</label>
+							<Input
+								value={originalHeight}
+								onChange={(e) => setOriginalHeight(e.target.value)}
+								placeholder="e.g. 650"
+								inputMode="numeric"
+							/>
 						</div>
 					</div>
-				)}
+
+					<div className="grid grid-cols-2 gap-2">
+						<div className="space-y-1">
+							<label className="text-[11px] text-gray-500">
+								{mode === "width" ? "Target W" : "Target H"}
+							</label>
+							<Input
+								value={mode === "width" ? targetWidth : targetHeight}
+								onChange={(e) =>
+									mode === "width"
+										? setTargetWidth(e.target.value)
+										: setTargetHeight(e.target.value)
+								}
+								placeholder={mode === "width" ? "e.g. 720" : "e.g. 975"}
+								inputMode="numeric"
+							/>
+						</div>
+						<div className="space-y-1">
+							<label className="text-[11px] text-gray-500">
+								{mode === "width" ? "Result H" : "Result W"}
+							</label>
+							<Input value={computedValue} readOnly placeholder="-" />
+						</div>
+					</div>
+
+					<div className="flex items-center justify-between text-[11px] text-gray-500">
+						<span>{aspectText}</span>
+						{selectedMedia?.width && selectedMedia?.height && (
+							<span className="text-blue-600">Auto</span>
+						)}
+					</div>
+				</div>
 			</Card>
 		</div>
 	);

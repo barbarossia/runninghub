@@ -1,0 +1,4 @@
+- [x] Add encoded status lookup for image previews in JobList.
+- [x] Add save/encode actions next to thumbnails.
+- [x] Make video previews playable.
+- [ ] Manual check: save/decode controls and video playback.

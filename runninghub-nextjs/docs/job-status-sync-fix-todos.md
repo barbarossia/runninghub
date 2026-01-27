@@ -1,0 +1,2 @@
+- [x] Skip status updates for jobs already in failed/completed state.
+- [ ] Manual check: failed job stays failed in Job History.

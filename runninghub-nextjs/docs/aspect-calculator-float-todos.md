@@ -1,4 +1,4 @@
 - [x] Create `AspectRatioTool` component with width/height calculation modes.
 - [x] Auto-fill original dimensions from selected image/video.
 - [x] Mount tool globally in `app/layout.tsx`.
-- [ ] Manual check: compute width/height on workspace/gallery/videos pages.
+- [ ] Manual check: compute width/height on workspace/gallery/videos pages and verify header icon toggling.

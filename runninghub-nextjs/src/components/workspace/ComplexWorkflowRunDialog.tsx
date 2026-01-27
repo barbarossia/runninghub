@@ -20,6 +20,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useWorkspaceStore } from "@/store/workspace-store";
 import { cn } from "@/lib/utils";
 import type { MediaFile } from "@/types/workspace";
 
@@ -35,6 +36,7 @@ export function ComplexWorkflowRunDialog({
 	selectedFiles,
 }: ComplexWorkflowRunDialogProps) {
 	const router = useRouter();
+	const setJobFiles = useWorkspaceStore((state) => state.setJobFiles);
 	const [workflows, setWorkflows] = useState<any[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 
@@ -66,10 +68,47 @@ export function ComplexWorkflowRunDialog({
 
 	const handleRunOnPage = (workflowId: string) => {
 		// Close dialog and navigate to run page
+		if (selectedFiles.length === 0) {
+			toast.error("Please select files in the media gallery first");
+			return;
+		}
+
+		const workflow = workflows.find((item) => item.id === workflowId);
+		const stepParams = workflow?.steps?.[0]?.parameters || [];
+		const fileParams = stepParams.filter(
+			(param: any) => param.valueType === "user-input",
+		);
+
+		if (fileParams.length === 0) {
+			toast.error("Step 1 has no user-input parameters");
+			return;
+		}
+
+		const assignments = selectedFiles
+			.slice(0, fileParams.length)
+			.map((file, index) => ({
+				parameterId: fileParams[index].parameterId,
+				filePath: file.path,
+				fileName: file.name,
+				fileSize: file.size || 0,
+				fileType: file.type,
+				valid: true,
+				width: file.width,
+				height: file.height,
+				thumbnail: file.thumbnail,
+			}));
+
+		if (selectedFiles.length > fileParams.length) {
+			toast.warning(
+				"More files selected than available step 1 inputs. Extra files were ignored.",
+			);
+		}
+
+		setJobFiles(assignments);
 		onOpenChange(false);
 
-		// Navigate to the run complex workflow page with the selected workflow
-		router.push(`/workspace/run-complex-workflow?workflow=${workflowId}`);
+		// Navigate to the complex workflow execute page
+		router.push(`/workspace/complex-workflow/execute/${workflowId}`);
 	};
 
 	return (

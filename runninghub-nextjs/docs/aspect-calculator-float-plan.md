@@ -7,6 +7,7 @@ Add a global floating aspect-ratio calculator tool that appears on all pages and
 
 ## Target State
 - A floating tool in the top-right on all pages.
+- When collapsed, it hides the panel and shows a header icon next to the toast toggle.
 - Accepts original width/height and a target width or height.
 - Computes the missing dimension with integer results.
 - Automatically pre-fills original width/height when a media item is selected (image/video).

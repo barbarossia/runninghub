@@ -1,0 +1,2 @@
+- [x] Move thumbnails into the title row in JobList.
+- [ ] Manual check: title row shows thumbnails inline.

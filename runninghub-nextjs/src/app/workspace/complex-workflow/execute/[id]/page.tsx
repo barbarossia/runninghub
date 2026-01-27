@@ -37,7 +37,13 @@ const POLL_INTERVAL = 2000;
 export default function ComplexWorkflowExecutePage() {
 	const params = useParams();
 	const router = useRouter();
-	const { workflows, setWorkflows } = useWorkspaceStore();
+	const {
+		workflows,
+		setWorkflows,
+		jobFiles,
+		mediaFiles,
+		autoAssignSelectedFilesToWorkflow,
+	} = useWorkspaceStore();
 	const { selectedFolder } = useWorkspaceFolder();
 
 	const [complexWorkflow, setComplexWorkflow] =
@@ -133,6 +139,20 @@ export default function ComplexWorkflowExecutePage() {
 			})),
 		};
 	}, [currentWorkflowTemplate]);
+
+	useEffect(() => {
+		if (!displayWorkflow || currentStepIndex !== 0) return;
+		if (jobFiles.length > 0) return;
+		const selectedFiles = mediaFiles.filter((file) => file.selected);
+		if (selectedFiles.length === 0) return;
+		autoAssignSelectedFilesToWorkflow(displayWorkflow.id);
+	}, [
+		displayWorkflow?.id,
+		currentStepIndex,
+		jobFiles.length,
+		mediaFiles,
+		autoAssignSelectedFilesToWorkflow,
+	]);
 
 	// Load workflow details map
 	useEffect(() => {

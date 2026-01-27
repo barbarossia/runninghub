@@ -14,18 +14,20 @@ import {
 	Loader2,
 	Calendar,
 	FileText,
+	FolderOpen,
 	RefreshCcw,
 	RefreshCw,
 	Trash2,
 	ChevronLeft,
 	ChevronRight,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useWorkspaceStore } from "@/store/workspace-store";
+import { useWorkspaceFolder } from "@/store/folder-store";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
 import {
 	Select,
 	SelectContent,
@@ -33,6 +35,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { DuckDecodeButton } from "@/components/workspace/DuckDecodeButton";
 import { cn } from "@/lib/utils";
 import type { Job, JobStatus } from "@/types/workspace";
 
@@ -42,6 +45,11 @@ export interface JobListProps {
 }
 
 const PAGE_SIZE = 20;
+const MAX_PREVIEWS = 3;
+type JobOutput = NonNullable<Job["results"]>["outputs"][number];
+type PreviewItem =
+	| { type: "text" }
+	| { type: "image" | "video"; path: string; fileName?: string };
 
 export function JobList({ onJobClick, className = "" }: JobListProps) {
 	const {
@@ -54,6 +62,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		isLoadingJobs,
 		updateJob,
 	} = useWorkspaceStore();
+	const { selectedFolder: workspaceFolder } = useWorkspaceFolder();
 
 	const [statusFilter, setStatusFilter] = useState<JobStatus | "all">("all");
 	const [workflowFilter, setWorkflowFilter] = useState<string>("all");
@@ -63,6 +72,9 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 	);
 	const [isDeletingSelected, setIsDeletingSelected] = useState(false);
 	const [page, setPage] = useState(1);
+	const [encodedStatus, setEncodedStatus] = useState<Record<string, boolean>>(
+		{},
+	);
 
 	// Fetch jobs on mount
 	useEffect(() => {
@@ -123,10 +135,18 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		return Array.from(names);
 	}, [jobs]);
 
+	const getDisplayStatus = (job: Job): JobStatus => {
+		if (job.error) return "failed";
+		if (job.completedAt) return "completed";
+		return job.status;
+	};
+
 	// Filter jobs
 	const filteredJobs = useMemo(() => {
 		return jobs.filter((job) => {
-			if (statusFilter !== "all" && job.status !== statusFilter) return false;
+			const displayStatus = getDisplayStatus(job);
+			if (statusFilter !== "all" && displayStatus !== statusFilter)
+				return false;
 			if (
 				workflowFilter !== "all" &&
 				(job.workflowName || job.workflowId) !== workflowFilter
@@ -205,6 +225,133 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 	// Format date
 	const formatDate = (timestamp: number) => {
 		return new Date(timestamp).toLocaleString();
+	};
+
+	const getOutputPath = (output: JobOutput) => {
+		return output.path || output.workspacePath || "";
+	};
+
+	const getPreviews = (job: Job) => {
+		const previews: PreviewItem[] = [];
+
+		if (job.results?.outputs?.length) {
+			for (const output of job.results.outputs) {
+				const outputPath = getOutputPath(output);
+				if (output.fileType === "image" && outputPath) {
+					previews.push({
+						type: "image",
+						path: outputPath,
+						fileName: output.fileName,
+					});
+				} else if (output.fileType === "video" && outputPath) {
+					previews.push({
+						type: "video",
+						path: outputPath,
+						fileName: output.fileName,
+					});
+				} else if (output.fileType === "text" || output.type === "text") {
+					previews.push({ type: "text" });
+				}
+				if (previews.length >= MAX_PREVIEWS) {
+					break;
+				}
+			}
+		}
+
+		if (previews.length < MAX_PREVIEWS && job.results?.textOutputs?.length) {
+			previews.push({ type: "text" });
+		}
+
+		return previews.slice(0, MAX_PREVIEWS);
+	};
+
+	const imagePreviewPaths = useMemo(() => {
+		const paths = new Set<string>();
+		pagedJobs.forEach((job) => {
+			const previews = getPreviews(job);
+			previews.forEach((preview) => {
+				if (preview.type === "image") {
+					paths.add(preview.path);
+				}
+			});
+		});
+		return Array.from(paths);
+	}, [pagedJobs]);
+
+	useEffect(() => {
+		const pending = imagePreviewPaths.filter(
+			(path) => !(path in encodedStatus),
+		);
+		if (pending.length === 0) return;
+
+		let cancelled = false;
+		const checkEncoded = async () => {
+			for (const path of pending) {
+				try {
+					const response = await fetch("/api/workspace/duck-validate", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ imagePath: path }),
+					});
+					const data = await response.json();
+					if (!cancelled) {
+						setEncodedStatus((prev) => ({
+							...prev,
+							[path]: Boolean(data.isDuckEncoded),
+						}));
+					}
+				} catch (error) {
+					if (!cancelled) {
+						setEncodedStatus((prev) => ({
+							...prev,
+							[path]: false,
+						}));
+					}
+				}
+			}
+		};
+
+		checkEncoded();
+		return () => {
+			cancelled = true;
+		};
+	}, [imagePreviewPaths, encodedStatus]);
+
+	const getBasename = (filePath: string) => {
+		return filePath.split(/[\\/]/).pop() || filePath;
+	};
+
+	const handleSaveToWorkspace = async (
+		filePath: string,
+		fileName?: string,
+	) => {
+		if (!workspaceFolder?.folder_path) {
+			toast.error("Please select a workspace folder first");
+			return;
+		}
+
+		try {
+			const response = await fetch("/api/workspace/copy-to-folder", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					sourcePath: filePath,
+					targetFolder: workspaceFolder.folder_path,
+					fileName: fileName || getBasename(filePath),
+				}),
+			});
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.error || "Failed to save to workspace");
+			}
+
+			toast.success(`Saved to workspace: ${fileName || getBasename(filePath)}`);
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : "Failed to save to workspace";
+			toast.error(errorMessage);
+		}
 	};
 
 	const toggleJobSelection = (jobId: string, checked: boolean) => {
@@ -358,6 +505,8 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 						{pagedJobs.map((job) => {
 							const isSelected = selectedJobId === job.id;
 							const isChecked = selectedJobIds.has(job.id);
+							const previews = getPreviews(job);
+							const displayStatus = getDisplayStatus(job);
 							return (
 								<motion.div
 									key={job.id}
@@ -389,23 +538,115 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 												<div
 													className={cn(
 														"p-2 rounded-lg",
-														getStatusColor(job.status),
+														getStatusColor(displayStatus),
 													)}
 												>
-													{getStatusIcon(job.status)}
+													{getStatusIcon(displayStatus)}
 												</div>
 
 												<div className="flex-1 min-w-0">
-													<div className="flex items-center gap-2 mb-1">
-														<h3 className="font-semibold text-sm truncate">
-															{job.workflowName}
-														</h3>
-														<Badge
-															variant={getStatusBadgeVariant(job.status)}
-															className="text-xs"
-														>
-															{job.status}
-														</Badge>
+													<div className="flex items-center justify-between gap-2 mb-1">
+														<div className="flex items-center gap-2 min-w-0">
+															<h3 className="font-semibold text-sm truncate">
+																{job.workflowName}
+															</h3>
+															<Badge
+																variant={getStatusBadgeVariant(displayStatus)}
+																className="text-xs"
+															>
+																{displayStatus}
+															</Badge>
+														</div>
+														{previews.length > 0 && (
+															<div className="flex gap-1 shrink-0">
+																{previews.map((preview, index) => {
+																	if (preview.type === "image") {
+																		return (
+																			<div
+																				key={`image-${index}`}
+																				className="flex items-center gap-1"
+																			>
+																				<div className="h-7 w-7 overflow-hidden rounded border border-gray-200 bg-gray-100">
+																					<img
+																						src={`/api/images/serve?path=${encodeURIComponent(preview.path)}`}
+																						alt="Output preview"
+																						className="h-full w-full object-cover"
+																					/>
+																				</div>
+																				<div
+																					className="flex items-center gap-1"
+																					onClick={(e) => e.stopPropagation()}
+																				>
+																					<Button
+																						variant="ghost"
+																						size="icon"
+																						className="h-7 w-7"
+																						onClick={() =>
+																							handleSaveToWorkspace(
+																								preview.path,
+																								preview.fileName,
+																							)
+																						}
+																						title="Save to workspace"
+																					>
+																						<FolderOpen className="h-3.5 w-3.5" />
+																					</Button>
+																					{encodedStatus[preview.path] && (
+																						<DuckDecodeButton
+																							imagePath={preview.path}
+																							jobId={job.id}
+																							onDecoded={() => fetchJobs()}
+																						/>
+																					)}
+																				</div>
+																			</div>
+																		);
+																	}
+																	if (preview.type === "video") {
+																		return (
+																			<div
+																				key={`video-${index}`}
+																				className="flex items-center gap-1"
+																			>
+																				<div className="h-7 w-7 overflow-hidden rounded border border-gray-200 bg-gray-100">
+																					<video
+																						src={`/api/videos/serve?path=${encodeURIComponent(preview.path)}`}
+																						className="h-full w-full object-cover"
+																						preload="metadata"
+																						muted
+																						playsInline
+																						controls
+																					/>
+																				</div>
+																				<Button
+																					variant="ghost"
+																					size="icon"
+																					className="h-7 w-7"
+																					onClick={(e) => {
+																						e.stopPropagation();
+																						handleSaveToWorkspace(
+																							preview.path,
+																							preview.fileName,
+																						);
+																					}}
+																					title="Save to workspace"
+																				>
+																					<FolderOpen className="h-3.5 w-3.5" />
+																				</Button>
+																			</div>
+																		);
+																	}
+																	return (
+																		<div
+																			key={`text-${index}`}
+																			className="flex h-7 w-7 items-center justify-center rounded border border-gray-200 bg-gray-50"
+																		>
+																			<FileText className="h-4 w-4 text-gray-500" />
+																		</div>
+																	);
+																})}
+															</div>
+														)}
 													</div>
 
 													{/* File inputs count */}
@@ -428,7 +669,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 													</div>
 
 													{/* Error message */}
-													{job.status === "failed" && job.error && (
+													{displayStatus === "failed" && job.error && (
 														<p className="text-xs text-red-600 mt-1 truncate">
 															{job.error}
 														</p>
@@ -437,7 +678,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 											</div>
 
 											<div className="flex gap-1">
-												{job.status === "failed" && (
+												{displayStatus === "failed" && (
 													<Button
 														variant="ghost"
 														size="icon"
@@ -454,7 +695,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 														/>
 													</Button>
 												)}
-												{job.runninghubTaskId && job.status !== "failed" && (
+												{job.runninghubTaskId && displayStatus !== "failed" && (
 													<Button
 														variant="ghost"
 														size="icon"
@@ -494,6 +735,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 												</Button>
 											</div>
 										</div>
+
 									</Card>
 								</motion.div>
 							);
