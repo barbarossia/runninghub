@@ -183,6 +183,7 @@ export default function WorkspacePage() {
 	const [convertTaskId, setConvertTaskId] = useState<string | null>(null);
 	const [isConvertProgressModalOpen, setIsConvertProgressModalOpen] =
 		useState(false);
+	const lastFolderPathRef = useRef<string | null>(null);
 
 	const handleEditComplexWorkflow = (workflow: ComplexWorkflow) => {
 		setEditingComplexWorkflow(workflow);
@@ -505,6 +506,14 @@ export default function WorkspacePage() {
 
 	const startMediaSubscription = useCallback(
 		(folderPath: string) => {
+			const isPathInFolder = (filePath: string) => {
+				if (!filePath) return false;
+				const normalizedFolder = folderPath.endsWith("/")
+					? folderPath
+					: `${folderPath}/`;
+				return filePath === folderPath || filePath.startsWith(normalizedFolder);
+			};
+
 			logger.info(
 				`[Workspace] startMediaSubscription called for: ${folderPath} at ${new Date().toISOString()}`,
 				{ toast: false },
@@ -537,6 +546,9 @@ export default function WorkspacePage() {
 					const payload = JSON.parse(event.data);
 					const file = payload?.payload;
 					if (!file || !payload?.type) return;
+					if (!isPathInFolder(file.path)) {
+						return;
+					}
 
 					// Defensive check: skip if file already exists in store to prevent duplicates
 					const currentFiles = useWorkspaceStore.getState().mediaFiles;
@@ -589,6 +601,9 @@ export default function WorkspacePage() {
 					const payload = JSON.parse(event.data);
 					const filePath = payload?.filePath;
 					if (!filePath) return;
+					if (!isPathInFolder(filePath)) {
+						return;
+					}
 					updateMediaFile(filePath, {
 						caption: payload.caption,
 						captionPath: payload.captionPath,
@@ -602,6 +617,9 @@ export default function WorkspacePage() {
 				try {
 					const payload = JSON.parse(event.data);
 					if (!payload?.path) return;
+					if (!isPathInFolder(payload.path)) {
+						return;
+					}
 
 					// Check if file still exists in store before attempting removal
 					const mediaFiles = useWorkspaceStore.getState().mediaFiles;
@@ -774,6 +792,11 @@ export default function WorkspacePage() {
 				"[WorkspacePage] Selected folder changed:",
 				selectedFolder.folder_path,
 			);
+			if (lastFolderPathRef.current !== selectedFolder.folder_path) {
+				setMediaFiles([]);
+				deselectAllMediaFiles();
+				lastFolderPathRef.current = selectedFolder.folder_path;
+			}
 			loadFolderContents(
 				selectedFolder.folder_path,
 				selectedFolder.session_id,

@@ -1,0 +1,2 @@
+- [x] Add folder path guard in SSE handlers.
+- [ ] Manual check: switching folders does not reintroduce old files on updates.
