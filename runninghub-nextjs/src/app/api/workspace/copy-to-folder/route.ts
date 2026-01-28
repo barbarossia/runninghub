@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json();
-		const { sourcePath, targetFolder, fileName } = body;
+		const { sourcePath, targetFolder, fileName, jobId, jobOutputPath } = body;
 
 		if (!sourcePath || !targetFolder) {
 			return NextResponse.json(
@@ -52,6 +52,32 @@ export async function POST(request: NextRequest) {
 		// Read source file and write to target
 		const fileContent = await readFile(sourcePath);
 		await writeFile(targetPath, fileContent);
+
+		if (jobId && jobOutputPath) {
+			try {
+				const jobFilePath = path.join(
+					process.env.HOME || "~",
+					"Downloads",
+					"workspace",
+					jobId,
+					"job.json",
+				);
+				const jobContent = await readFile(jobFilePath, "utf-8");
+				const job = JSON.parse(jobContent);
+				const savedOutputPaths = Array.isArray(job.savedOutputPaths)
+					? job.savedOutputPaths
+					: [];
+				if (!savedOutputPaths.includes(jobOutputPath)) {
+					savedOutputPaths.push(jobOutputPath);
+					await writeFile(
+						jobFilePath,
+						JSON.stringify({ ...job, savedOutputPaths }, null, 2),
+					);
+				}
+			} catch (error) {
+				console.warn("Failed to update job saved outputs:", error);
+			}
+		}
 
 		return NextResponse.json({
 			success: true,

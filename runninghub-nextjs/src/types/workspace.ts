@@ -310,7 +310,7 @@ export interface MediaFileDetail {
 /**
  * Job status
  */
-export type JobStatus = "pending" | "running" | "completed" | "failed";
+export type JobStatus = "queued" | "pending" | "running" | "completed" | "failed";
 
 /**
  * File input assignment to a workflow parameter
@@ -371,6 +371,7 @@ export interface JobResult {
 export interface Job {
 	id: string;
 	workflowId: string;
+	sourceWorkflowId?: string;
 	workflowName: string;
 	fileInputs: FileInputAssignment[];
 	textInputs: Record<string, string>;
@@ -379,6 +380,7 @@ export interface Job {
 	runninghubTaskId?: string; // RunningHub task ID (numeric string)
 	startedAt?: number;
 	completedAt?: number;
+	queuedAt?: number;
 	results?: JobResult;
 	error?: string;
 	createdAt: number;
@@ -392,6 +394,9 @@ export interface Job {
 	parentJobId?: string; // ID of job this was recreated from
 	seriesId?: string; // Groups related jobs (auto-generated)
 	runNumber?: number; // Position in series (1, 2, 3, ...)
+
+	// Saved output tracking (Save to workspace actions)
+	savedOutputPaths?: string[];
 
 	// Complex workflow fields
 	complexWorkflowId?: string;
@@ -555,6 +560,97 @@ export interface ValidateFileResponse {
 	valid: boolean;
 	error?: string;
 }
+
+// ============================================================================
+// BATCH PROCESS TEMPLATE TYPES
+// ============================================================================
+
+export type BatchProcessLocalOperationType =
+	| "video-convert"
+	| "video-fps-convert"
+	| "video-clip"
+	| "video-crop"
+	| "image-resize"
+	| "duck-decode"
+	| "caption";
+
+export type BatchProcessLocalOperation = {
+	type: BatchProcessLocalOperationType;
+	config?: Record<string, unknown>;
+};
+
+export type BatchProcessInputMapping = {
+	targetKey: string;
+	targetType: "file" | "text" | "config";
+	sourceType: "selected" | "previous-output" | "static";
+	sourceKey?: string;
+	staticValue?: string | number | boolean;
+};
+
+export type BatchProcessOutputMapping = {
+	outputKey: string;
+	outputType: "file" | "text";
+	outputIndex?: number;
+	parameterId?: string;
+};
+
+export type BatchProcessStep = {
+	id: string;
+	order: number;
+	name: string;
+	type: "local" | "workflow";
+	localOperation?: BatchProcessLocalOperation;
+	workflowId?: string;
+	workflowName?: string;
+	sourceWorkflowId?: string;
+	inputMapping: BatchProcessInputMapping[];
+	outputMapping?: BatchProcessOutputMapping[];
+	staticValues?: Record<string, string | number | boolean>;
+};
+
+export type BatchProcessTemplate = {
+	id: string;
+	name: string;
+	description?: string;
+	steps: BatchProcessStep[];
+	createdAt: number;
+	updatedAt: number;
+};
+
+export type SaveBatchProcessTemplateRequest = {
+	template: BatchProcessTemplate;
+};
+
+export type SaveBatchProcessTemplateResponse = {
+	success: boolean;
+	templateId?: string;
+	error?: string;
+};
+
+export type ListBatchProcessTemplateResponse = {
+	success: boolean;
+	templates: BatchProcessTemplate[];
+	error?: string;
+};
+
+export type GetBatchProcessTemplateResponse = {
+	success: boolean;
+	template?: BatchProcessTemplate;
+	error?: string;
+};
+
+export type ExecuteBatchProcessTemplateRequest = {
+	templateId: string;
+	filePaths: string[];
+	folderPath?: string;
+};
+
+export type ExecuteBatchProcessTemplateResponse = {
+	success: boolean;
+	taskId?: string;
+	message?: string;
+	error?: string;
+};
 
 // ============================================================================
 // COMPLEX WORKFLOW TYPES

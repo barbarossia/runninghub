@@ -185,6 +185,8 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 	// Get status icon and color
 	const getStatusIcon = (status: JobStatus) => {
 		switch (status) {
+			case "queued":
+				return <Clock className="h-4 w-4" />;
 			case "pending":
 				return <Clock className="h-4 w-4" />;
 			case "running":
@@ -198,6 +200,8 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 
 	const getStatusColor = (status: JobStatus) => {
 		switch (status) {
+			case "queued":
+				return "text-amber-600 bg-amber-50";
 			case "pending":
 				return "text-yellow-600 bg-yellow-50";
 			case "running":
@@ -217,6 +221,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 				return "default";
 			case "failed":
 				return "destructive";
+			case "queued":
 			default:
 				return "secondary";
 		}
@@ -263,6 +268,30 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		}
 
 		return previews.slice(0, MAX_PREVIEWS);
+	};
+
+	const isMediaPath = (filePath: string) => {
+		const ext = filePath.split(".").pop()?.toLowerCase();
+		if (!ext) return false;
+		return [
+			"png",
+			"jpg",
+			"jpeg",
+			"gif",
+			"bmp",
+			"webp",
+			"svg",
+			"mp4",
+			"mov",
+			"avi",
+			"webm",
+		].includes(ext);
+	};
+
+	const hasSavedMediaOutputs = (job: Job) => {
+		const savedOutputPaths = job.savedOutputPaths || [];
+		if (savedOutputPaths.length === 0) return false;
+		return savedOutputPaths.some((savedPath) => isMediaPath(savedPath));
 	};
 
 	const imagePreviewPaths = useMemo(() => {
@@ -322,8 +351,10 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 	};
 
 	const handleSaveToWorkspace = async (
+		job: Job,
 		filePath: string,
 		fileName?: string,
+		jobOutputPath?: string,
 	) => {
 		if (!workspaceFolder?.folder_path) {
 			toast.error("Please select a workspace folder first");
@@ -338,12 +369,24 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 					sourcePath: filePath,
 					targetFolder: workspaceFolder.folder_path,
 					fileName: fileName || getBasename(filePath),
+					jobId: job.id,
+					jobOutputPath: jobOutputPath || filePath,
 				}),
 			});
 			const data = await response.json();
 
 			if (!response.ok) {
 				throw new Error(data.error || "Failed to save to workspace");
+			}
+
+			const nextSavedOutputPath = jobOutputPath || filePath;
+			if (nextSavedOutputPath) {
+				const savedOutputPaths = job.savedOutputPaths || [];
+				if (!savedOutputPaths.includes(nextSavedOutputPath)) {
+					updateJob(job.id, {
+						savedOutputPaths: [...savedOutputPaths, nextSavedOutputPath],
+					});
+				}
 			}
 
 			toast.success(`Saved to workspace: ${fileName || getBasename(filePath)}`);
@@ -450,6 +493,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="all">All Status</SelectItem>
+							<SelectItem value="queued">Queued</SelectItem>
 							<SelectItem value="pending">Pending</SelectItem>
 							<SelectItem value="running">Running</SelectItem>
 							<SelectItem value="completed">Completed</SelectItem>
@@ -583,8 +627,10 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 																						className="h-7 w-7"
 																						onClick={() =>
 																							handleSaveToWorkspace(
+																								job,
 																								preview.path,
 																								preview.fileName,
+																								preview.path,
 																							)
 																						}
 																						title="Save to workspace"
@@ -625,8 +671,10 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 																					onClick={(e) => {
 																						e.stopPropagation();
 																						handleSaveToWorkspace(
+																							job,
 																							preview.path,
 																							preview.fileName,
+																							preview.path,
 																						);
 																					}}
 																					title="Save to workspace"
@@ -655,6 +703,11 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 															{job.fileInputs.length} file
 															{job.fileInputs.length !== 1 ? "s" : ""}
 														</span>
+														{hasSavedMediaOutputs(job) && (
+															<Badge variant="outline" className="text-xs">
+																Saved
+															</Badge>
+														)}
 														{job.deleteSourceFiles && (
 															<Badge variant="outline" className="text-xs">
 																Source files deleted

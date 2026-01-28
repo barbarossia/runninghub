@@ -19,6 +19,7 @@ import {
 	MessageSquare,
 	Database,
 	FilePlus,
+	Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { BaseSelectionToolbar } from "@/components/selection/BaseSelectionToolbar";
 import { QuickRunWorkflowDialog } from "@/components/workspace/QuickRunWorkflowDialog";
 import { ComplexWorkflowRunDialog } from "@/components/workspace/ComplexWorkflowRunDialog";
+import { BatchProcessDialog } from "@/components/workspace/BatchProcessDialog";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import type { MediaFile, Workflow } from "@/types/workspace";
 
@@ -74,6 +76,8 @@ interface MediaSelectionToolbarProps {
 	onAddCaption?: (files: MediaFile[]) => Promise<void>; // Manually add caption (empty txt)
 	onExportToDataset?: () => void; // Export selected files to dataset
 	onDeselectAll?: () => void;
+	onBatchProcessStart?: (taskId: string) => void;
+	showBatchProcessButton?: boolean;
 	disabled?: boolean;
 	className?: string;
 	showCancelButton?: boolean;
@@ -96,6 +100,8 @@ export function MediaSelectionToolbar({
 	onAddCaption,
 	onExportToDataset,
 	onDeselectAll,
+	onBatchProcessStart,
+	showBatchProcessButton = false,
 	disabled = false,
 	className = "",
 	showCancelButton = true,
@@ -135,6 +141,7 @@ export function MediaSelectionToolbar({
 	const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
 	const [showComplexWorkflowDialog, setShowComplexWorkflowDialog] =
 		useState(false);
+	const [showBatchProcessDialog, setShowBatchProcessDialog] = useState(false);
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
 	const [newFileName, setNewFileName] = useState("");
 	const [decodePassword, setDecodePassword] = useState("");
@@ -464,6 +471,19 @@ export function MediaSelectionToolbar({
 									</Button>
 								)}
 
+								{showBatchProcessButton && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setShowBatchProcessDialog(true)}
+										disabled={toolbarDisabled}
+										className="h-9 border-slate-200 bg-slate-50/70 hover:bg-slate-100 text-slate-700"
+									>
+										<Layers className="h-4 w-4 mr-2" />
+										Batch Process
+									</Button>
+								)}
+
 								{/* Run Complex Workflow */}
 								<Button
 									variant="outline"
@@ -705,6 +725,20 @@ export function MediaSelectionToolbar({
 									>
 										<Play className="h-3.5 w-3.5 mr-2 text-blue-400" />
 										<span className="text-xs">Run Workflow</span>
+									</Button>
+								)}
+
+								{showBatchProcessButton && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => setShowBatchProcessDialog(true)}
+										disabled={toolbarDisabled}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Batch Process"
+									>
+										<Layers className="h-3.5 w-3.5 mr-2 text-slate-300" />
+										<span className="text-xs">Batch</span>
 									</Button>
 								)}
 
@@ -1242,6 +1276,15 @@ export function MediaSelectionToolbar({
 					</DialogContent>
 				</Dialog>
 			)}
+
+			<BatchProcessDialog
+				open={showBatchProcessDialog}
+				onOpenChange={setShowBatchProcessDialog}
+				selectedFiles={selectedFiles}
+				workflows={workflows}
+				onTaskStart={onBatchProcessStart}
+				onDeselectAll={onDeselectAll}
+			/>
 
 			{/* Quick Run Workflow Dialog */}
 			{onRunWorkflow && (

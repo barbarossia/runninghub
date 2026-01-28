@@ -574,7 +574,11 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	};
 
 	// Handle save to workspace folder
-	const handleSaveToWorkspace = async (filePath: string, fileName: string) => {
+	const handleSaveToWorkspace = async (
+		filePath: string,
+		fileName: string,
+		jobOutputPath?: string,
+	) => {
 		if (!workspaceFolder?.folder_path) {
 			toast.error("Please select a workspace folder first");
 			return;
@@ -588,6 +592,8 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 					sourcePath: filePath,
 					targetFolder: workspaceFolder.folder_path,
 					fileName,
+					jobId,
+					jobOutputPath: jobOutputPath || filePath,
 				}),
 			});
 
@@ -595,6 +601,16 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 
 			if (!response.ok) {
 				throw new Error(data.error || "Failed to save to workspace");
+			}
+
+			const nextSavedOutputPath = jobOutputPath || filePath;
+			if (nextSavedOutputPath && job) {
+				const savedOutputPaths = job.savedOutputPaths || [];
+				if (!savedOutputPaths.includes(nextSavedOutputPath)) {
+					updateJob(jobId, {
+						savedOutputPaths: [...savedOutputPaths, nextSavedOutputPath],
+					});
+				}
 			}
 
 			toast.success(`Saved to workspace: ${fileName}`);
@@ -880,6 +896,8 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	// Get status color
 	const getStatusColor = (status: Job["status"]) => {
 		switch (status) {
+			case "queued":
+				return "bg-amber-100 text-amber-800";
 			case "pending":
 				return "bg-yellow-100 text-yellow-800";
 			case "running":
@@ -1192,6 +1210,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 																			output.fileName ||
 																				getBasename(output.path!) ||
 																				"download",
+																			output.path!,
 																		)
 																	}
 																	title={
@@ -1277,6 +1296,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 																		handleSaveToWorkspace(
 																			decodedFile.decodedPath,
 																			getBasename(decodedFile.decodedPath),
+																			output.path,
 																		)
 																	}
 																	title={

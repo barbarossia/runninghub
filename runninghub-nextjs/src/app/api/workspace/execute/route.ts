@@ -8,6 +8,12 @@ import { randomUUID } from "crypto";
 import { spawn } from "child_process";
 import { writeLog } from "@/lib/logger";
 import { initTask, updateTask } from "@/lib/task-store";
+import {
+	enqueueJob,
+	releaseSlot,
+	takeNextQueued,
+	tryAcquireSlot,
+} from "@/lib/workspace-submit-queue";
 import type {
 	ExecuteJobRequest,
 	ExecuteJobResponse,
@@ -15,6 +21,13 @@ import type {
 	Job,
 	Workflow,
 } from "@/types/workspace";
+
+const MAX_CONCURRENT_SUBMISSIONS = parseInt(
+	process.env.RUNNINGHUB_MAX_CONCURRENT_PROCESSES || "3",
+	10,
+);
+
+let isDrainingQueue = false;
 
 export async function POST(request: NextRequest) {
 	try {
@@ -90,6 +103,7 @@ export async function POST(request: NextRequest) {
 			id: jobId,
 			workflowId: body.workflowId,
 			workflowName: body.workflowName || "Unknown Workflow",
+			sourceWorkflowId: body.sourceWorkflowId,
 			fileInputs: body.fileInputs || [],
 			textInputs: body.textInputs || {},
 			status: "pending",
@@ -189,7 +203,37 @@ export async function POST(request: NextRequest) {
 			body.fileInputs = validFileInputs;
 		}
 
-		// Start background processing
+		const canStartNow = await tryAcquireSlot(MAX_CONCURRENT_SUBMISSIONS);
+		if (!canStartNow) {
+			const position = await enqueueJob({
+				jobId,
+				taskId,
+				workflowId: body.workflowId,
+				enqueuedAt: Date.now(),
+			});
+
+			await updateTask(taskId, { status: "pending", error: undefined });
+			await updateJobFile(jobId, {
+				status: "queued",
+				queuedAt: Date.now(),
+				error: undefined,
+				completedAt: undefined,
+			});
+
+			await writeLog(
+				`Job queued due to capacity limit (position ${position})`,
+				"info",
+				taskId,
+			);
+
+			return NextResponse.json({
+				success: true,
+				taskId,
+				jobId,
+				message: "Job queued successfully",
+			} as ExecuteJobResponse);
+		}
+
 		processWorkflowInBackground(
 			taskId,
 			jobId,
@@ -300,6 +344,139 @@ async function updateJobFile(jobId: string, updates: Partial<Job>) {
 		await fs.writeFile(jobFilePath, JSON.stringify(updatedJob, null, 2));
 	} catch (e) {
 		console.error(`Failed to update job file for ${jobId}:`, e);
+	}
+}
+
+async function readJobFile(jobId: string): Promise<Job | null> {
+	const fs = await import("fs/promises");
+	const path = await import("path");
+	const jobFilePath = path.join(
+		process.env.HOME || "~",
+		"Downloads",
+		"workspace",
+		jobId,
+		"job.json",
+	);
+
+	try {
+		const content = await fs.readFile(jobFilePath, "utf-8");
+		return JSON.parse(content) as Job;
+	} catch (error) {
+		console.error(`Failed to read job file for ${jobId}:`, error);
+		return null;
+	}
+}
+
+function buildEnvForJob(job: Job): NodeJS.ProcessEnv {
+	const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+	const apiHost =
+		process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
+	const downloadDir = process.env.RUNNINGHUB_DOWNLOAD_DIR;
+	const cliWorkflowId = job.sourceWorkflowId || job.workflowId;
+
+	const env: NodeJS.ProcessEnv = {
+		...process.env,
+		RUNNINGHUB_API_KEY: apiKey!,
+		RUNNINGHUB_WORKFLOW_ID: cliWorkflowId,
+		RUNNINGHUB_API_HOST: apiHost,
+	};
+
+	if (downloadDir) {
+		env.RUNNINGHUB_DOWNLOAD_DIR = downloadDir;
+	}
+
+	return env;
+}
+
+function extractCliCode(output: string): number | null {
+	const lines = output.split("\n");
+	const candidates: any[] = [];
+
+	for (let startIndex = 0; startIndex < lines.length; startIndex++) {
+		if (!lines[startIndex].includes("{")) continue;
+		const firstBracePos = lines[startIndex].indexOf("{");
+		let braceCount = 0;
+		let endIndex = -1;
+
+		for (let i = startIndex; i < lines.length; i++) {
+			const line =
+				i === startIndex ? lines[i].substring(firstBracePos) : lines[i];
+			for (const char of line) {
+				if (char === "{") braceCount++;
+				if (char === "}") braceCount--;
+			}
+			if (braceCount === 0) {
+				endIndex = i;
+				break;
+			}
+		}
+
+		if (endIndex >= 0) {
+			try {
+				const jsonStr = lines.slice(startIndex, endIndex + 1).join("\n");
+				const jsonStart = firstBracePos > 0 ? jsonStr.indexOf("{") : 0;
+				const parsed = JSON.parse(jsonStr.substring(jsonStart));
+				if (parsed && parsed.code !== undefined) {
+					candidates.push(parsed);
+				}
+			} catch {
+				continue;
+			}
+		}
+	}
+
+	if (candidates.length === 0) return null;
+	const last = candidates[candidates.length - 1];
+	const parsedCode = Number(last.code);
+	return Number.isFinite(parsedCode) ? parsedCode : null;
+}
+
+function isQueueFullError(stdout: string, stderr: string): boolean {
+	const combined = `${stdout}\n${stderr}`;
+	const code = extractCliCode(combined);
+	if (code === 805) return true;
+	if (combined.includes("TASK_QUEUE_MAXED")) return true;
+	return /code\s*[:=]\s*805/i.test(combined);
+}
+
+async function startQueuedJob(jobId: string, taskId: string) {
+	const job = await readJobFile(jobId);
+	if (!job) {
+		await releaseSlot();
+		await drainQueue();
+		return;
+	}
+
+	const env = buildEnvForJob(job);
+
+	await processWorkflowInBackground(
+		taskId,
+		jobId,
+		job.workflowId,
+		job.fileInputs || [],
+		job.textInputs || {},
+		job.deleteSourceFiles,
+		env,
+		job.seriesId,
+	);
+}
+
+async function drainQueue() {
+	if (isDrainingQueue) return;
+	isDrainingQueue = true;
+	try {
+		while (true) {
+			const next = await takeNextQueued(MAX_CONCURRENT_SUBMISSIONS);
+			if (!next) break;
+			await writeLog(
+				`Dequeued job ${next.jobId} for execution`,
+				"info",
+				next.taskId,
+			);
+			await startQueuedJob(next.jobId, next.taskId);
+		}
+	} finally {
+		isDrainingQueue = false;
 	}
 }
 
@@ -1130,47 +1307,71 @@ async function processWorkflowInBackground(
 					completedCount: fileInputs.length + Object.keys(textInputs).length,
 				});
 
-				// Update job status
 				await updateJobFile(jobId, {
 					status: "completed",
 					completedAt: Date.now(),
 				});
 
-				// NEW: Process outputs - pass stdout for JSON parsing
 				await processJobOutputs(taskId, workflowId, jobId, env, stdout);
+				await releaseSlot();
+				await drainQueue();
+				return;
+			}
 
-				// Note: Manual cleanup moved to BEFORE execution block above.
-				// No further cleanup needed here.
-			} else {
+			if (isQueueFullError(stdout, stderr)) {
 				await writeLog(
-					`Workflow execution failed with code ${code}`,
-					"error",
+					"RunningHub queue is full (code 805). Re-queuing job.",
+					"warning",
 					taskId,
 				);
-				await updateTask(taskId, {
-					status: "failed",
-					error: `Exit code ${code}`,
-				});
-
-				// Update job status
+				await updateTask(taskId, { status: "pending", error: undefined });
 				await updateJobFile(jobId, {
-					status: "failed",
-					error: `Exit code ${code}`,
-					completedAt: Date.now(),
+					status: "queued",
+					queuedAt: Date.now(),
+					error: undefined,
+					completedAt: undefined,
 				});
+				await enqueueJob({
+					jobId,
+					taskId,
+					workflowId,
+					enqueuedAt: Date.now(),
+				});
+				await releaseSlot();
+				await drainQueue();
+				return;
 			}
+
+			await writeLog(
+				`Workflow execution failed with code ${code}`,
+				"error",
+				taskId,
+			);
+			await updateTask(taskId, {
+				status: "failed",
+				error: `Exit code ${code}`,
+			});
+
+			await updateJobFile(jobId, {
+				status: "failed",
+				error: `Exit code ${code}`,
+				completedAt: Date.now(),
+			});
+			await releaseSlot();
+			await drainQueue();
 		});
 
 		childProcess.on("error", async (error) => {
 			await writeLog(`Process error: ${error.message}`, "error", taskId);
 			await updateTask(taskId, { status: "failed", error: error.message });
 
-			// Update job status
 			await updateJobFile(jobId, {
 				status: "failed",
 				error: error.message,
 				completedAt: Date.now(),
 			});
+			await releaseSlot();
+			await drainQueue();
 		});
 	} catch (error) {
 		const errorMessage =
@@ -1184,5 +1385,7 @@ async function processWorkflowInBackground(
 			error: errorMessage,
 			completedAt: Date.now(),
 		});
+		await releaseSlot();
+		await drainQueue();
 	}
 }

@@ -746,6 +746,7 @@ export default function WorkspacePage() {
 			if (
 				job &&
 				job.status !== jobStatus &&
+				!(job.status === "queued" && jobStatus === "pending") &&
 				job.status !== "failed" &&
 				job.status !== "completed"
 			) {
