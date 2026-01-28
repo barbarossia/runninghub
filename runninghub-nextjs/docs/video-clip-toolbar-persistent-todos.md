@@ -1,0 +1,3 @@
+- [x] Update `VideoClipSelectionToolbar` to keep the toolbar always visible and full width.
+- [x] Confirm clip/convert actions stay disabled with no selection.
+- [ ] Smoke check clip/convert tabs for expanded/floating toolbar modes.

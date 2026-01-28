@@ -2321,22 +2321,20 @@ export default function WorkspacePage() {
 								<ExportConfiguration />
 
 								{/* Media Selection Toolbar */}
-								{selectedFiles.length > 0 && (
-									<MediaSelectionToolbar
-										selectedFiles={selectedFiles}
-										onRename={handleRenameFile}
-										onDelete={handleDeleteFile}
-										onDecode={handleDecodeFile}
-										onRunWorkflow={handleQuickRunWorkflow}
-										onPreview={handlePreviewFile}
-										onExport={handleExport}
-										onExportToDataset={() => {
-											setFileToExportToDataset(null); // null means use selectedFiles
-											setShowSelectDatasetDialog(true);
-										}}
-										onDeselectAll={deselectAllMediaFiles}
-									/>
-								)}
+								<MediaSelectionToolbar
+									selectedFiles={selectedFiles}
+									onRename={handleRenameFile}
+									onDelete={handleDeleteFile}
+									onDecode={handleDecodeFile}
+									onRunWorkflow={handleQuickRunWorkflow}
+									onPreview={handlePreviewFile}
+									onExport={handleExport}
+									onExportToDataset={() => {
+										setFileToExportToDataset(null); // null means use selectedFiles
+										setShowSelectDatasetDialog(true);
+									}}
+									onDeselectAll={deselectAllMediaFiles}
+								/>
 
 								{/* Sort Controls */}
 								<div className="flex items-center justify-between">

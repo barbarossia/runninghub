@@ -16,6 +16,8 @@ export interface BaseToolbarProps {
 	children: (mode: "expanded" | "floating" | "expanded-actions") => ReactNode;
 	onDeselectAll: () => void;
 	showCancelButton?: boolean;
+	alwaysVisible?: boolean;
+	fullWidth?: boolean;
 }
 
 export function BaseSelectionToolbar({
@@ -26,13 +28,16 @@ export function BaseSelectionToolbar({
 	children,
 	onDeselectAll,
 	showCancelButton = false,
+	alwaysVisible = false,
+	fullWidth = false,
 }: BaseToolbarProps) {
 	const [mode, setMode] = useToolbarMode();
 	const hasSelection = selectedCount > 0;
+	const shouldRender = hasSelection || alwaysVisible;
 
 	return (
 		<AnimatePresence mode="wait">
-			{hasSelection &&
+			{shouldRender &&
 				(mode === "expanded" ? (
 					/* Expanded Mode (Sticky at top of gallery area) */
 					<motion.div
@@ -42,7 +47,8 @@ export function BaseSelectionToolbar({
 						exit={{ opacity: 0, y: -20, x: 0 }}
 						transition={{ type: "spring", damping: 20, stiffness: 300 }}
 						className={cn(
-							"sticky top-4 z-30 bg-white/95 backdrop-blur-md border border-blue-100 rounded-xl shadow-lg p-3 mb-6 w-full max-w-4xl mx-auto",
+							"sticky top-4 z-30 bg-white/95 backdrop-blur-md border border-blue-100 rounded-xl shadow-lg p-3 mb-6 w-full",
+							!fullWidth && "max-w-4xl mx-auto",
 							className,
 						)}
 					>

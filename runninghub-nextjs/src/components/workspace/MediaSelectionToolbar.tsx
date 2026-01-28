@@ -404,6 +404,7 @@ export function MediaSelectionToolbar({
 
 	const toolbarDisabled =
 		disabled ||
+		selectedCount === 0 ||
 		isRenaming ||
 		isDeleting ||
 		isDecoding ||
@@ -430,6 +431,8 @@ export function MediaSelectionToolbar({
 				badgeColor="bg-purple-600"
 				onDeselectAll={handleDeselectAll}
 				showCancelButton={showCancelButton}
+				alwaysVisible={true}
+				fullWidth={true}
 			>
 				{(mode) => {
 					if (mode === "expanded") {
@@ -639,7 +642,7 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Decode - for single or multiple duck-encoded images */}
-								{hasDuckEncodedImages && onDecode && (
+								{onDecode && (
 									<Button
 										variant="outline"
 										size="sm"
@@ -656,7 +659,7 @@ export function MediaSelectionToolbar({
 												handleDecode();
 											}
 										}}
-										disabled={toolbarDisabled}
+										disabled={toolbarDisabled || !hasDuckEncodedImages}
 										className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700 shadow-md shadow-green-200/50"
 									>
 										<Eye className="h-4 w-4 mr-2" />
@@ -875,7 +878,7 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Decode - for single or multiple duck-encoded images in floating mode */}
-								{hasDuckEncodedImages && onDecode && (
+								{onDecode && (
 									<motion.div
 										initial={{ scale: 0.8, opacity: 0 }}
 										animate={{ scale: 1, opacity: 1 }}
@@ -898,7 +901,7 @@ export function MediaSelectionToolbar({
 													handleDecode();
 												}
 											}}
-											disabled={toolbarDisabled}
+											disabled={toolbarDisabled || !hasDuckEncodedImages}
 											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3 relative overflow-hidden"
 											title={
 												duckEncodedCount === 1

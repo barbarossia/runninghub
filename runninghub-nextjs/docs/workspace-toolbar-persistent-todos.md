@@ -1,0 +1,4 @@
+- [x] Add always-visible/full-width options to BaseSelectionToolbar.
+- [x] Render MediaSelectionToolbar without requiring selection.
+- [x] Disable decode button unless encoded images are selected.
+- [ ] Manual check: toolbar visible, full width, floating toggle works.
