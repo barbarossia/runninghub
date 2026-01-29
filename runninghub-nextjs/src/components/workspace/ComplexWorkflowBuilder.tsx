@@ -187,8 +187,8 @@ export function ComplexWorkflowBuilder({
 			parameters: workflow.inputs.map((param) => ({
 				parameterId: param.id,
 				parameterName: param.name,
-				valueType: "static",
-				staticValue: param.defaultValue,
+				valueType: param.type === 'file' ? "user-input" : "static",
+				staticValue: param.defaultValue ?? "",
 				required: param.required,
 				placeholder: param.placeholder,
 			})),
@@ -942,22 +942,54 @@ export function ComplexWorkflowBuilder({
 
 																<div className="md:col-span-5">
 																	{param.valueType === "static" ? (
-																		<Input
-																			value={
-																				param.staticValue?.toString() || ""
-																			}
-																			onChange={(e) =>
-																				updateStaticValue(
-																					step.id,
-																					param.parameterId,
-																					e.target.value,
-																				)
-																			}
-																			placeholder={
-																				param.placeholder || "Enter value"
-																			}
-																			className="h-8"
-																		/>
+																		originalParam?.options &&
+																		originalParam.options.length > 0 ? (
+																			<Select
+																				value={
+																					param.staticValue?.toString() || ""
+																				}
+																				onValueChange={(value) =>
+																					updateStaticValue(
+																						step.id,
+																						param.parameterId,
+																						value,
+																					)
+																				}
+																			>
+																				<SelectTrigger className="h-8">
+																					<SelectValue placeholder="Select option" />
+																				</SelectTrigger>
+																				<SelectContent>
+																					{originalParam.options.map(
+																						(option) => (
+																							<SelectItem
+																								key={option.value.toString()}
+																								value={option.value.toString()}
+																							>
+																								{option.label}
+																							</SelectItem>
+																						),
+																					)}
+																				</SelectContent>
+																			</Select>
+																		) : (
+																			<Input
+																				value={
+																					param.staticValue?.toString() || ""
+																				}
+																				onChange={(e) =>
+																					updateStaticValue(
+																						step.id,
+																						param.parameterId,
+																						e.target.value,
+																					)
+																				}
+																				placeholder={
+																					param.placeholder || "Enter value"
+																				}
+																				className="h-8"
+																			/>
+																		)
 																	) : param.valueType === "user-input" ? (
 																		<div className="flex items-center gap-2 h-8 px-3 bg-muted/50 rounded-md border border-dashed text-muted-foreground text-sm">
 																			<User className="h-3.5 w-3.5" />
