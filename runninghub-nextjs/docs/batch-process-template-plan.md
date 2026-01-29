@@ -1,7 +1,7 @@
 # Local Workflow Plan
 
 ## Overview
-Add a Local Workflow feature for local operations (convert/clip/crop/resize/duck decode/caption) managed inside the Workflows tab. Local workflows are reusable templates for a **single local operation** (no step list) with configurable options and default input mapping. Users create/edit them via the existing **Create New** button, choosing “Local Workflow” vs “RunningHub Workflow.” The Workflows list should **flag** each entry as Local or RunningHub.
+Add a Local Workflow feature for local operations (convert/clip/crop/resize/duck decode/caption) managed inside the Workflows tab. Local workflows are reusable templates for a **single local operation** (no step list) with configurable options. The JSON structure is aligned with standard workflows by using an `inputs` array for operation definitions, omitting complex mapping logic to keep it lightweight. Users create/edit them via the existing **Create New** button, choosing “Local Workflow” vs “RunningHub Workflow.” The Workflows list should **flag** each entry as Local or RunningHub.
 
 This plan focuses on **create/edit and management UI** first. Execution, batch auto-run, and media-gallery integration are follow-up phases.
 
@@ -33,9 +33,10 @@ This plan focuses on **create/edit and management UI** first. Execution, batch a
 6. Workflow list shows the new entry with a “Local” badge.
 
 ## Data Model
-Local Workflow stored separately from RunningHub workflows.
-- Fields: `id`, `name`, `description`, `createdAt`, `updatedAt`, `steps` (single local step).
-- Step includes: local operation type + config, input mapping, static values.
+Local Workflow follows a structure similar to standard RunningHub workflows but specialized for local tasks.
+- Fields: `id`, `name`, `description`, `createdAt`, `updatedAt`, `inputs` (list of local operation definitions).
+- Input includes: `id`, `name`, `type` ("local"), `operation` (local operation type), `config` (specific parameters for that operation).
+- Note: Mapping logic is handled implicitly (processing "selected" files) to keep the JSON clean.
 
 ## Architecture / API (Phase 1)
 - `POST /api/workspace/local-workflow/save`

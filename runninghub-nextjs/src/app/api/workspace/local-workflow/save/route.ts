@@ -19,9 +19,9 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		if (!body.workflow.steps || body.workflow.steps.length === 0) {
+		if (!body.workflow.inputs || body.workflow.inputs.length === 0) {
 			return NextResponse.json(
-				{ success: false, error: 'At least one step is required' },
+				{ success: false, error: 'At least one input operation is required' },
 				{ status: 400 },
 			);
 		}

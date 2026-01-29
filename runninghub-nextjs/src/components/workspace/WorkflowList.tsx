@@ -197,7 +197,7 @@ export function WorkflowList({
 	}, [workflows, localWorkflows]);
 
 	const getLocalOperationLabel = (workflow: LocalWorkflow) => {
-		const operation = workflow.steps?.[0]?.localOperation?.type || "local";
+		const operation = workflow.inputs?.[0]?.operation || "local";
 		return operation
 			.replace("video-", "")
 			.replace("image-", "")

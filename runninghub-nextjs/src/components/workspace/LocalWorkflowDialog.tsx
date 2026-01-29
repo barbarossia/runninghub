@@ -19,21 +19,14 @@ import { LOCAL_OPS_DEFINITIONS } from '@/constants/local-ops';
 import { useVideoConvertStore } from '@/store/video-convert-store';
 import type {
 	LocalWorkflow,
-	LocalWorkflowInputMapping,
+	LocalWorkflowInput,
 	LocalWorkflowOperationType,
-	LocalWorkflowStep,
 } from '@/types/workspace';
 
 const LOCAL_OPERATION_OPTIONS = Object.values(LOCAL_OPS_DEFINITIONS).map(def => ({
 	value: def.type,
 	label: def.label
 }));
-
-const DEFAULT_MAPPING: LocalWorkflowInputMapping = {
-	targetKey: 'video',
-	targetType: 'file',
-	sourceType: 'selected',
-};
 
 function createEmptyWorkflow(): LocalWorkflow {
 	const now = Date.now();
@@ -43,20 +36,17 @@ function createEmptyWorkflow(): LocalWorkflow {
 		description: '',
 		createdAt: now,
 		updatedAt: now,
-		steps: [createStep(1)],
+		inputs: [createInput()],
 	};
 }
 
-function createStep(order: number): LocalWorkflowStep {
+function createInput(): LocalWorkflowInput {
 	return {
 		id: crypto.randomUUID(),
-		order,
-		name: `Step ${order}`,
+		name: 'Local Operation',
 		type: 'local',
-		localOperation: { type: 'video-convert', config: {} },
-		inputMapping: [DEFAULT_MAPPING],
-		outputMapping: [],
-		staticValues: {},
+		operation: 'video-convert',
+		config: {},
 	};
 }
 
@@ -87,24 +77,7 @@ export function LocalWorkflowDialog({
 		return workflows.find((workflow) => workflow.id === selectedWorkflowId) || null;
 	}, [workflows, selectedWorkflowId]);
 
-	const primaryStep = draftWorkflow.steps[0];
-
-	const getDefaultInputMapping = useCallback(
-		(operationType: LocalWorkflowOperationType): LocalWorkflowInputMapping => {
-			const isVideo =
-				operationType === 'video-convert' ||
-				operationType === 'video-fps-convert' ||
-				operationType === 'video-clip' ||
-				operationType === 'video-crop';
-			const targetKey = isVideo ? 'video' : 'image';
-			return {
-				targetKey,
-				targetType: 'file',
-				sourceType: 'selected',
-			};
-		},
-		[],
-	);
+	const primaryInput = draftWorkflow.inputs[0];
 
 	const loadWorkflows = useCallback(async () => {
 		try {
@@ -160,10 +133,10 @@ export function LocalWorkflowDialog({
 
 	const editSelectedWorkflow = () => {
 		if (!selectedWorkflow) return;
-		const steps = selectedWorkflow.steps?.length
-			? selectedWorkflow.steps
-			: [createStep(1)];
-		setDraftWorkflow({ ...selectedWorkflow, steps });
+		const inputs = selectedWorkflow.inputs?.length
+			? selectedWorkflow.inputs
+			: [createInput()];
+		setDraftWorkflow({ ...selectedWorkflow, inputs });
 		setIsEditing(true);
 	};
 
@@ -171,11 +144,11 @@ export function LocalWorkflowDialog({
 		setDraftWorkflow((prev) => ({ ...prev, ...updates }));
 	};
 
-	const updateStep = (stepId: string, updates: Partial<LocalWorkflowStep>) => {
+	const updateInput = (inputId: string, updates: Partial<LocalWorkflowInput>) => {
 		setDraftWorkflow((prev) => ({
 			...prev,
-			steps: prev.steps.map((step) =>
-				step.id === stepId ? { ...step, ...updates } : step,
+			inputs: prev.inputs.map((input) =>
+				input.id === inputId ? { ...input, ...updates } : input,
 			),
 		}));
 	};
@@ -186,8 +159,8 @@ export function LocalWorkflowDialog({
 			return;
 		}
 
-		if (!primaryStep) {
-			toast.error('Local workflow step is missing');
+		if (!primaryInput) {
+			toast.error('Local workflow input is missing');
 			return;
 		}
 
@@ -195,7 +168,7 @@ export function LocalWorkflowDialog({
 		try {
 			const nextWorkflow: LocalWorkflow = {
 				...draftWorkflow,
-				steps: [primaryStep],
+				inputs: [primaryInput],
 			};
 
 			const response = await fetch('/api/workspace/local-workflow/save', {
@@ -219,65 +192,6 @@ export function LocalWorkflowDialog({
 		} finally {
 			setIsSaving(false);
 		}
-	};
-
-	const renderInputMapping = (step: LocalWorkflowStep, mapping: LocalWorkflowInputMapping) => {
-		const mappingIndex = step.inputMapping.findIndex(
-			(entry) => entry.targetKey === mapping.targetKey && entry.targetType === mapping.targetType,
-		);
-
-		const updateMapping = (updates: Partial<LocalWorkflowInputMapping>) => {
-			const nextMappings = [...step.inputMapping];
-			const nextEntry = { ...mapping, ...updates };
-			if (mappingIndex === -1) {
-				nextMappings.push(nextEntry);
-			} else {
-				nextMappings[mappingIndex] = nextEntry;
-			}
-			updateStep(step.id, { inputMapping: nextMappings });
-		};
-
-		return (
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-3" key={`${mapping.targetKey}-${mapping.targetType}`}>
-				<div>
-					<Label className="text-xs">Target</Label>
-					<div className="text-xs text-gray-600 mt-1">{mapping.targetKey}</div>
-				</div>
-				<div>
-					<Label className="text-xs">Source</Label>
-					<Select
-						value={mapping.sourceType}
-						onValueChange={(value) => updateMapping({ sourceType: value as LocalWorkflowInputMapping['sourceType'] })}
-					>
-						<SelectTrigger className="h-8">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="selected">Selected File</SelectItem>
-							<SelectItem value="previous-output">Previous Output</SelectItem>
-							<SelectItem value="static">Static Value</SelectItem>
-						</SelectContent>
-					</Select>
-				</div>
-				<div>
-					<Label className="text-xs">Value / Key</Label>
-					<Input
-						value={
-							mapping.sourceType === 'static'
-								? String(mapping.staticValue ?? '')
-								: mapping.sourceKey || ''
-						}
-						onChange={(event) =>
-							mapping.sourceType === 'static'
-								? updateMapping({ staticValue: event.target.value })
-								: updateMapping({ sourceKey: event.target.value })
-						}
-						placeholder={mapping.sourceType === 'static' ? 'Static value' : 'Output key'}
-						className="h-8"
-					/>
-				</div>
-			</div>
-		);
 	};
 
 	const content = (
@@ -312,7 +226,7 @@ export function LocalWorkflowDialog({
 				</Button>
 			</div>
 
-			{isEditing && primaryStep && (
+			{isEditing && primaryInput && (
 				<div className="border rounded-lg p-4 space-y-4">
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
@@ -335,15 +249,12 @@ export function LocalWorkflowDialog({
 						<div>
 							<Label className="text-sm">Operation</Label>
 							<Select
-								value={primaryStep.localOperation?.type || 'video-convert'}
+								value={primaryInput.operation || 'video-convert'}
 								onValueChange={(value) => {
 									const operationType = value as LocalWorkflowOperationType;
-									updateStep(primaryStep.id, {
-										localOperation: {
-											type: operationType,
-											config: primaryStep.localOperation?.config || {},
-										},
-										inputMapping: [getDefaultInputMapping(operationType)],
+									updateInput(primaryInput.id, {
+										operation: operationType,
+										config: primaryInput.config || {},
 									});
 								}}
 							>
@@ -359,31 +270,23 @@ export function LocalWorkflowDialog({
 								</SelectContent>
 							</Select>
 							<div className="mt-3 text-xs text-gray-500">
-								Default input: {primaryStep.inputMapping[0]?.targetKey || 'video'}
+								Target: Selected Files
 							</div>
 						</div>
 						<div className="space-y-3">
 							<Label className="text-sm">Configuration</Label>
 							<div className="border rounded-lg p-4 bg-gray-50/50">
 								<LocalNodeConfigurator
-									operationType={primaryStep.localOperation?.type || 'video-convert'}
-									config={primaryStep.localOperation?.config || {}}
+									operationType={primaryInput.operation || 'video-convert'}
+									config={primaryInput.config || {}}
 									onConfigChange={(newConfig) => {
-										updateStep(primaryStep.id, {
-											localOperation: {
-												type: primaryStep.localOperation?.type || 'video-convert',
-												config: newConfig,
-											},
+										updateInput(primaryInput.id, {
+											config: newConfig,
 										});
 									}}
 								/>
 							</div>
 						</div>
-					</div>
-
-					<div>
-						<Label className="text-xs">Input Mapping</Label>
-						{renderInputMapping(primaryStep, primaryStep.inputMapping[0] || DEFAULT_MAPPING)}
 					</div>
 
 					<div className="flex justify-end gap-2">

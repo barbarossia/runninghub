@@ -574,42 +574,19 @@ export type LocalWorkflowOperationType =
 	| "duck-decode"
 	| "caption";
 
-export type LocalWorkflowOperation = {
-	type: LocalWorkflowOperationType;
-	config?: Record<string, unknown>;
-};
-
-export type LocalWorkflowInputMapping = {
-	targetKey: string;
-	targetType: "file" | "text" | "config";
-	sourceType: "selected" | "previous-output" | "static";
-	sourceKey?: string;
-	staticValue?: string | number | boolean;
-};
-
-export type LocalWorkflowOutputMapping = {
-	outputKey: string;
-	outputType: "file" | "text";
-	outputIndex?: number;
-	parameterId?: string;
-};
-
-export type LocalWorkflowStep = {
+export type LocalWorkflowInput = {
 	id: string;
-	order: number;
 	name: string;
 	type: "local";
-	localOperation?: LocalWorkflowOperation;
-	inputMapping: LocalWorkflowInputMapping[];
-	outputMapping?: LocalWorkflowOutputMapping[];
-	staticValues?: Record<string, string | number | boolean>;
+	operation: LocalWorkflowOperationType;
+	config: Record<string, any>;
 };
 
 export type LocalWorkflow = {
 	id: string;
 	name: string;
 	description?: string;
-	steps: LocalWorkflowStep[];
+	inputs: LocalWorkflowInput[];
 	createdAt: number;
 	updatedAt: number;
 };

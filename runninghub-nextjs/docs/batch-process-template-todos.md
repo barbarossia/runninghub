@@ -12,6 +12,7 @@
 - [x] Implement `GET /api/workspace/local-workflow/list`.
 - [x] Implement `GET /api/workspace/local-workflow/[workflowId]`.
 - [x] Implement `DELETE /api/workspace/local-workflow/[workflowId]`.
+- [x] Refactor LocalWorkflow JSON structure (steps -> inputs, remove mapping) to match standard sample.
 - [ ] Implement `POST /api/workspace/local-workflow/execute` orchestration.
 - [ ] Add structured logging with `writeLog` and taskId.
 
@@ -19,8 +20,8 @@
 - [x] Add Local Workflow entry in Workflows tab (Create New → type chooser).
 - [x] Merge Local + RunningHub list with badges.
 - [x] Build Local Workflow editor for a single operation (no step list UI).
-- [x] Use convert configuration UI for convert operations.
-- [x] Default input mapping based on operation (video vs image).
+- [x] Use LocalNodeConfigurator for dynamic operation configuration.
+- [x] Default input behavior (selected files) without explicit mapping UI.
 - [x] Render local editor as full-page content in Workflows tab.
 
 ## Future Execution

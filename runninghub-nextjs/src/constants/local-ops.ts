@@ -7,6 +7,7 @@ export interface LocalOpInputDefinition {
 	name: string;
 	label: string;
 	type: LocalOpInputType;
+	required?: boolean;
 	options?: { value: string | number; label: string }[];
 	defaultValue?: string | number | boolean;
 	description?: string;
