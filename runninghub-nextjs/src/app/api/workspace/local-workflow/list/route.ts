@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { listLocalWorkflows } from '@/lib/local-workflow-utils';
 import type { ListLocalWorkflowResponse } from '@/types/workspace';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
 	try {
 		const workflows = await listLocalWorkflows();

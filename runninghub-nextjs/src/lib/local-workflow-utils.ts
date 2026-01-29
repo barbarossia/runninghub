@@ -59,13 +59,39 @@ export async function updateLocalWorkflow(
 	return workflow.id;
 }
 
+function migrateLegacyWorkflow(data: any): LocalWorkflow {
+	if (data.inputs) return data as LocalWorkflow;
+
+	// Migration for legacy "steps" format
+	if (data.steps && Array.isArray(data.steps) && data.steps.length > 0) {
+		const step = data.steps[0];
+		// Map old step structure to new input structure
+		const input = {
+			id: step.id || crypto.randomUUID(),
+			name: step.name || 'Local Operation',
+			type: 'local' as const,
+			operation: step.localOperation?.type || 'video-convert',
+			config: step.localOperation?.config || {},
+		};
+
+		return {
+			...data,
+			inputs: [input],
+			steps: undefined, // Remove legacy field
+		} as LocalWorkflow;
+	}
+
+	return data as LocalWorkflow;
+}
+
 export async function loadLocalWorkflow(
 	workflowId: string,
 ): Promise<LocalWorkflow | null> {
 	try {
 		const filePath = join(LOCAL_WORKFLOW_DIR, `${workflowId}.json`);
 		const content = await fs.readFile(filePath, 'utf-8');
-		return JSON.parse(content) as LocalWorkflow;
+		const data = JSON.parse(content);
+		return migrateLegacyWorkflow(data);
 	} catch (error) {
 		console.error(`Failed to load local workflow ${workflowId}:`, error);
 		return null;
@@ -84,7 +110,8 @@ export async function listLocalWorkflows(): Promise<LocalWorkflow[]> {
 			try {
 				const filePath = join(LOCAL_WORKFLOW_DIR, file);
 				const content = await fs.readFile(filePath, 'utf-8');
-				workflows.push(JSON.parse(content) as LocalWorkflow);
+				const data = JSON.parse(content);
+				workflows.push(migrateLegacyWorkflow(data));
 			} catch (error) {
 				console.error(`Failed to read ${file}:`, error);
 			}

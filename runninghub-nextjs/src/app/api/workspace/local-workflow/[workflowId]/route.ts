@@ -5,6 +5,8 @@ import {
 } from '@/lib/local-workflow-utils';
 import type { GetLocalWorkflowResponse } from '@/types/workspace';
 
+export const dynamic = 'force-dynamic';
+
 interface RouteParams {
 	params: Promise<{ workflowId: string }>;
 }
