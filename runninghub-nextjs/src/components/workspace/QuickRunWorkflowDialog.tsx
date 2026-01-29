@@ -6,7 +6,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Play, AlertCircle, Video, ImageIcon } from "lucide-react";
+import { Play, AlertCircle, Video, ImageIcon, Layers, Monitor, Cloud, Settings } from "lucide-react";
 import { toast } from "sonner";
 import {
 	Dialog,
@@ -172,7 +172,7 @@ export function QuickRunWorkflowDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="sm:max-w-2xl">
 				<DialogTitle>Run Workflow with Selected Files</DialogTitle>
 
 				{/* File count and preview */}
@@ -256,7 +256,8 @@ export function QuickRunWorkflowDialog({
 
 				{/* Workflow selector */}
 				<div className="mb-4">
-					<Label htmlFor="workflow-select" className="mb-2 block">
+					<Label htmlFor="workflow-select" className="mb-2 flex items-center gap-2">
+						<Settings className="h-4 w-4 text-gray-500" />
 						Select Workflow
 					</Label>
 					<Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
@@ -274,35 +275,38 @@ export function QuickRunWorkflowDialog({
 							>
 								<Badge
 									variant={filter === 'all' ? 'default' : 'outline'}
-									className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90"
+									className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
 									onClick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
 										setFilter('all');
 									}}
 								>
+									<Layers className="h-3 w-3" />
 									All ({counts.all})
 								</Badge>
 								<Badge
 									variant={filter === 'local' ? 'default' : 'outline'}
-									className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90"
+									className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
 									onClick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
 										setFilter('local');
 									}}
 								>
+									<Monitor className="h-3 w-3" />
 									Local ({counts.local})
 								</Badge>
 								<Badge
 									variant={filter === 'runninghub' ? 'default' : 'outline'}
-									className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90"
+									className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
 									onClick={(e) => {
 										e.preventDefault();
 										e.stopPropagation();
 										setFilter('runninghub');
 									}}
 								>
+									<Cloud className="h-3 w-3" />
 									Cloud ({counts.runninghub})
 								</Badge>
 							</div>
@@ -318,14 +322,26 @@ export function QuickRunWorkflowDialog({
 											key={`${item.kind}_${item.workflow.id}`}
 											value={item.workflow.id}
 										>
-											<div className="flex items-center gap-2 w-full">
-												<span className="truncate flex-1">
-													{item.workflow.name}
-												</span>
-												{item.kind === "local" && (
-													<Badge variant="secondary" className="text-[10px] h-4 px-1">
-														Local
-													</Badge>
+											<div className="flex flex-col gap-0.5 w-full py-0.5">
+												<div className="flex items-center gap-2 w-full">
+													{item.kind === 'local' ? (
+														<Monitor className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+													) : (
+														<Cloud className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+													)}
+													<span className="font-medium truncate flex-1">
+														{item.workflow.name}
+													</span>
+													{item.kind === "local" && (
+														<Badge variant="secondary" className="text-xs h-5 px-1 flex-shrink-0">
+															Local
+														</Badge>
+													)}
+												</div>
+												{item.workflow.description && (
+													<span className="text-[10px] text-muted-foreground truncate pl-5.5">
+														{item.workflow.description}
+													</span>
 												)}
 											</div>
 										</SelectItem>
