@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { CustomWorkflowIdDialog } from "@/components/workspace/CustomWorkflowIdDialog";
-import type { Workflow } from "@/types/workspace";
+import type { Workflow, LocalWorkflow } from "@/types/workspace";
 
 export interface WorkflowSelectorProps {
 	onAddWorkflow?: () => void;
@@ -51,22 +51,63 @@ export function WorkflowSelector({
 			setLoadError(null);
 
 			try {
-				const response = await fetch("/api/workflow/list");
+				// Fetch both standard and local workflows in parallel
+				const [standardRes, localRes] = await Promise.all([
+					fetch("/api/workflow/list"),
+					fetch("/api/workspace/local-workflow/list"),
+				]);
 
-				const text = await response.text();
-				let data;
-				try {
-					data = text ? JSON.parse(text) : { workflows: [] };
-				} catch (e) {
-					throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+				const standardData = await standardRes.json();
+				const localData = await localRes.json();
+
+				if (!standardRes.ok) {
+					throw new Error(standardData.error || "Failed to load workflows");
 				}
 
-				if (!response.ok) {
-					throw new Error(data.error || "Failed to load workflows");
+				const standardWorkflows: Workflow[] = standardData.workflows || [];
+				let localWorkflows: Workflow[] = [];
+
+				if (localRes.ok && localData.success) {
+					// Adapt LocalWorkflow to Workflow interface
+					localWorkflows = (localData.workflows || []).map(
+						(lw: LocalWorkflow) => {
+							// Determine input type based on operation
+							const opType = lw.inputs?.[0]?.operation || "video-convert";
+							const isVideoOp =
+								opType.startsWith("video-") || opType === "caption"; // Caption supports both, defaulting to video/image check
+							const isImageOp =
+								opType.startsWith("image-") || opType === "duck-decode";
+
+							// Create synthetic input for compatibility checks
+							const syntheticInput = {
+								id: "input_1",
+								name: "Input File",
+								type: "file" as const,
+								required: true,
+								validation: {
+									mediaType: isVideoOp
+										? ("video" as const)
+										: isImageOp
+											? ("image" as const)
+											: undefined,
+								},
+							};
+
+							return {
+								id: lw.id,
+								name: lw.name,
+								description: lw.description || `Local ${opType} workflow`,
+								inputs: [syntheticInput],
+								createdAt: lw.createdAt,
+								updatedAt: lw.updatedAt,
+								sourceType: "local" as const,
+							};
+						},
+					);
 				}
 
-				// Replace localStorage workflows with fetched workflows
-				setWorkflows(data.workflows || []);
+				// Merge and set workflows
+				setWorkflows([...standardWorkflows, ...localWorkflows]);
 			} catch (error) {
 				console.error("Failed to load workflows:", error);
 				setLoadError(
