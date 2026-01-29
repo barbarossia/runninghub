@@ -178,7 +178,7 @@ export interface WorkflowInputParameter {
  * Workflow output definition
  */
 export interface WorkflowOutput {
-	type: "none" | "text" | "image" | "mixed";
+	type: "none" | "text" | "image" | "video" | "mixed";
 	description?: string;
 }
 
@@ -591,6 +591,7 @@ export type LocalWorkflow = {
 	name: string;
 	description?: string;
 	inputs: LocalWorkflowInput[];
+	output?: WorkflowOutput;
 	createdAt: number;
 	updatedAt: number;
 };

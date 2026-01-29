@@ -21,6 +21,7 @@ import type {
 	LocalWorkflow,
 	LocalWorkflowInput,
 	LocalWorkflowOperationType,
+	WorkflowOutput,
 } from '@/types/workspace';
 
 const LOCAL_OPERATION_OPTIONS = Object.values(LOCAL_OPS_DEFINITIONS).map(def => ({
@@ -37,6 +38,7 @@ function createEmptyWorkflow(): LocalWorkflow {
 		createdAt: now,
 		updatedAt: now,
 		inputs: [createInput()],
+		output: { type: 'none', description: '' },
 	};
 }
 
@@ -284,6 +286,52 @@ export function LocalWorkflowDialog({
 											config: newConfig,
 										});
 									}}
+								/>
+							</div>
+						</div>
+					</div>
+
+					<div className="space-y-3 pt-4 border-t">
+						<Label className="text-base font-medium">Output Configuration</Label>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div>
+								<Label className="text-sm">Output Type</Label>
+								<Select
+									value={draftWorkflow.output?.type || 'none'}
+									onValueChange={(value) => {
+										updateDraft({
+											output: {
+												...(draftWorkflow.output || { description: '' }),
+												type: value as WorkflowOutput['type'],
+											},
+										});
+									}}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Select output type" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="none">None</SelectItem>
+										<SelectItem value="image">Image</SelectItem>
+										<SelectItem value="video">Video</SelectItem>
+										<SelectItem value="text">Text</SelectItem>
+										<SelectItem value="mixed">Mixed</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							<div>
+								<Label className="text-sm">Output Description</Label>
+								<Input
+									value={draftWorkflow.output?.description || ''}
+									onChange={(e) =>
+										updateDraft({
+											output: {
+												...(draftWorkflow.output || { type: 'none' }),
+												description: e.target.value,
+											},
+										})
+									}
+									placeholder="Describe the output..."
 								/>
 							</div>
 						</div>

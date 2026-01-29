@@ -810,6 +810,7 @@ async function getWorkflowById(
 				name: localWorkflow.name,
 				description: localWorkflow.description,
 				inputs: workflowInputs,
+				output: localWorkflow.output,
 				createdAt: localWorkflow.createdAt,
 				updatedAt: localWorkflow.updatedAt,
 				executionType: "local",
