@@ -908,6 +908,136 @@ async function copyInputFilesToJobDirectory(
 	}
 }
 
+/**
+ * Process local job outputs
+ * Scans job directory for new or modified files and moves them to result/
+ */
+async function processLocalJobOutputs(
+	taskId: string,
+	jobId: string,
+	inputs: FileInputAssignment[],
+	inputMtimes: Map<string, number>,
+) {
+	try {
+		await writeLog("Processing local job outputs...", "info", taskId);
+
+		const fs = await import("fs/promises");
+		const path = await import("path");
+
+		const workspaceJobDir = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			jobId,
+		);
+		const workspaceOutputsDir = path.join(workspaceJobDir, "result");
+
+		// Create result directory
+		await fs.mkdir(workspaceOutputsDir, { recursive: true });
+
+		const files = await fs.readdir(workspaceJobDir);
+		const processedOutputs: any[] = [];
+		const textOutputs: any[] = [];
+
+		const inputPaths = new Set(inputs.map((i) => i.filePath));
+
+		for (const fileName of files) {
+			// Skip system files and result dir
+			if (
+				fileName === "job.json" ||
+				fileName === "result" ||
+				fileName.startsWith(".")
+			)
+				continue;
+
+			const filePath = path.join(workspaceJobDir, fileName);
+			const stats = await fs.stat(filePath);
+
+			if (stats.isDirectory()) continue;
+
+			// Check if it's an output
+			let isOutput = false;
+
+			if (!inputPaths.has(filePath)) {
+				// New file
+				isOutput = true;
+			} else {
+				// Existing input file, check if modified
+				const originalMtime = inputMtimes.get(filePath);
+				if (originalMtime && stats.mtimeMs > originalMtime) {
+					isOutput = true;
+					await writeLog(`Input file modified: ${fileName}`, "info", taskId);
+				}
+			}
+
+			if (isOutput) {
+				// Move to result directory
+				const resultPath = path.join(workspaceOutputsDir, fileName);
+				await fs.rename(filePath, resultPath);
+
+				// Determine type
+				const ext = path.extname(fileName).toLowerCase();
+				let determinedFileType: "image" | "text" | "video" | "file" = "file";
+
+				if (
+					[".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg"].includes(
+						ext,
+					)
+				) {
+					determinedFileType = "image";
+				} else if ([".mp4", ".mov", ".avi", ".webm"].includes(ext)) {
+					determinedFileType = "video";
+				} else if (
+					[".txt", ".md", ".json", ".log", ".xml", ".csv"].includes(ext)
+				) {
+					determinedFileType = "text";
+				}
+
+				if (determinedFileType === "text") {
+					const content = await fs.readFile(resultPath, "utf-8");
+					textOutputs.push({
+						fileName,
+						filePath: resultPath,
+						content: {
+							original: content,
+							en: undefined,
+							zh: undefined,
+						},
+						autoTranslated: false,
+						translationError: undefined,
+					});
+				}
+
+				processedOutputs.push({
+					type: determinedFileType === "text" ? "text" : "file",
+					path: resultPath,
+					fileName: fileName,
+					fileType: determinedFileType,
+					workspacePath: path.join(jobId, "result", fileName),
+				});
+
+				await writeLog(`Found output: ${fileName}`, "success", taskId);
+			}
+		}
+
+		if (processedOutputs.length === 0) {
+			await writeLog("No output files found", "warning", taskId);
+		}
+
+		// Update job.json
+		await updateJobFile(jobId, {
+			results: {
+				outputs: processedOutputs,
+				textOutputs: textOutputs,
+			},
+		});
+	} catch (error) {
+		const errorMessage =
+			error instanceof Error ? error.message : "Local output processing failed";
+		await writeLog(`Output processing error: ${errorMessage}`, "error", taskId);
+	}
+}
+
 async function processWorkflowInBackground(
 	taskId: string,
 	jobId: string,
@@ -940,6 +1070,18 @@ async function processWorkflowInBackground(
 		// Update job.json with the copied file paths (from job folder)
 		// This ensures job history references files from job folder, not original location
 		await updateJobFile(jobId, { fileInputs: jobFileInputs });
+
+		// Capture input stats for local output detection
+		const fs = await import("fs/promises");
+		const inputMtimes = new Map<string, number>();
+		for (const input of jobFileInputs) {
+			try {
+				const stats = await fs.stat(input.filePath);
+				inputMtimes.set(input.filePath, stats.mtimeMs);
+			} catch (e) {
+				// Ignore missing files
+			}
+		}
 
 		// Handle source file deletion BEFORE execution
 		// Since we've already copied the files to the job directory, it's safe to remove the originals from the gallery
@@ -1474,7 +1616,17 @@ async function processWorkflowInBackground(
 					completedAt: Date.now(),
 				});
 
-				await processJobOutputs(taskId, workflowId, jobId, env, stdout);
+				if (executionType === "local") {
+					await processLocalJobOutputs(
+						taskId,
+						jobId,
+						jobFileInputs,
+						inputMtimes,
+					);
+				} else {
+					await processJobOutputs(taskId, workflowId, jobId, env, stdout);
+				}
+
 				await releaseSlot();
 				await drainQueue();
 				return;
