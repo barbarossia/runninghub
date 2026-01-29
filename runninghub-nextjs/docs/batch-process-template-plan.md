@@ -1,123 +1,61 @@
-# Batch Process Template Plan
+# Local Workflow Plan
 
 ## Overview
-Add a new "Batch Process Template" feature that chains local operations (convert/clip/crop/resize/duck decode/caption) with workflow execution. The template supports configurable step order, static values, and input/output mappings similar to Complex Workflow. Users trigger it from the Workspace Media Gallery toolbar, and it runs in single mode when one file is selected or batch mode when multiple files are selected. Outputs are taken from the last step in the chain.
+Add a Local Workflow feature for local operations (convert/clip/crop/resize/duck decode/caption) managed inside the Workflows tab. Local workflows are reusable templates for a **single local operation** (no step list) with configurable options and default input mapping. Users create/edit them via the existing **Create New** button, choosing “Local Workflow” vs “RunningHub Workflow.” The Workflows list should **flag** each entry as Local or RunningHub.
+
+This plan focuses on **create/edit and management UI** first. Execution, batch auto-run, and media-gallery integration are follow-up phases.
 
 ## Goals
-- Provide a reusable template that combines local operations + workflow steps.
-- Allow configurable order of steps (local-first or workflow-first, multi-step).
-- Support single-file and batch-file execution based on selection count.
-- Expose a toolbar entry on Workspace Media Gallery for quick access.
-- Persist templates so users can reuse them across sessions.
+- Provide a reusable Local Workflow template for local operations only.
+- Create/edit Local Workflows in the Workflows tab using a full-page editor.
+- Show Local vs RunningHub workflows in a unified list with badges.
+- Capture convert configuration in the Local Workflow definition.
 
 ## Requirements
-1. Template definition supports steps of two types:
-   - `local`: operations (convert, clip, crop, resize, duck decode, caption)
-   - `workflow`: RunningHub workflow execution
-2. Steps can be reordered; template defines input mapping, output mapping, and static values.
-3. Execution mode:
-   - 1 selected file = single execution
-   - N selected files = batch execution (same template applied per file)
-4. Add a new button to the Workspace Media Gallery toolbar.
-5. Final outputs are determined by the last step output.
-6. Stop execution on first failure (no per-file continuation).
-7. Log progress to ConsoleViewer using `writeLog` with a taskId.
+1. Local Workflow uses a single operation (no Step 1/Step 2 UI).
+2. Operation selection drives default input mapping (video vs image).
+3. Convert operations use the existing convert configuration UI.
+4. Workflows list shows a badge indicating Local vs RunningHub.
+5. Creation entry is the existing “Create New” button (type chooser).
+6. No Media Gallery toolbar button for Local Workflow creation.
 
-## Non-Goals
-- Editing existing Complex Workflow templates.
-- Adding auto-refresh intervals; refresh only on add/remove completion.
-- Changing global workflow execution behavior.
+## Non-Goals (Phase 1)
+- Local workflow execution orchestration.
+- Auto-run batch workflow execution.
+- Media Gallery toolbar changes.
 
-## UX Flow
-1. User selects media in Workspace Media Gallery.
-2. User clicks new toolbar button: "Batch Process".
-3. Dialog opens:
-   - Select existing Batch Process Template or create new.
-   - Configure template steps, mappings, and static values.
-   - Show summary of single vs batch mode.
-4. User confirms run.
-5. UI logs progress in ConsoleViewer; results appear in gallery after completion.
+## UX Flow (Phase 1)
+1. User opens Workspace → Workflows tab.
+2. User clicks “Create New.”
+3. Chooses “Local Workflow.”
+4. Full-page Local Workflow editor opens.
+5. User selects operation, configures options, and saves.
+6. Workflow list shows the new entry with a “Local” badge.
 
 ## Data Model
-Create a new template type (separate from Complex Workflow):
-- File location: `~/Downloads/workspace/batch-process-templates/{id}.json`
-- Example shape:
+Local Workflow stored separately from RunningHub workflows.
+- Fields: `id`, `name`, `description`, `createdAt`, `updatedAt`, `steps` (single local step).
+- Step includes: local operation type + config, input mapping, static values.
 
-```ts
-export type BatchProcessTemplate = {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt: string;
-  updatedAt: string;
-  steps: BatchProcessStep[];
-};
+## Architecture / API (Phase 1)
+- `POST /api/workspace/local-workflow/save`
+- `GET /api/workspace/local-workflow/list`
+- `GET /api/workspace/local-workflow/[workflowId]`
+- `DELETE /api/workspace/local-workflow/[workflowId]`
 
-export type BatchProcessStep = {
-  id: string;
-  type: 'local' | 'workflow';
-  name: string;
-  order: number;
-  localOperation?: LocalOperationConfig;
-  workflowConfig?: WorkflowStepConfig;
-  inputMapping: StepInputMapping[];
-  outputMapping: StepOutputMapping[];
-  staticValues?: Record<string, string | number | boolean>;
-};
-```
+## UI Changes (Phase 1)
+- Workflows list merges Local + RunningHub entries with badges.
+- “Create New” opens type chooser (RunningHub or Local).
+- Local Workflow editor renders as **full-page** content (no modal).
+- Local editor shows single operation form (no step list UI).
 
-- `LocalOperationConfig` supports: convert, clip, crop, resize, duck decode, caption.
-- `WorkflowStepConfig` reuses existing workflow definitions in workspace store.
-- Input/output mapping supports:
-  - `source: 'selected' | 'previous-output' | 'static'`
-  - `targetField` for local operation or workflow input
-
-## Architecture / API
-### New API Routes
-- `POST /api/workspace/batch-process-template/save`
-- `GET /api/workspace/batch-process-template/list`
-- `GET /api/workspace/batch-process-template/[templateId]`
-- `DELETE /api/workspace/batch-process-template/[templateId]`
-- `POST /api/workspace/batch-process-template/execute`
-
-### Execution Orchestration
-- For each selected file:
-  1. Build step inputs from mapping + static values.
-  2. Execute step in order (local op or workflow).
-  3. Capture outputs; pass to next step via output mapping.
-- Stop the run on the first error; emit failure log and return error response.
-- Final outputs come from last step; save results where the existing operation does.
-- Use `writeLog(message, level, taskId)` for progress and errors.
-
-### Local Operations Integration
-- Convert: reuse video convert API or existing helpers.
-- Clip/Crop: reuse video clip/crop API routes.
-- Resize: reuse image resize API or existing helpers.
-- Duck decode: reuse `/api/workspace/duck-decode`.
-- Caption: reuse caption API and save captions alongside media.
-
-## UI Changes
-- Add "Batch Process" button to `MediaSelectionToolbar` (Workspace only).
-- New dialog component (similar to `QuickRunWorkflowDialog`) for:
-  - Template selection
-  - Template creation/editing (step list, mappings, static values)
-  - Confirmation and execution
-- Store templates in a new Zustand store or extend workspace store with `batchProcessTemplates`.
-
-## Phases
-1. Data model + API routes for template CRUD.
-2. Execution API route to orchestrate steps and logging.
-3. UI: toolbar button + dialog + template builder.
-4. Integrate selection count and run mode display.
-5. Refresh media gallery after execution completes.
-
-## Risks
-- Mapping complexity across local operations and workflow inputs.
-- Large batch sizes impacting execution time; log progress per file.
-- Different output shapes for local operations (file vs text).
+## Future Phases
+- Execution API route for Local Workflow runs (stop on first failure).
+- Auto-run behavior for batch selection (multi-file runs).
+- ConsoleViewer logging for batch runs.
+- Media Gallery integration for selection and execution.
 
 ## Testing
-- Single file run with local->workflow.
-- Batch run (3+ files) with workflow->local.
-- Static value mapping applied correctly.
-- Failure mid-batch halts immediately; verify logs and UI messaging.
+- Create Local Workflow for video convert and ensure config is saved.
+- Edit Local Workflow and verify persisted updates.
+- List shows Local/RunningHub badges correctly.

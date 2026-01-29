@@ -2811,6 +2811,7 @@ export default function WorkspacePage() {
 					defaultVisible={false}
 				/>
 
+
 				{/* Workflow Editor Dialog */}
 				{isEditingWorkflow && (
 					<WorkflowEditor

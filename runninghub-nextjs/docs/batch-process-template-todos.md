@@ -1,41 +1,44 @@
-# Batch Process Template TODOs
+# Local Workflow TODOs
 
 ## Planning
-- [ ] Confirm local operations supported (convert, clip, crop, resize, duck decode, caption).
-- [x] Define batch failure policy (stop on first error).
+- [x] Confirm Local Workflow is separate from RunningHub workflows.
+- [x] Confirm editor is full-page (not a toolbar modal).
+- [x] Confirm create flow uses existing “Create New” button.
 
 ## Data + API
-- [ ] Add `BatchProcessTemplate` types in `src/types/`.
-- [ ] Add storage helpers for template CRUD in `src/lib/`.
-- [ ] Implement `POST /api/workspace/batch-process-template/save`.
-- [ ] Implement `GET /api/workspace/batch-process-template/list`.
-- [ ] Implement `GET /api/workspace/batch-process-template/[templateId]`.
-- [ ] Implement `DELETE /api/workspace/batch-process-template/[templateId]`.
-- [ ] Implement `POST /api/workspace/batch-process-template/execute` orchestration.
+- [x] Add `LocalWorkflow` types in `src/types/`.
+- [x] Add storage helpers for local workflow CRUD in `src/lib/`.
+- [x] Implement `POST /api/workspace/local-workflow/save`.
+- [x] Implement `GET /api/workspace/local-workflow/list`.
+- [x] Implement `GET /api/workspace/local-workflow/[workflowId]`.
+- [x] Implement `DELETE /api/workspace/local-workflow/[workflowId]`.
+- [ ] Implement `POST /api/workspace/local-workflow/execute` orchestration.
 - [ ] Add structured logging with `writeLog` and taskId.
 
-## Store
-- [ ] Add `batchProcessTemplates` to workspace store or new store.
-- [ ] Add actions: load/list/save/delete templates.
+## UI (Create/Edit)
+- [x] Add Local Workflow entry in Workflows tab (Create New → type chooser).
+- [x] Merge Local + RunningHub list with badges.
+- [x] Build Local Workflow editor for a single operation (no step list UI).
+- [x] Use convert configuration UI for convert operations.
+- [x] Default input mapping based on operation (video vs image).
+- [x] Render local editor as full-page content in Workflows tab.
 
-## UI
-- [ ] Add "Batch Process" button to `MediaSelectionToolbar` (Workspace only).
-- [ ] Create `BatchProcessDialog` component (template selection + builder).
-- [ ] Add step editor for local/workflow steps with mappings and static values.
-- [ ] Show single vs batch mode summary based on selection count.
+## Future Execution
 - [ ] Wire execute action to call API and set active console taskId.
-
-## Integration
-- [ ] Use existing local operation APIs in execution route.
-- [ ] Pass outputs from step to step; last step output defines result.
+- [ ] Stop run on first failure.
 - [ ] Refresh media gallery after completion (no auto-refresh intervals).
 
+## Auto-Run (Future)
+- [ ] Detect multi-selection and workflow assignment in quick-run/complex-run flows.
+- [ ] Auto-assign inputs per file using existing compatibility logic.
+- [ ] Trigger workflow execution automatically when multiple files are selected.
+- [ ] Trigger complex workflow execution automatically when multiple files are selected.
+- [ ] Log progress and surface failures in ConsoleViewer.
+
 ## QA
-- [ ] Single file: convert -> workflow.
-- [ ] Batch files: workflow -> resize.
-- [ ] Duck decode step with password and without password.
-- [ ] Caption step writes txt alongside media.
-- [ ] Error handling logs and user toast.
+- [ ] Create/edit Local Workflow and confirm persistence.
+- [ ] Convert workflow saves correct config.
+- [ ] Workflows list shows Local vs RunningHub badges.
 
 ## Build
 - [ ] Run `cd runninghub-nextjs && npm run build` after each phase.

@@ -562,10 +562,10 @@ export interface ValidateFileResponse {
 }
 
 // ============================================================================
-// BATCH PROCESS TEMPLATE TYPES
+// LOCAL WORKFLOW TYPES
 // ============================================================================
 
-export type BatchProcessLocalOperationType =
+export type LocalWorkflowOperationType =
 	| "video-convert"
 	| "video-fps-convert"
 	| "video-clip"
@@ -574,12 +574,12 @@ export type BatchProcessLocalOperationType =
 	| "duck-decode"
 	| "caption";
 
-export type BatchProcessLocalOperation = {
-	type: BatchProcessLocalOperationType;
+export type LocalWorkflowOperation = {
+	type: LocalWorkflowOperationType;
 	config?: Record<string, unknown>;
 };
 
-export type BatchProcessInputMapping = {
+export type LocalWorkflowInputMapping = {
 	targetKey: string;
 	targetType: "file" | "text" | "config";
 	sourceType: "selected" | "previous-output" | "static";
@@ -587,68 +587,52 @@ export type BatchProcessInputMapping = {
 	staticValue?: string | number | boolean;
 };
 
-export type BatchProcessOutputMapping = {
+export type LocalWorkflowOutputMapping = {
 	outputKey: string;
 	outputType: "file" | "text";
 	outputIndex?: number;
 	parameterId?: string;
 };
 
-export type BatchProcessStep = {
+export type LocalWorkflowStep = {
 	id: string;
 	order: number;
 	name: string;
-	type: "local" | "workflow";
-	localOperation?: BatchProcessLocalOperation;
-	workflowId?: string;
-	workflowName?: string;
-	sourceWorkflowId?: string;
-	inputMapping: BatchProcessInputMapping[];
-	outputMapping?: BatchProcessOutputMapping[];
+	type: "local";
+	localOperation?: LocalWorkflowOperation;
+	inputMapping: LocalWorkflowInputMapping[];
+	outputMapping?: LocalWorkflowOutputMapping[];
 	staticValues?: Record<string, string | number | boolean>;
 };
 
-export type BatchProcessTemplate = {
+export type LocalWorkflow = {
 	id: string;
 	name: string;
 	description?: string;
-	steps: BatchProcessStep[];
+	steps: LocalWorkflowStep[];
 	createdAt: number;
 	updatedAt: number;
 };
 
-export type SaveBatchProcessTemplateRequest = {
-	template: BatchProcessTemplate;
+export type SaveLocalWorkflowRequest = {
+	workflow: LocalWorkflow;
 };
 
-export type SaveBatchProcessTemplateResponse = {
+export type SaveLocalWorkflowResponse = {
 	success: boolean;
-	templateId?: string;
+	workflowId?: string;
 	error?: string;
 };
 
-export type ListBatchProcessTemplateResponse = {
+export type ListLocalWorkflowResponse = {
 	success: boolean;
-	templates: BatchProcessTemplate[];
+	workflows: LocalWorkflow[];
 	error?: string;
 };
 
-export type GetBatchProcessTemplateResponse = {
+export type GetLocalWorkflowResponse = {
 	success: boolean;
-	template?: BatchProcessTemplate;
-	error?: string;
-};
-
-export type ExecuteBatchProcessTemplateRequest = {
-	templateId: string;
-	filePaths: string[];
-	folderPath?: string;
-};
-
-export type ExecuteBatchProcessTemplateResponse = {
-	success: boolean;
-	taskId?: string;
-	message?: string;
+	workflow?: LocalWorkflow;
 	error?: string;
 };
 
