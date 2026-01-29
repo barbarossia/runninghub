@@ -44,6 +44,26 @@ export function QuickRunWorkflowDialog({
 }: QuickRunWorkflowDialogProps) {
 	const [selectedWorkflow, setSelectedWorkflow] = useState<string>("");
 
+	const [filter, setFilter] = useState<'all' | 'local' | 'runninghub'>('all');
+
+	// Filter workflows based on selected type
+	const filteredWorkflows = useMemo(() => {
+		if (filter === 'all') return workflows;
+		return workflows.filter((w) => {
+			const isLocal = w.sourceType === 'local';
+			return filter === 'local' ? isLocal : !isLocal;
+		});
+	}, [workflows, filter]);
+
+	const counts = useMemo(() => {
+		const local = workflows.filter((w) => w.sourceType === 'local').length;
+		return {
+			all: workflows.length,
+			local,
+			runninghub: workflows.length - local
+		};
+	}, [workflows]);
+
 	// Calculate compatibility statistics
 	const compatibilityStats = useMemo(() => {
 		if (!selectedWorkflow) {
@@ -180,21 +200,69 @@ export function QuickRunWorkflowDialog({
 							<SelectValue placeholder="Choose a workflow..." />
 						</SelectTrigger>
 						<SelectContent
-							className="z-[100] max-w-md"
+							className="z-[100] max-w-md max-h-[300px]"
 							position="popper"
 							align="start"
 						>
-							{workflows.length === 0 ? (
-								<div className="p-2 text-sm text-gray-500 text-center">
-									No workflows configured
-								</div>
-							) : (
-								workflows.map((workflow) => (
-									<SelectItem key={workflow.id} value={workflow.id}>
-										{workflow.name}
-									</SelectItem>
-								))
-							)}
+							<div
+								className="sticky top-0 z-10 bg-white border-b p-2 flex gap-1 justify-between select-none"
+								onPointerDown={(e) => e.stopPropagation()} // Prevent close on interaction
+							>
+								<Badge
+									variant={filter === 'all' ? 'default' : 'outline'}
+									className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90"
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setFilter('all');
+									}}
+								>
+									All ({counts.all})
+								</Badge>
+								<Badge
+									variant={filter === 'local' ? 'default' : 'outline'}
+									className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90"
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setFilter('local');
+									}}
+								>
+									Local ({counts.local})
+								</Badge>
+								<Badge
+									variant={filter === 'runninghub' ? 'default' : 'outline'}
+									className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90"
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setFilter('runninghub');
+									}}
+								>
+									Cloud ({counts.runninghub})
+								</Badge>
+							</div>
+
+							<div className="max-h-[200px] overflow-y-auto">
+								{filteredWorkflows.length === 0 ? (
+									<div className="p-2 text-sm text-gray-500 text-center">
+										No workflows found
+									</div>
+								) : (
+									filteredWorkflows.map((workflow) => (
+										<SelectItem key={workflow.id} value={workflow.id}>
+											<div className="flex items-center gap-2 w-full">
+												<span className="truncate flex-1">{workflow.name}</span>
+												{workflow.sourceType === 'local' && (
+													<Badge variant="secondary" className="text-[10px] h-4 px-1">
+														Local
+													</Badge>
+												)}
+											</div>
+										</SelectItem>
+									))
+								)}
+							</div>
 						</SelectContent>
 					</Select>
 				</div>
