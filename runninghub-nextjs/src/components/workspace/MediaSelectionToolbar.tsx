@@ -60,7 +60,7 @@ interface MediaSelectionToolbarProps {
 		password?: string,
 		progress?: { current: number; total: number },
 	) => Promise<void>;
-	onRunWorkflow?: (workflowId?: string) => void;
+	onRunWorkflow?: (workflowId?: string) => void | Promise<void>;
 	onClip?: (files: MediaFile[]) => Promise<void>;
 	onPreview?: (file: MediaFile) => void;
 	onExport?: (files: MediaFile[]) => Promise<void>;
@@ -257,9 +257,9 @@ export function MediaSelectionToolbar({
 
 	// Handle quick run workflow
 	const handleQuickRunConfirm = useCallback(
-		(workflowId: string) => {
+		async (workflowId: string) => {
 			if (onRunWorkflow) {
-				onRunWorkflow(workflowId);
+				await Promise.resolve(onRunWorkflow(workflowId));
 				onDeselectAll?.(); // Clear selection after action
 			}
 		},

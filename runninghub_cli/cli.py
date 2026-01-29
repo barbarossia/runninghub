@@ -1378,6 +1378,35 @@ def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, pa
 
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
+@click.option("--fps", type=int, help="Target frames per second")
+@click.option("--crf", type=int, default=20, help="Constant Rate Factor (quality, 0-51)")
+@click.option(
+    "--preset",
+    type=click.Choice(
+        [
+            "ultrafast",
+            "superfast",
+            "veryfast",
+            "faster",
+            "fast",
+            "medium",
+            "slow",
+            "slower",
+            "veryslow",
+        ]
+    ),
+    default="slow",
+    help="Encoding preset",
+)
+@click.option(
+    "--resize-mode",
+    type=click.Choice(["fit", "longest-side", "shortest-side"]),
+    help="Resize mode",
+)
+@click.option("--width", type=int, help="Target width (for fit mode)")
+@click.option("--height", type=int, help="Target height (for fit mode)")
+@click.option("--longest-side", type=int, help="Target longest side size")
+@click.option("--output-suffix", help="Suffix for output filename")
 @click.option("--timeout", default=3600, help="Timeout in seconds (default: 3600)")
 @click.option(
     "--no-overwrite",
@@ -1385,7 +1414,20 @@ def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, pa
     help="Keep original file (default: overwrites with converted .mp4)",
 )
 @click.pass_context
-def convert_video(ctx, file_path, timeout, no_overwrite):
+def convert_video(
+    ctx,
+    file_path,
+    fps,
+    crf,
+    preset,
+    resize_mode,
+    width,
+    height,
+    longest_side,
+    output_suffix,
+    timeout,
+    no_overwrite,
+):
     """Convert a single video file to MP4 format."""
     from .video_utils import (
         is_video_file,
@@ -1412,16 +1454,24 @@ def convert_video(ctx, file_path, timeout, no_overwrite):
     try:
         print_info(f"Converting: {video_path.name}")
 
-        if overwrite:
+        if overwrite and not output_suffix:
             print_warning("Original file will be replaced with converted MP4 version")
 
         success, stdout, stderr = convert_video_to_mp4(
-            video_path, overwrite=overwrite, timeout=timeout
+            video_path,
+            overwrite=overwrite,
+            target_fps=fps,
+            crf=crf,
+            preset=preset,
+            resize_mode=resize_mode,
+            width=width,
+            height=height,
+            longest_side=longest_side,
+            output_suffix=output_suffix,
+            timeout=timeout,
         )
 
-        if success:
-            print_success(f"Successfully converted: {video_path.name}")
-        else:
+        if not success:
             print_error(f"Failed to convert: {video_path.name}")
             if stderr:
                 print(f"Error output: {stderr[-500:]}")  # Last 500 chars

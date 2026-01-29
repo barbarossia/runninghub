@@ -10,7 +10,7 @@ from typing import Tuple, Optional
 from .utils import print_info, print_error, print_success
 
 # Supported video formats for conversion
-SUPPORTED_VIDEO_FORMATS = [".webm", ".mkv", ".avi", ".mov", ".flv"]
+SUPPORTED_VIDEO_FORMATS = [".webm", ".mkv", ".avi", ".mov", ".flv", ".mp4"]
 TARGET_FORMAT = ".mp4"
 
 
@@ -375,11 +375,121 @@ def rename_video(current_path: Path, new_name: str) -> Path:
 
 
 def convert_video_to_mp4(
-    input_path: Path, overwrite: bool = True, timeout: int = 3600
+    input_path: Path,
+    overwrite: bool = True,
+    target_fps: Optional[int] = None,
+    crf: int = 20,
+    preset: str = "slow",
+    resize_mode: Optional[str] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    longest_side: Optional[int] = None,
+    output_suffix: str = "",
+    timeout: int = 3600,
 ) -> Tuple[bool, str, str]:
-    """Convert a video file to MP4 format using FFmpeg."""
-    # ... (existing implementation) ...
-    pass  # Placeholder for replace context
+    """Convert a video file to MP4 format using FFmpeg.
+
+    Args:
+        input_path: Path to the input video file.
+        overwrite: Whether to overwrite original file or create a new one.
+        target_fps: Target frames per second.
+        crf: Constant Rate Factor (quality, 0-51, lower is better).
+        preset: FFmpeg encoding preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow).
+        resize_mode: Resize mode ('fit', 'longest-side', 'shortest-side').
+        width: Target width (for 'fit' mode).
+        height: Target height (for 'fit' mode).
+        longest_side: Target size for longest side (for 'longest-side' or 'shortest-side' mode).
+        output_suffix: Suffix for output filename (if not overwriting).
+        timeout: Processing timeout in seconds.
+
+    Returns:
+        Tuple of (success: bool, stdout: str, stderr: str).
+    """
+    if not check_ffmpeg_available():
+        return False, "", "FFmpeg is not installed or not accessible."
+
+    if not input_path.exists():
+        return False, "", f"Input file does not exist: {input_path}"
+
+    # Determine output path
+    if overwrite and not output_suffix:
+        output_path = input_path.parent / f".{input_path.name}.tmp.mp4"
+        final_output = input_path.with_suffix(".mp4")
+    else:
+        suffix = output_suffix or "_converted"
+        final_output = input_path.parent / f"{input_path.stem}{suffix}.mp4"
+        output_path = final_output.parent / f".{final_output.name}.tmp.mp4"
+
+    # Build filters
+    filters = []
+    if resize_mode:
+        if (resize_mode == "longest-side" or resize_mode == "shortest-side") and longest_side:
+            comparator = "lt" if resize_mode == "shortest-side" else "gt"
+            filters.append(
+                f"scale=if({comparator}(iw\\,ih)\\,{longest_side}\\,-2):if({comparator}(iw\\,ih)\\,-2\\,{longest_side})"
+            )
+        elif width or height:
+            if width and height:
+                filters.append(f"scale={width}:{height}:force_original_aspect_ratio=decrease")
+                filters.append(f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2")
+            else:
+                w = width if width else "-2"
+                h = height if height else "-2"
+                filters.append(f"scale={w}:{h}")
+
+    filters.append("format=yuv420p")
+
+    # Build command
+    cmd = ["ffmpeg", "-i", str(input_path)]
+    
+    if target_fps:
+        cmd.extend(["-r", str(target_fps)])
+        
+    cmd.extend([
+        "-c:v", "libx264",
+        "-crf", str(crf),
+        "-preset", preset,
+        "-vf", ",".join(filters),
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        "-y",
+        str(output_path)
+    ])
+
+    print_info(f"Converting: {input_path.name} -> {final_output.name}")
+    if target_fps:
+        print(f"  Target FPS: {target_fps}")
+    if resize_mode:
+        print(f"  Resize: {resize_mode} ({longest_side or f'{width}x{height}'})")
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+
+        if result.returncode == 0:
+            if overwrite and input_path != final_output:
+                if input_path.exists():
+                    input_path.unlink()
+            
+            if final_output.exists():
+                final_output.unlink()
+                
+            os.rename(output_path, final_output)
+            print_success(f"Successfully converted: {final_output.name}")
+            return True, result.stdout, result.stderr
+        else:
+            if output_path.exists():
+                output_path.unlink()
+            return False, result.stdout, result.stderr
+
+    except subprocess.TimeoutExpired:
+        if output_path.exists():
+            output_path.unlink()
+        return False, "", f"Conversion timed out after {timeout} seconds"
+    except Exception as e:
+        if output_path.exists():
+            output_path.unlink()
+        return False, "", str(e)
 
 
 def crop_video(

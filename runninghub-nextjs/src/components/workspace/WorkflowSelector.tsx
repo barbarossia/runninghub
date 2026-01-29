@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { CustomWorkflowIdDialog } from "@/components/workspace/CustomWorkflowIdDialog";
 import type { Workflow, LocalWorkflow } from "@/types/workspace";
+import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
 
 export interface WorkflowSelectorProps {
 	onAddWorkflow?: () => void;
@@ -69,40 +70,8 @@ export function WorkflowSelector({
 
 				if (localRes.ok && localData.success) {
 					// Adapt LocalWorkflow to Workflow interface
-					localWorkflows = (localData.workflows || []).map(
-						(lw: LocalWorkflow) => {
-							// Determine input type based on operation
-							const opType = lw.inputs?.[0]?.operation || "video-convert";
-							const isVideoOp =
-								opType.startsWith("video-") || opType === "caption"; // Caption supports both, defaulting to video/image check
-							const isImageOp =
-								opType.startsWith("image-") || opType === "duck-decode";
-
-							// Create synthetic input for compatibility checks
-							const syntheticInput = {
-								id: "input_1",
-								name: "Input File",
-								type: "file" as const,
-								required: true,
-								validation: {
-									mediaType: isVideoOp
-										? ("video" as const)
-										: isImageOp
-											? ("image" as const)
-											: undefined,
-								},
-							};
-
-							return {
-								id: lw.id,
-								name: lw.name,
-								description: lw.description || `Local ${opType} workflow`,
-								inputs: [syntheticInput],
-								createdAt: lw.createdAt,
-								updatedAt: lw.updatedAt,
-								sourceType: "local" as const,
-							};
-						},
+					localWorkflows = (localData.workflows || []).map((lw: LocalWorkflow) =>
+						mapLocalWorkflowToWorkflow(lw),
 					);
 				}
 

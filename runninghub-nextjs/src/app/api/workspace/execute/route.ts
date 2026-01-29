@@ -780,6 +780,48 @@ async function getWorkflowById(
 	const path = await import("path");
 	const fs = await import("fs/promises");
 
+	// Handle local workflows
+	if (workflowId.startsWith("local_")) {
+		try {
+			const localWorkflowDir = path.join(
+				process.env.HOME || "~",
+				"Downloads",
+				"workspace",
+				"local-workflows",
+			);
+			const workflowPath = path.join(localWorkflowDir, `${workflowId}.json`);
+
+			const content = await fs.readFile(workflowPath, "utf-8");
+			const localWorkflow = JSON.parse(content);
+
+			// Map inputs for validation
+			// Match logic in src/lib/local-workflow-mapper.ts where ID is ${workflowId}_file
+			const workflowInputs = [
+				{
+					id: `${localWorkflow.id}_file`,
+					name: "Input File",
+					type: "file",
+					required: true,
+				},
+			];
+
+			return {
+				id: localWorkflow.id,
+				name: localWorkflow.name,
+				description: localWorkflow.description,
+				inputs: workflowInputs,
+				createdAt: localWorkflow.createdAt,
+				updatedAt: localWorkflow.updatedAt,
+				executionType: "local",
+				localOperation: localWorkflow.inputs?.[0]?.operation,
+				localConfig: localWorkflow.inputs?.[0]?.config,
+			} as Workflow;
+		} catch (error) {
+			console.error("Failed to load local workflow:", error);
+			return undefined;
+		}
+	}
+
 	try {
 		const workflowDir = path.join(
 			process.env.HOME || "~",
@@ -1128,7 +1170,123 @@ async function processWorkflowInBackground(
 
 		// DECISION: Use execution type to determine CLI command
 
-		if (executionType === "workflow") {
+		if (executionType === "local") {
+			const operation = workflow?.localOperation;
+			const prefix = `${workflowId}_`;
+			const getVal = (key: string) => textInputs[`${prefix}${key}`] || workflow?.localConfig?.[key];
+
+			if (operation === "video-convert") {
+				const input = jobFileInputs[0];
+				if (!input)
+					throw new Error("No input file provided for video conversion");
+
+				args.push("convert-video");
+				args.push(input.filePath);
+
+				const targetFps = getVal("targetFps");
+				const customFps = getVal("customFps");
+				const quality = getVal("quality");
+				const customCrf = getVal("customCrf");
+				const encodingPreset = getVal("encodingPreset");
+				const resizeEnabled = getVal("resizeEnabled");
+				const resizeMode = getVal("resizeMode");
+				const resizeLongestSide = getVal("resizeLongestSide");
+				const resizeWidth = getVal("resizeWidth");
+				const resizeHeight = getVal("resizeHeight");
+				const outputSuffix = getVal("outputSuffix");
+				const deleteOriginal = getVal("deleteOriginal");
+
+				if (targetFps === "custom" && customFps) {
+					args.push("--fps", String(customFps));
+				} else if (targetFps && targetFps !== "original" && targetFps !== "custom") {
+					args.push("--fps", String(targetFps));
+				}
+
+				if (quality === "custom" && customCrf) {
+					args.push("--crf", String(customCrf));
+				} else if (quality === "high") {
+					args.push("--crf", "18");
+				} else if (quality === "low") {
+					args.push("--crf", "23");
+				} else if (quality === "medium") {
+					args.push("--crf", "20");
+				}
+
+				if (encodingPreset) args.push("--preset", String(encodingPreset));
+
+				if (String(resizeEnabled) === "true") {
+					if (resizeMode) args.push("--resize-mode", String(resizeMode));
+					if (resizeLongestSide) args.push("--longest-side", String(resizeLongestSide));
+					if (resizeWidth) args.push("--width", String(resizeWidth));
+					if (resizeHeight) args.push("--height", String(resizeHeight));
+				}
+
+				if (outputSuffix) args.push("--output-suffix", String(outputSuffix));
+				if (String(deleteOriginal) === "false") args.push("--no-overwrite");
+				if (workflow?.localConfig?.timeout) args.push("--timeout", String(workflow.localConfig.timeout));
+
+			} else if (operation === "video-clip") {
+				const input = jobFileInputs[0];
+				if (!input) throw new Error("No input file provided for video clipping");
+
+				args.push("clip");
+				args.push(input.filePath);
+				args.push("--output-dir", "."); // Output to job directory
+
+				const mode = getVal("mode");
+				const format = getVal("format");
+				const quality = getVal("quality");
+				const frameCount = getVal("frameCount");
+				const intervalSeconds = getVal("intervalSeconds");
+				const frameInterval = getVal("frameInterval");
+				const organizeByVideo = getVal("organizeByVideo");
+				const deleteOriginal = getVal("deleteOriginal");
+
+				if (mode) args.push("--mode", String(mode));
+				if (format) args.push("--format", String(format));
+				if (quality) args.push("--quality", String(quality));
+				if (frameCount) args.push("--frame-count", String(frameCount));
+				if (intervalSeconds) args.push("--interval", String(intervalSeconds));
+				if (frameInterval) args.push("--frame-interval", String(frameInterval));
+				if (String(organizeByVideo) === "false") args.push("--no-organize");
+				if (String(deleteOriginal) === "true") args.push("--delete");
+
+			} else if (operation === "video-crop") {
+				const input = jobFileInputs[0];
+				if (!input) throw new Error("No input file provided for video cropping");
+
+				args.push("crop");
+				args.push(input.filePath);
+
+				const mode = getVal("mode");
+				const width = getVal("width");
+				const height = getVal("height");
+				const x = getVal("x");
+				const y = getVal("y");
+				const preserveAudio = getVal("preserveAudio");
+				const outputSuffix = getVal("outputSuffix");
+
+				if (mode) args.push("--mode", String(mode));
+				if (width) args.push("--width", String(width));
+				if (height) args.push("--height", String(height));
+				if (x) args.push("--x", String(x));
+				if (y) args.push("--y", String(y));
+				if (String(preserveAudio) === "true") args.push("--preserve-audio");
+				if (outputSuffix) args.push("--output-suffix", String(outputSuffix));
+
+			} else if (operation === "duck-decode") {
+				const input = jobFileInputs[0];
+				if (!input) throw new Error("No input file provided for duck decoding");
+
+				args.push("duck-decode");
+				args.push(input.filePath);
+
+				const password = getVal("password");
+				if (password) args.push("--password", String(password));
+			} else {
+				throw new Error(`Unsupported local operation: ${operation}`);
+			}
+		} else if (executionType === "workflow") {
 			// Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
 
 			if (jobFileInputs.length > 0) {
@@ -1235,13 +1393,17 @@ async function processWorkflowInBackground(
 			}
 		}
 
-		// Add workflow ID explicitly if provided
-		if (env.RUNNINGHUB_WORKFLOW_ID) {
+		// Add workflow ID explicitly if provided, BUT ONLY for non-local execution
+		// Local commands (convert-video, etc.) don't support --workflow-id
+		if (env.RUNNINGHUB_WORKFLOW_ID && executionType !== "local") {
 			args.push("--workflow-id", env.RUNNINGHUB_WORKFLOW_ID);
 		}
 
 		// Add common flags
-		args.push("--json"); // Output JSON for better parsing (though we rely on logs mostly)
+		// Add --json flag only for non-local execution, as local commands don't support it
+		if (executionType !== "local") {
+			args.push("--json"); // Output JSON for better parsing (though we rely on logs mostly)
+		}
 
 		await writeLog(
 			`Executing command: python ${args.join(" ")}`,

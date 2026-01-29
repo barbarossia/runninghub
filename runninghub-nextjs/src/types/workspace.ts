@@ -138,7 +138,7 @@ export interface WorkflowTemplate {
 /**
  * Parameter type for workflow inputs
  */
-export type ParameterType = "text" | "file" | "number" | "boolean";
+export type ParameterType = "text" | "file" | "number" | "boolean" | "select";
 
 /**
  * Validation rules for workflow parameters
@@ -170,6 +170,8 @@ export interface WorkflowInputParameter {
 	placeholder?: string;
 	description?: string;
 	validation?: ParameterValidation;
+	options?: { value: string | number; label: string }[];
+	configKey?: string;
 }
 
 /**
@@ -184,7 +186,7 @@ export interface WorkflowOutput {
  * Workflow execution type
  * Determines which API endpoint to use for execution
  */
-export type WorkflowExecutionType = "ai-app" | "workflow";
+export type WorkflowExecutionType = "ai-app" | "workflow" | "local";
 
 /**
  * Workflow configuration
@@ -201,6 +203,8 @@ export interface Workflow {
 	sourceWorkflowId?: string; // RunningHub workflow ID (numeric ID from URL like "1980237776367083521")
 	sourceType?: "template" | "custom" | "local"; // How this workflow was created
 	executionType?: WorkflowExecutionType; // Which API endpoint to use ('ai-app' or 'workflow')
+	localOperation?: LocalWorkflowOperationType;
+	localConfig?: Record<string, any>;
 }
 
 /**

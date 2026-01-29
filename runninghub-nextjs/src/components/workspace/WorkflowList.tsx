@@ -181,11 +181,13 @@ export function WorkflowList({
 	}, [loadLocalWorkflows]);
 
 	const workflowItems = useMemo(() => {
-		const runningHubItems = workflows.map((workflow) => ({
-			kind: "runninghub" as const,
-			workflow,
-			createdAt: workflow.createdAt,
-		}));
+		const runningHubItems = workflows
+			.filter((w) => w.sourceType !== "local" && !w.id.startsWith("local_"))
+			.map((workflow) => ({
+				kind: "runninghub" as const,
+				workflow,
+				createdAt: workflow.createdAt,
+			}));
 		const localItems = localWorkflows.map((workflow) => ({
 			kind: "local" as const,
 			workflow,

@@ -99,7 +99,10 @@ import type {
 	MediaFile,
 	FileInputAssignment,
 	ComplexWorkflow,
+	LocalWorkflow,
+	LocalWorkflowOperationType,
 } from "@/types/workspace";
+import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
 
 export default function WorkspacePage() {
 	// Folder store state - use page-specific folder state for workspace page
@@ -1121,12 +1124,49 @@ export default function WorkspacePage() {
 
 	// Handler for quick run workflow from Media Gallery
 	const handleQuickRunWorkflow = useCallback(
-		(workflowId?: string) => {
+		async (workflowId?: string) => {
 			if (!workflowId) {
 				// If no workflowId provided, just open the dialog
 				setShowQuickRunDialog(true);
 				return;
 			}
+
+			if (workflowId.startsWith("local_")) {
+				try {
+					const response = await fetch(
+						`/api/workspace/local-workflow/${workflowId}`,
+					);
+					const data = await response.json();
+					if (!response.ok || !data?.success || !data?.workflow) {
+						throw new Error(data?.error || "Failed to load local workflow");
+					}
+
+					const mappedWorkflow = mapLocalWorkflowToWorkflow(data.workflow);
+					const existing = workflows.find((w) => w.id === mappedWorkflow.id);
+
+					if (existing) {
+						updateWorkflow(mappedWorkflow.id, mappedWorkflow);
+					} else {
+						addWorkflow(mappedWorkflow);
+					}
+
+					setSelectedWorkflow(mappedWorkflow.id);
+					autoAssignSelectedFilesToWorkflow(mappedWorkflow.id);
+					deselectAllMediaFiles();
+					setActiveTab("run-workflow");
+					toast.success("Files assigned to workflow. You can now run the job.");
+				} catch (error) {
+					console.error("Failed to prepare local workflow:", error);
+					toast.error(
+						error instanceof Error
+							? error.message
+							: "Failed to load local workflow",
+					);
+				}
+				return;
+			}
+
+			setSelectedWorkflow(workflowId);
 
 			// Auto-assign files to workflow
 			autoAssignSelectedFilesToWorkflow(workflowId);
@@ -1139,8 +1179,46 @@ export default function WorkspacePage() {
 
 			toast.success("Files assigned to workflow. You can now run the job.");
 		},
-		[autoAssignSelectedFilesToWorkflow],
+		[
+			addWorkflow,
+			autoAssignSelectedFilesToWorkflow,
+			deselectAllMediaFiles,
+			setActiveTab,
+			setSelectedWorkflow,
+			setShowQuickRunDialog,
+			updateWorkflow,
+			workflows,
+		],
 	);
+
+	const selectedWorkflow = useMemo(
+		() => workflows.find((w) => w.id === selectedWorkflowId) || null,
+		[workflows, selectedWorkflowId],
+	);
+
+	const localWorkflowPrefillInputs = useMemo(() => {
+		if (!selectedWorkflow || selectedWorkflow.sourceType !== "local") {
+			return undefined;
+		}
+		const config = selectedWorkflow.localConfig;
+		if (!config) return undefined;
+
+		const prefill: Record<string, string> = {};
+		selectedWorkflow.inputs.forEach((param) => {
+			if (param.type === "file") return;
+			if (!param.configKey) return;
+			if (Object.prototype.hasOwnProperty.call(config, param.configKey)) {
+				const value = config[param.configKey];
+				prefill[param.id] = value === undefined ? "" : String(value);
+				return;
+			}
+			if (param.defaultValue !== undefined) {
+				prefill[param.id] = String(param.defaultValue);
+			}
+		});
+
+		return prefill;
+	}, [selectedWorkflow]);
 
 	const handleRenameFile = async (file: MediaFile, newName: string) => {
 		try {

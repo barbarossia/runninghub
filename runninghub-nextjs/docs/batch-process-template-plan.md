@@ -49,6 +49,7 @@ Local Workflow follows a structure similar to standard RunningHub workflows but 
 - “Create New” opens type chooser (RunningHub or Local).
 - Local Workflow editor renders as **full-page** content (no modal).
 - Local editor shows single operation form (no step list UI).
+- Quick Run dialog includes Local workflows in the picker (execution remains future work).
 
 ## Future Phases
 - Execution API route for Local Workflow runs (stop on first failure).

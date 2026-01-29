@@ -5,8 +5,9 @@
 
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Play, AlertCircle, Video, ImageIcon } from "lucide-react";
+import { toast } from "sonner";
 import {
 	Dialog,
 	DialogContent,
@@ -24,7 +25,12 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import type { MediaFile, Workflow } from "@/types/workspace";
+import type {
+	LocalWorkflow,
+	LocalWorkflowOperationType,
+	MediaFile,
+	Workflow,
+} from "@/types/workspace";
 import { validateFileForParameter } from "@/utils/workspace-validation";
 
 export interface QuickRunWorkflowDialogProps {
@@ -43,26 +49,67 @@ export function QuickRunWorkflowDialog({
 	onConfirm,
 }: QuickRunWorkflowDialogProps) {
 	const [selectedWorkflow, setSelectedWorkflow] = useState<string>("");
+	const [localWorkflows, setLocalWorkflows] = useState<LocalWorkflow[]>([]);
 
 	const [filter, setFilter] = useState<'all' | 'local' | 'runninghub'>('all');
 
+	useEffect(() => {
+		if (!open) return;
+
+		const loadLocalWorkflows = async () => {
+			try {
+				const response = await fetch("/api/workspace/local-workflow/list");
+				const data = await response.json();
+				if (data.success) {
+					setLocalWorkflows(data.workflows || []);
+				} else {
+					toast.error(data.error || "Failed to load local workflows");
+				}
+			} catch (error) {
+				console.error("Failed to load local workflows:", error);
+				toast.error("Failed to load local workflows");
+			}
+		};
+
+		loadLocalWorkflows();
+	}, [open]);
+
+	const workflowItems = useMemo(() => {
+		const runningHubItems = workflows.map((workflow) => ({
+			kind: "runninghub" as const,
+			workflow,
+		}));
+		const localItems = localWorkflows.map((workflow) => ({
+			kind: "local" as const,
+			workflow,
+		}));
+		return [...runningHubItems, ...localItems];
+	}, [workflows, localWorkflows]);
+
+	const getLocalMediaType = (operation?: LocalWorkflowOperationType) => {
+		if (operation?.startsWith("video-")) {
+			return "video";
+		}
+		return "image";
+	};
+
 	// Filter workflows based on selected type
 	const filteredWorkflows = useMemo(() => {
-		if (filter === 'all') return workflows;
-		return workflows.filter((w) => {
-			const isLocal = w.sourceType === 'local';
-			return filter === 'local' ? isLocal : !isLocal;
+		if (filter === "all") return workflowItems;
+		return workflowItems.filter((item) => {
+			const isLocal = item.kind === "local";
+			return filter === "local" ? isLocal : !isLocal;
 		});
-	}, [workflows, filter]);
+	}, [workflowItems, filter]);
 
 	const counts = useMemo(() => {
-		const local = workflows.filter((w) => w.sourceType === 'local').length;
+		const local = localWorkflows.length;
 		return {
-			all: workflows.length,
+			all: workflowItems.length,
 			local,
-			runninghub: workflows.length - local
+			runninghub: workflowItems.length - local,
 		};
-	}, [workflows]);
+	}, [workflowItems, localWorkflows.length]);
 
 	// Calculate compatibility statistics
 	const compatibilityStats = useMemo(() => {
@@ -70,12 +117,29 @@ export function QuickRunWorkflowDialog({
 			return { compatible: 0, incompatible: 0, total: selectedFiles.length };
 		}
 
-		const workflow = workflows.find((w) => w.id === selectedWorkflow);
-		if (!workflow) {
+		const workflowItem = workflowItems.find(
+			(item) => item.workflow.id === selectedWorkflow,
+		);
+		if (!workflowItem) {
 			return { compatible: 0, incompatible: 0, total: selectedFiles.length };
 		}
 
-		const fileParams = workflow.inputs.filter((input) => input.type === "file");
+		if (workflowItem.kind === "local") {
+			const operation = workflowItem.workflow.inputs?.[0]?.operation;
+			const mediaType = getLocalMediaType(operation);
+			const compatible = selectedFiles.filter(
+				(file) => file.type === mediaType,
+			).length;
+			return {
+				compatible,
+				incompatible: selectedFiles.length - compatible,
+				total: selectedFiles.length,
+			};
+		}
+
+		const fileParams = workflowItem.workflow.inputs.filter(
+			(input) => input.type === "file",
+		);
 		let compatible = 0;
 		let incompatible = 0;
 
@@ -91,7 +155,7 @@ export function QuickRunWorkflowDialog({
 		});
 
 		return { compatible, incompatible, total: selectedFiles.length };
-	}, [selectedWorkflow, selectedFiles, workflows]);
+	}, [selectedWorkflow, selectedFiles, workflowItems]);
 
 	const handleConfirm = () => {
 		if (selectedWorkflow) {
@@ -249,11 +313,16 @@ export function QuickRunWorkflowDialog({
 										No workflows found
 									</div>
 								) : (
-									filteredWorkflows.map((workflow) => (
-										<SelectItem key={workflow.id} value={workflow.id}>
+									filteredWorkflows.map((item) => (
+										<SelectItem
+											key={`${item.kind}_${item.workflow.id}`}
+											value={item.workflow.id}
+										>
 											<div className="flex items-center gap-2 w-full">
-												<span className="truncate flex-1">{workflow.name}</span>
-												{workflow.sourceType === 'local' && (
+												<span className="truncate flex-1">
+													{item.workflow.name}
+												</span>
+												{item.kind === "local" && (
 													<Badge variant="secondary" className="text-[10px] h-4 px-1">
 														Local
 													</Badge>
@@ -297,7 +366,9 @@ export function QuickRunWorkflowDialog({
 					</Button>
 					<Button
 						onClick={handleConfirm}
-						disabled={!selectedWorkflow || compatibilityStats.compatible === 0}
+						disabled={
+							!selectedWorkflow || compatibilityStats.compatible === 0
+						}
 						className="gap-2"
 					>
 						<Play className="h-4 w-4" />

@@ -23,6 +23,7 @@
 - [x] Use LocalNodeConfigurator for dynamic operation configuration.
 - [x] Default input behavior (selected files) without explicit mapping UI.
 - [x] Render local editor as full-page content in Workflows tab.
+- [x] Show Local workflows in the Quick Run workflow picker.
 
 ## Future Execution
 - [ ] Wire execute action to call API and set active console taskId.

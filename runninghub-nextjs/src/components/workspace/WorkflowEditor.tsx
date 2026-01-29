@@ -43,6 +43,7 @@ import type {
 	Workflow,
 	WorkflowInputParameter,
 	CliNode,
+	WorkflowExecutionType,
 } from "@/types/workspace";
 
 export interface WorkflowEditorProps {
@@ -101,7 +102,7 @@ export function WorkflowEditor({
 
 	// Execution type state
 	const [executionType, setExecutionType] = useState<
-		"ai-app" | "workflow" | undefined
+		WorkflowExecutionType | undefined
 	>(workflow?.executionType);
 
 	// Output configuration state
