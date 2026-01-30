@@ -61,17 +61,20 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		fetchJobs,
 		isLoadingJobs,
 		updateJob,
+		jobListPage: page,
+		setJobListPage: setPage,
+		jobListStatusFilter: statusFilter,
+		setJobListStatusFilter: setStatusFilter,
+		jobListWorkflowFilter: workflowFilter,
+		setJobListWorkflowFilter: setWorkflowFilter,
 	} = useWorkspaceStore();
 	const { selectedFolder: workspaceFolder } = useWorkspaceFolder();
 
-	const [statusFilter, setStatusFilter] = useState<JobStatus | "all">("all");
-	const [workflowFilter, setWorkflowFilter] = useState<string>("all");
 	const [reQueryingIds, setReQueryingIds] = useState<Set<string>>(new Set());
 	const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(
 		new Set(),
 	);
 	const [isDeletingSelected, setIsDeletingSelected] = useState(false);
-	const [page, setPage] = useState(1);
 	const [encodedStatus, setEncodedStatus] = useState<Record<string, boolean>>(
 		{},
 	);
@@ -801,7 +804,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 								<Button
 									variant="outline"
 									size="sm"
-									onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+									onClick={() => setPage(Math.max(1, page - 1))}
 									disabled={page === 1}
 								>
 									<ChevronLeft className="h-4 w-4 mr-1" />
@@ -814,7 +817,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 									variant="outline"
 									size="sm"
 									onClick={() =>
-										setPage((prev) => Math.min(totalPages, prev + 1))
+										setPage(Math.min(totalPages, page + 1))
 									}
 									disabled={page === totalPages}
 								>

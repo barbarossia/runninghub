@@ -85,6 +85,11 @@ interface WorkspaceState {
 	// Currently selected complex workflow template
 	selectedComplexWorkflowId: string | null;
 
+	// Job List UI State
+	jobListPage: number;
+	jobListStatusFilter: JobStatus | "all";
+	jobListWorkflowFilter: string;
+
 	// ============================================================
 	// NEW STATE - UI State
 	// ============================================================
@@ -240,6 +245,10 @@ interface WorkspaceActions extends WorkspaceState {
 	setActiveComplexExecutionId: (executionId: string | null) => void;
 	setSelectedComplexWorkflowId: (workflowId: string | null) => void;
 
+	setJobListPage: (page: number) => void;
+	setJobListStatusFilter: (status: JobStatus | "all") => void;
+	setJobListWorkflowFilter: (workflowId: string) => void;
+
 	// ============================================================
 	// NEW ACTIONS - UI State
 	// ============================================================
@@ -290,12 +299,16 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 			jobs: [],
 			selectedJobId: null,
 			isLoadingJobs: false,
-	activeSeriesId: null,
-	activeComplexExecutionId: null,
-	selectedComplexWorkflowId: null,
-
-			// New state - UI State
-			viewMode: "grid",
+		activeSeriesId: null,
+				activeComplexExecutionId: null,
+				selectedComplexWorkflowId: null,
+	
+				jobListPage: 1,
+				jobListStatusFilter: "all",
+				jobListWorkflowFilter: "all",
+	
+				// New state - UI State
+				viewMode: "grid",
 			selectedExtension: null,
 			isLoading: false,
 
@@ -1153,6 +1166,11 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 			setSelectedComplexWorkflowId: (workflowId) =>
 				set({ selectedComplexWorkflowId: workflowId }),
 
+			setJobListPage: (page) => set({ jobListPage: page }),
+			setJobListStatusFilter: (status) => set({ jobListStatusFilter: status }),
+			setJobListWorkflowFilter: (filter) =>
+				set({ jobListWorkflowFilter: filter }),
+
 			// ============================================================
 			// NEW ACTIONS - UI State
 			// ============================================================
@@ -1227,6 +1245,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 				workflows: state.workflows,
 				// jobs: state.jobs, // Jobs are now fetched from server
 				selectedWorkflowId: state.selectedWorkflowId,
+				jobListPage: state.jobListPage,
+				jobListStatusFilter: state.jobListStatusFilter,
+				jobListWorkflowFilter: state.jobListWorkflowFilter,
 
 				// UI state
 				viewMode: state.viewMode,
