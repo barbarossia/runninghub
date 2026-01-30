@@ -37,6 +37,9 @@ export function ComplexWorkflowRunDialog({
 }: ComplexWorkflowRunDialogProps) {
 	const router = useRouter();
 	const setJobFiles = useWorkspaceStore((state) => state.setJobFiles);
+	const setSelectedComplexWorkflowId = useWorkspaceStore(
+		(state) => state.setSelectedComplexWorkflowId,
+	);
 	const [workflows, setWorkflows] = useState<any[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 
@@ -105,6 +108,7 @@ export function ComplexWorkflowRunDialog({
 		}
 
 		setJobFiles(assignments);
+		setSelectedComplexWorkflowId(workflowId);
 		onOpenChange(false);
 
 		// Navigate to the complex workflow execute page

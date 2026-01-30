@@ -61,6 +61,9 @@ interface MediaSelectionToolbarProps {
 		progress?: { current: number; total: number },
 	) => Promise<void>;
 	onRunWorkflow?: (workflowId?: string) => void | Promise<void>;
+	onBatchProcess?: () => void | Promise<void>;
+	batchWorkflowId?: string | null;
+	batchWorkflowName?: string | null;
 	onClip?: (files: MediaFile[]) => Promise<void>;
 	onPreview?: (file: MediaFile) => void;
 	onExport?: (files: MediaFile[]) => Promise<void>;
@@ -87,6 +90,9 @@ export function MediaSelectionToolbar({
 	onDelete,
 	onDecode,
 	onRunWorkflow,
+	onBatchProcess,
+	batchWorkflowId = null,
+	batchWorkflowName = null,
 	onClip,
 	onPreview,
 	onExport,
@@ -135,6 +141,7 @@ export function MediaSelectionToolbar({
 	const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
 	const [showComplexWorkflowDialog, setShowComplexWorkflowDialog] =
 		useState(false);
+	const [showBatchConfirmDialog, setShowBatchConfirmDialog] = useState(false);
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
 	const [newFileName, setNewFileName] = useState("");
 	const [decodePassword, setDecodePassword] = useState("");
@@ -143,6 +150,7 @@ export function MediaSelectionToolbar({
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isDecoding, setIsDecoding] = useState(false);
 	const [isClipping, setIsClipping] = useState(false);
+	const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 	const [isResizing, setIsResizing] = useState(false);
 	const [isCaptioning, setIsCaptioning] = useState(false);
 	const [captionProgress, setCaptionProgress] = useState({
@@ -178,6 +186,17 @@ export function MediaSelectionToolbar({
 			setIsRenaming(false);
 		}
 	}, [onRename, isSingleSelection, selectedFiles, newFileName, onDeselectAll]);
+
+	const handleBatchProcess = useCallback(async () => {
+		if (!onBatchProcess) return;
+		setIsBatchProcessing(true);
+		try {
+			await Promise.resolve(onBatchProcess());
+			onDeselectAll?.();
+		} finally {
+			setIsBatchProcessing(false);
+		}
+	}, [onBatchProcess, onDeselectAll]);
 
 	// Open rename dialog
 	const openRenameDialog = useCallback(() => {
@@ -477,6 +496,25 @@ export function MediaSelectionToolbar({
 									<Zap className="h-4 w-4 mr-2 fill-indigo-700" />
 									Run Complex Workflow
 								</Button>
+
+								{/* Batch Process */}
+								{onBatchProcess && (
+									<Button
+										variant="default"
+										size="sm"
+										onClick={() => setShowBatchConfirmDialog(true)}
+										disabled={toolbarDisabled || isBatchProcessing}
+										className="h-9 bg-emerald-600 hover:bg-emerald-700"
+										title="Run selected complex workflow on each file"
+									>
+										{isBatchProcessing ? (
+											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+										) : (
+											<Zap className="h-4 w-4 mr-2" />
+										)}
+										{isBatchProcessing ? "Starting..." : "Batch Process"}
+									</Button>
+								)}
 
 								{/* Preview - when image or video files are selected */}
 								{onPreview &&
@@ -833,6 +871,27 @@ export function MediaSelectionToolbar({
 											<span className="text-xs">Export</span>
 										</Button>
 									)}
+
+								{/* Batch Process - floating mode */}
+								{onBatchProcess && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => setShowBatchConfirmDialog(true)}
+										disabled={toolbarDisabled || isBatchProcessing}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Run selected complex workflow on each file"
+									>
+										{isBatchProcessing ? (
+											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+										) : (
+											<Zap className="h-3.5 w-3.5 mr-2 text-emerald-400" />
+										)}
+										<span className="text-xs">
+											{isBatchProcessing ? "Starting..." : "Batch"}
+										</span>
+									</Button>
+								)}
 
 								{/* FPS Convert - floating mode */}
 								{onConvertFps &&
@@ -1262,6 +1321,62 @@ export function MediaSelectionToolbar({
 				onOpenChange={setShowComplexWorkflowDialog}
 				selectedFiles={selectedFiles}
 			/>
+
+			{/* Batch Process Confirm Dialog */}
+			{onBatchProcess && (
+				<Dialog
+					open={showBatchConfirmDialog}
+					onOpenChange={setShowBatchConfirmDialog}
+				>
+					<DialogContent className="max-w-md">
+						<DialogHeader>
+							<DialogTitle>Confirm Batch Process</DialogTitle>
+							<DialogDescription>
+								Run the selected complex workflow on {selectedCount} file
+								{selectedCount !== 1 ? "s" : ""}?
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-2 text-sm text-muted-foreground">
+							<div>
+								<span className="font-medium text-gray-900">Workflow:</span>{" "}
+								{batchWorkflowName || batchWorkflowId || "Not selected"}
+							</div>
+							<div>
+								<span className="font-medium text-gray-900">Mode:</span>{" "}
+								Parallel (one execution per file)
+							</div>
+						</div>
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setShowBatchConfirmDialog(false)}
+								disabled={isBatchProcessing}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={() => {
+									setShowBatchConfirmDialog(false);
+									handleBatchProcess();
+								}}
+								disabled={
+									isBatchProcessing || !batchWorkflowId || selectedCount === 0
+								}
+								className="bg-emerald-600 hover:bg-emerald-700"
+							>
+								{isBatchProcessing ? (
+									<>
+										<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+										Starting...
+									</>
+								) : (
+									"Confirm"
+								)}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			)}
 		</>
 	);
 }

@@ -112,6 +112,7 @@ export default function WorkspacePage() {
 	const {
 		mediaFiles,
 		selectedWorkflowId,
+		selectedComplexWorkflowId,
 		workflows,
 		jobs,
 		selectedJobId,
@@ -252,6 +253,8 @@ export default function WorkspacePage() {
 	const [showSelectDatasetDialog, setShowSelectDatasetDialog] = useState(false);
 	const [fileToExportToDataset, setFileToExportToDataset] =
 		useState<MediaFile | null>(null);
+	const [selectedComplexWorkflowName, setSelectedComplexWorkflowName] =
+		useState<string | null>(null);
 
 	// Resize dialog state
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
@@ -262,6 +265,35 @@ export default function WorkspacePage() {
 
 	// Get selected files from store
 	const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
+
+	useEffect(() => {
+		if (!selectedComplexWorkflowId) {
+			setSelectedComplexWorkflowName(null);
+			return;
+		}
+
+		let isActive = true;
+
+		const loadSelectedComplexWorkflow = async () => {
+			try {
+				const response = await fetch(
+					`/api/workspace/complex-workflow/${selectedComplexWorkflowId}`,
+				);
+				const data = await response.json();
+				if (response.ok && data?.success && data?.workflow && isActive) {
+					setSelectedComplexWorkflowName(data.workflow.name || null);
+				}
+			} catch (error) {
+				console.error("Failed to load selected complex workflow:", error);
+			}
+		};
+
+		loadSelectedComplexWorkflow();
+
+		return () => {
+			isActive = false;
+		};
+	}, [selectedComplexWorkflowId]);
 
 	// Filter videos for Clip tab
 	const filteredVideos = useMemo(() => {
@@ -1190,6 +1222,182 @@ export default function WorkspacePage() {
 			workflows,
 		],
 	);
+
+	const handleBatchProcess = useCallback(async () => {
+		if (selectedFiles.length === 0) {
+			toast.error("Select files in the media gallery first");
+			return;
+		}
+
+		if (!selectedComplexWorkflowId) {
+			toast.error("Select a complex workflow in Run Complex Workflow first");
+			return;
+		}
+
+		try {
+			const response = await fetch(
+				`/api/workspace/complex-workflow/${selectedComplexWorkflowId}`,
+			);
+			const data = await response.json();
+
+			if (!response.ok || !data?.success || !data?.workflow) {
+				throw new Error(data?.error || "Failed to load complex workflow");
+			}
+
+			const complexWorkflow = data.workflow as ComplexWorkflow;
+			const firstStep = complexWorkflow.steps.find(
+				(step) => step.stepNumber === 1,
+			);
+
+			if (!firstStep) {
+				toast.error("Complex workflow has no step 1 definition");
+				return;
+			}
+
+			let stepWorkflow = workflows.find(
+				(workflow) => workflow.id === firstStep.workflowId,
+			);
+
+			if (!stepWorkflow) {
+				if (firstStep.workflowId.startsWith("local_")) {
+					const localRes = await fetch(
+						`/api/workspace/local-workflow/${firstStep.workflowId}`,
+					);
+					const localData = await localRes.json();
+					if (localRes.ok && localData?.success && localData?.workflow) {
+						stepWorkflow = mapLocalWorkflowToWorkflow(localData.workflow);
+						const existing = workflows.find(
+							(w) => w.id === stepWorkflow?.id,
+						);
+						if (stepWorkflow) {
+							if (existing) {
+								updateWorkflow(stepWorkflow.id, stepWorkflow);
+							} else {
+								addWorkflow(stepWorkflow);
+							}
+						}
+					}
+				} else {
+					const listRes = await fetch("/api/workflow/list");
+					const listData = await listRes.json();
+					if (listRes.ok && listData?.success && listData?.workflows) {
+						stepWorkflow = listData.workflows.find(
+							(workflow: Workflow) => workflow.id === firstStep.workflowId,
+						);
+						if (stepWorkflow) {
+							const existing = workflows.find(
+								(w) => w.id === stepWorkflow?.id,
+							);
+							if (existing) {
+								updateWorkflow(stepWorkflow.id, stepWorkflow);
+							} else {
+								addWorkflow(stepWorkflow);
+							}
+						}
+					}
+				}
+			}
+
+			if (!stepWorkflow) {
+				toast.error("Step 1 workflow definition not found");
+				return;
+			}
+
+			const inputDefinitions = new Map(
+				stepWorkflow.inputs.map((input) => [input.id, input]),
+			);
+
+			const fileParams = firstStep.parameters.filter((param) => {
+				if (param.valueType !== "user-input") return false;
+				return inputDefinitions.get(param.parameterId)?.type === "file";
+			});
+
+			if (fileParams.length === 0) {
+				toast.error("Step 1 has no file inputs for batch processing");
+				return;
+			}
+
+			const staticTextInputs = firstStep.parameters.reduce(
+				(acc, param) => {
+					if (
+						param.valueType === "static" &&
+						param.staticValue !== undefined
+					) {
+						const input = inputDefinitions.get(param.parameterId);
+						if (input?.type !== "file") {
+							acc[param.parameterId] = String(param.staticValue);
+						}
+					}
+					return acc;
+				},
+				{} as Record<string, string>,
+			);
+
+			const results = await Promise.allSettled(
+				selectedFiles.map(async (file) => {
+					const fileInputs: FileInputAssignment[] = fileParams.map((param) => ({
+						parameterId: param.parameterId,
+						filePath: file.path,
+						fileName: file.name,
+						fileSize: file.size || 0,
+						fileType: file.type,
+						valid: true,
+						width: file.width,
+						height: file.height,
+					}));
+
+					const execRes = await fetch(
+						"/api/workspace/complex-workflow/execute",
+						{
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({
+								complexWorkflowId: selectedComplexWorkflowId,
+								autoContinue: true,
+								initialParameters: {
+									fileInputs,
+									textInputs: staticTextInputs,
+									deleteSourceFiles: false,
+								},
+							}),
+						},
+					);
+
+					const execData = await execRes.json();
+					if (!execRes.ok || !execData?.success) {
+						throw new Error(execData?.error || "Failed to start execution");
+					}
+
+					return execData;
+				}),
+			);
+
+			const succeeded = results.filter((result) => result.status === "fulfilled")
+				.length;
+			const failed = results.length - succeeded;
+
+			if (failed > 0) {
+				toast.warning(
+					`Batch started: ${succeeded} succeeded, ${failed} failed`,
+				);
+			} else {
+				toast.success(`Batch started: ${succeeded} executions`);
+			}
+		} catch (error) {
+			console.error("Batch process failed:", error);
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to start batch process",
+			);
+		}
+	}, [
+		addWorkflow,
+		selectedFiles,
+		selectedComplexWorkflowId,
+		updateWorkflow,
+		workflows,
+	]);
 
 	const selectedWorkflow = useMemo(
 		() => workflows.find((w) => w.id === selectedWorkflowId) || null,
@@ -2406,6 +2614,9 @@ export default function WorkspacePage() {
 									onDelete={handleDeleteFile}
 									onDecode={handleDecodeFile}
 									onRunWorkflow={handleQuickRunWorkflow}
+									onBatchProcess={handleBatchProcess}
+									batchWorkflowId={selectedComplexWorkflowId}
+									batchWorkflowName={selectedComplexWorkflowName}
 									onPreview={handlePreviewFile}
 									onExport={handleExport}
 									onExportToDataset={() => {

@@ -82,6 +82,8 @@ interface WorkspaceState {
 	activeSeriesId: string | null;
 	// Currently active complex workflow execution (for runner tab)
 	activeComplexExecutionId: string | null;
+	// Currently selected complex workflow template
+	selectedComplexWorkflowId: string | null;
 
 	// ============================================================
 	// NEW STATE - UI State
@@ -236,6 +238,7 @@ interface WorkspaceActions extends WorkspaceState {
 	getRecentJobsForWorkflow: (workflowId: string, limit?: number) => Job[];
 	setActiveSeriesId: (seriesId: string | null) => void;
 	setActiveComplexExecutionId: (executionId: string | null) => void;
+	setSelectedComplexWorkflowId: (workflowId: string | null) => void;
 
 	// ============================================================
 	// NEW ACTIONS - UI State
@@ -287,8 +290,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 			jobs: [],
 			selectedJobId: null,
 			isLoadingJobs: false,
-			activeSeriesId: null,
-			activeComplexExecutionId: null,
+	activeSeriesId: null,
+	activeComplexExecutionId: null,
+	selectedComplexWorkflowId: null,
 
 			// New state - UI State
 			viewMode: "grid",
@@ -1146,6 +1150,8 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
 			setActiveComplexExecutionId: (executionId) =>
 				set({ activeComplexExecutionId: executionId }),
+			setSelectedComplexWorkflowId: (workflowId) =>
+				set({ selectedComplexWorkflowId: workflowId }),
 
 			// ============================================================
 			// NEW ACTIONS - UI State

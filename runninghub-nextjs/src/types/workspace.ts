@@ -665,6 +665,7 @@ export interface ComplexWorkflowExecution {
 	status: "pending" | "running" | "paused" | "completed" | "failed";
 	currentStep: number;
 	steps: ExecutionStep[];
+	autoContinue?: boolean;
 	createdAt: number;
 	startedAt?: number;
 	completedAt?: number;
@@ -695,6 +696,7 @@ export interface SaveComplexWorkflowResponse {
 export interface ExecuteComplexWorkflowRequest {
 	complexWorkflowId: string;
 	initialParameters?: Record<string, any>;
+	autoContinue?: boolean;
 }
 
 export interface ExecuteComplexWorkflowResponse {

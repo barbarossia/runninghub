@@ -1039,6 +1039,90 @@ async function processLocalJobOutputs(
 	}
 }
 
+type ComplexExecutionUpdate = {
+	autoContinue: boolean;
+	stepNumber: number;
+	isLastStep: boolean;
+};
+
+async function updateComplexExecutionForJob(
+	seriesId: string,
+	jobId: string,
+	status: "completed" | "failed",
+): Promise<ComplexExecutionUpdate | null> {
+	try {
+		const fs = await import("fs/promises");
+		const path = await import("path");
+		const executionDir = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			"complex-executions",
+			seriesId,
+		);
+		const executionFile = path.join(executionDir, "execution.json");
+		const executionContent = await fs.readFile(executionFile, "utf-8");
+		const execution = JSON.parse(executionContent);
+
+		const stepIndex = execution.steps.findIndex(
+			(step: any) => step.jobId === jobId,
+		);
+		if (stepIndex === -1) return null;
+
+		const jobFile = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			jobId,
+			"job.json",
+		);
+		let jobResults: any = undefined;
+		try {
+			const jobContent = await fs.readFile(jobFile, "utf-8");
+			const job = JSON.parse(jobContent);
+			jobResults = job.results;
+		} catch (error) {
+			console.error("Failed to read job results for complex execution:", error);
+		}
+
+		const stepNumber = execution.steps[stepIndex].stepNumber;
+		const isLastStep = stepIndex === execution.steps.length - 1;
+		const autoContinue = Boolean(execution.autoContinue);
+
+		const updatedStep = {
+			...execution.steps[stepIndex],
+			status,
+			completedAt: Date.now(),
+			outputs:
+				status === "completed" && jobResults ? jobResults : execution.steps[stepIndex].outputs,
+		};
+
+		const nextExecution = {
+			...execution,
+			currentStep: stepNumber,
+			steps: execution.steps.map((step: any, index: number) =>
+				index === stepIndex ? updatedStep : step,
+			),
+		};
+
+		if (status === "failed") {
+			nextExecution.status = "failed";
+		} else if (isLastStep) {
+			nextExecution.status = "completed";
+			nextExecution.completedAt = Date.now();
+		} else {
+			nextExecution.status = autoContinue ? "running" : "paused";
+		}
+
+		await fs.writeFile(executionFile, JSON.stringify(nextExecution, null, 2));
+
+		return { autoContinue, stepNumber, isLastStep };
+	} catch (error) {
+		console.error("Failed to update complex execution for job:", error);
+		return null;
+	}
+}
+
 async function processWorkflowInBackground(
 	taskId: string,
 	jobId: string,
@@ -1628,6 +1712,37 @@ async function processWorkflowInBackground(
 					await processJobOutputs(taskId, workflowId, jobId, env, stdout);
 				}
 
+				if (seriesId && seriesId.startsWith("exec_")) {
+					const updateResult = await updateComplexExecutionForJob(
+						seriesId,
+						jobId,
+						"completed",
+					);
+
+					if (updateResult?.autoContinue && !updateResult.isLastStep) {
+						try {
+							await fetch(
+								`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workspace/complex-workflow/continue`,
+								{
+									method: "POST",
+									headers: { "Content-Type": "application/json" },
+									body: JSON.stringify({
+										executionId: seriesId,
+										stepNumber: updateResult.stepNumber,
+										parameters: {
+											fileInputs: [],
+											textInputs: {},
+											deleteSourceFiles: false,
+										},
+									}),
+								},
+							);
+						} catch (error) {
+							console.error("Failed to auto-continue complex workflow:", error);
+						}
+					}
+				}
+
 				await releaseSlot();
 				await drainQueue();
 				return;
@@ -1672,6 +1787,10 @@ async function processWorkflowInBackground(
 				error: `Exit code ${code}`,
 				completedAt: Date.now(),
 			});
+
+			if (seriesId && seriesId.startsWith("exec_")) {
+				await updateComplexExecutionForJob(seriesId, jobId, "failed");
+			}
 			await releaseSlot();
 			await drainQueue();
 		});
@@ -1685,6 +1804,9 @@ async function processWorkflowInBackground(
 				error: error.message,
 				completedAt: Date.now(),
 			});
+			if (seriesId && seriesId.startsWith("exec_")) {
+				await updateComplexExecutionForJob(seriesId, jobId, "failed");
+			}
 			await releaseSlot();
 			await drainQueue();
 		});
@@ -1700,6 +1822,9 @@ async function processWorkflowInBackground(
 			error: errorMessage,
 			completedAt: Date.now(),
 		});
+		if (seriesId && seriesId.startsWith("exec_")) {
+			await updateComplexExecutionForJob(seriesId, jobId, "failed");
+		}
 		await releaseSlot();
 		await drainQueue();
 	}

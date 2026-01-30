@@ -45,6 +45,9 @@ export function ComplexWorkflowList({ onEdit }: ComplexWorkflowListProps) {
 	const setActiveComplexExecutionId = useWorkspaceStore(
 		(state) => state.setActiveComplexExecutionId,
 	);
+	const setSelectedComplexWorkflowId = useWorkspaceStore(
+		(state) => state.setSelectedComplexWorkflowId,
+	);
 
 	// Load workflows on mount
 	useEffect(() => {
@@ -71,6 +74,7 @@ export function ComplexWorkflowList({ onEdit }: ComplexWorkflowListProps) {
 	};
 
 	const handleExecute = (workflowId: string) => {
+		setSelectedComplexWorkflowId(workflowId);
 		window.location.href = `/workspace/complex-workflow/execute/${workflowId}`;
 	};
 

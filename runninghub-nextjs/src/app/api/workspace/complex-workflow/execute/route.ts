@@ -9,17 +9,68 @@ import {
 	ensureExecutionIdentity,
 	getExecutionCreatedAtFromId,
 } from "@/lib/complex-workflow-utils";
+import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
 import type {
 	ExecuteComplexWorkflowRequest,
 	ExecuteComplexWorkflowResponse,
 	ComplexWorkflow,
 	WorkflowStep,
 	ComplexWorkflowExecution,
+	Workflow,
+	LocalWorkflow,
 } from "@/types/workspace";
 
 const EXECUTION_DIR = process.env.HOME
 	? `${process.env.HOME}/Downloads/workspace/complex-executions`
 	: "~/Downloads/workspace/complex-executions";
+
+type LoadedWorkflowDefinition = {
+	workflow: Workflow;
+	sourceWorkflowId: string;
+	isLocal: boolean;
+};
+
+async function loadWorkflowDefinition(
+	workflowId: string,
+): Promise<LoadedWorkflowDefinition> {
+	const fs = await import("fs/promises");
+	const path = await import("path");
+
+	if (workflowId.startsWith("local_")) {
+		const localWorkflowPath = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			"local-workflows",
+			`${workflowId}.json`,
+		);
+		const localWorkflowContent = await fs.readFile(
+			localWorkflowPath,
+			"utf-8",
+		);
+		const localWorkflow = JSON.parse(localWorkflowContent) as LocalWorkflow;
+		return {
+			workflow: mapLocalWorkflowToWorkflow(localWorkflow),
+			sourceWorkflowId: "",
+			isLocal: true,
+		};
+	}
+
+	const workflowPath = path.join(
+		process.env.HOME || "~",
+		"Downloads",
+		"workspace",
+		"workflows",
+		`${workflowId}.json`,
+	);
+	const workflowContent = await fs.readFile(workflowPath, "utf-8");
+	const workflow = JSON.parse(workflowContent) as Workflow;
+	return {
+		workflow,
+		sourceWorkflowId: workflow.sourceWorkflowId || "",
+		isLocal: false,
+	};
+}
 
 export async function POST(request: NextRequest) {
 	try {
@@ -65,22 +116,9 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Load first step workflow definition to get RunningHub ID
-		const firstWorkflowPath = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"workflows",
-			`${firstStep.workflowId}.json`,
-		);
-
 		let sourceWorkflowId = "";
 		try {
-			const firstWorkflowContent = await fs.readFile(
-				firstWorkflowPath,
-				"utf-8",
-			);
-			const firstWorkflow = JSON.parse(firstWorkflowContent);
+			const firstWorkflow = await loadWorkflowDefinition(firstStep.workflowId);
 			sourceWorkflowId = firstWorkflow.sourceWorkflowId;
 		} catch (e) {
 			console.error(`Failed to load workflow ${firstStep.workflowId}:`, e);
@@ -105,6 +143,7 @@ export async function POST(request: NextRequest) {
 			name: complexWorkflow.name,
 			status: "pending",
 			currentStep: 1,
+			autoContinue: body.autoContinue ?? false,
 			steps: complexWorkflow.steps.map((step, idx) => ({
 				stepNumber: step.stepNumber,
 				workflowId: step.workflowId,
