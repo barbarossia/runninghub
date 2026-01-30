@@ -117,8 +117,9 @@ export async function POST(request: NextRequest) {
 		}
 
 		let sourceWorkflowId = "";
+		let firstWorkflow: LoadedWorkflowDefinition | null = null;
 		try {
-			const firstWorkflow = await loadWorkflowDefinition(firstStep.workflowId);
+			firstWorkflow = await loadWorkflowDefinition(firstStep.workflowId);
 			sourceWorkflowId = firstWorkflow.sourceWorkflowId;
 		} catch (e) {
 			console.error(`Failed to load workflow ${firstStep.workflowId}:`, e);
@@ -136,6 +137,15 @@ export async function POST(request: NextRequest) {
 		const fileInputs = initialParams.fileInputs || [];
 		const textInputs = initialParams.textInputs || {};
 		const deleteSourceFiles = initialParams.deleteSourceFiles || false;
+		const getLocalParamValue = (key: string) =>
+			textInputs[`${firstStep.workflowId}_${key}`] ??
+			firstWorkflow?.workflow?.localConfig?.[key];
+		const isLocalVideoConvert =
+			firstWorkflow?.isLocal &&
+			firstWorkflow.workflow?.localOperation === "video-convert";
+		const deleteOriginal = getLocalParamValue("deleteOriginal");
+		const resolvedDeleteSourceFiles =
+			deleteSourceFiles || (isLocalVideoConvert && String(deleteOriginal) === "true");
 
 		// Create execution state
 		const execution: Omit<ComplexWorkflowExecution, "id" | "createdAt"> = {
@@ -151,7 +161,7 @@ export async function POST(request: NextRequest) {
 				status: "pending",
 				inputs:
 					idx === 0
-						? { fileInputs, textInputs, deleteSourceFiles }
+						? { fileInputs, textInputs, deleteSourceFiles: resolvedDeleteSourceFiles }
 						: { fileInputs: [], textInputs: {}, deleteSourceFiles: false },
 				startedAt: undefined,
 				completedAt: undefined,
@@ -174,7 +184,7 @@ export async function POST(request: NextRequest) {
 					fileInputs: fileInputs,
 					textInputs: textInputs,
 					folderPath: "",
-					deleteSourceFiles: deleteSourceFiles,
+					deleteSourceFiles: resolvedDeleteSourceFiles,
 					seriesId: executionId, // Identify as part of complex workflow
 				}),
 			},

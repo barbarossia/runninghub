@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useResizeConfigStore } from "@/store/resize-config-store";
 import { motion } from "framer-motion";
 import {
@@ -39,6 +39,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,7 +56,7 @@ import { BaseSelectionToolbar } from "@/components/selection/BaseSelectionToolba
 import { QuickRunWorkflowDialog } from "@/components/workspace/QuickRunWorkflowDialog";
 import { ComplexWorkflowRunDialog } from "@/components/workspace/ComplexWorkflowRunDialog";
 import { useWorkspaceStore } from "@/store/workspace-store";
-import type { MediaFile, Workflow } from "@/types/workspace";
+import type { ComplexWorkflow, MediaFile, Workflow } from "@/types/workspace";
 
 interface MediaSelectionToolbarProps {
 	selectedFiles: MediaFile[];
@@ -161,12 +168,62 @@ export function MediaSelectionToolbar({
 		current: 0,
 		total: 0,
 	});
+	const [complexWorkflows, setComplexWorkflows] = useState<ComplexWorkflow[]>(
+		[],
+	);
+	const [isLoadingComplexWorkflows, setIsLoadingComplexWorkflows] =
+		useState(false);
+
+	const selectedBatchWorkflowLabel = useMemo(() => {
+		if (batchWorkflowName) return batchWorkflowName;
+		if (batchWorkflowId) {
+			return (
+				complexWorkflows.find((workflow) => workflow.id === batchWorkflowId)
+					?.name || batchWorkflowId
+			);
+		}
+		return "Not selected";
+	}, [batchWorkflowId, batchWorkflowName, complexWorkflows]);
 
 	// Get workflows from store
-	const { workflows } = useWorkspaceStore();
+	const { workflows, setSelectedComplexWorkflowId } = useWorkspaceStore();
 
 	// Get resize config from store
 	const { deleteOriginal, setDeleteOriginal } = useResizeConfigStore();
+
+	useEffect(() => {
+		if (!showBatchConfirmDialog) return;
+		let isActive = true;
+
+		const loadComplexWorkflows = async () => {
+			setIsLoadingComplexWorkflows(true);
+			try {
+				const response = await fetch("/api/workspace/complex-workflow/list");
+				const data = await response.json();
+				if (!isActive) return;
+				if (response.ok && data?.success) {
+					setComplexWorkflows(data.workflows || []);
+				} else {
+					toast.error(data?.error || "Failed to load complex workflows");
+				}
+			} catch (error) {
+				console.error("Failed to load complex workflows:", error);
+				if (isActive) {
+					toast.error("Failed to load complex workflows");
+				}
+			} finally {
+				if (isActive) {
+					setIsLoadingComplexWorkflows(false);
+				}
+			}
+		};
+
+		loadComplexWorkflows();
+
+		return () => {
+			isActive = false;
+		};
+	}, [showBatchConfirmDialog]);
 
 	// Handle rename
 	const handleRename = useCallback(async () => {
@@ -1336,10 +1393,46 @@ export function MediaSelectionToolbar({
 								{selectedCount !== 1 ? "s" : ""}?
 							</DialogDescription>
 						</DialogHeader>
-						<div className="space-y-2 text-sm text-muted-foreground">
-							<div>
-								<span className="font-medium text-gray-900">Workflow:</span>{" "}
-								{batchWorkflowName || batchWorkflowId || "Not selected"}
+						<div className="space-y-3 text-sm text-muted-foreground">
+							<div className="space-y-2">
+								<Label className="text-xs font-medium text-gray-700">
+									Workflow
+								</Label>
+								<Select
+									value={batchWorkflowId ?? "__none__"}
+									onValueChange={(value) => {
+										setSelectedComplexWorkflowId(
+											value === "__none__" ? null : value,
+										);
+									}}
+								>
+									<SelectTrigger className="h-9">
+										<SelectValue
+											placeholder={
+												isLoadingComplexWorkflows
+													? "Loading workflows..."
+													: "Select a workflow"
+											}
+										/>
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="__none__">Not selected</SelectItem>
+										{complexWorkflows.length === 0 ? (
+											<div className="px-2 py-1 text-xs text-muted-foreground">
+												No workflows found
+											</div>
+										) : (
+											complexWorkflows.map((workflow) => (
+												<SelectItem key={workflow.id} value={workflow.id}>
+													{workflow.name || workflow.id}
+												</SelectItem>
+											))
+										)}
+									</SelectContent>
+								</Select>
+								<div className="text-xs text-muted-foreground">
+									Selected: {selectedBatchWorkflowLabel}
+								</div>
 							</div>
 							<div>
 								<span className="font-medium text-gray-900">Mode:</span>{" "}

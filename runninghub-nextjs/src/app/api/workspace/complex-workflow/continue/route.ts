@@ -168,12 +168,14 @@ export async function POST(request: NextRequest) {
 
 		let sourceWorkflowId = "";
 		let nextWorkflow: Workflow | null = null;
+		let nextWorkflowIsLocal = false;
 		try {
 			const loadedWorkflow = await loadWorkflowDefinition(
 				nextStepDef.workflowId,
 			);
 			nextWorkflow = loadedWorkflow.workflow;
 			sourceWorkflowId = loadedWorkflow.sourceWorkflowId;
+			nextWorkflowIsLocal = loadedWorkflow.isLocal;
 		} catch (e) {
 			console.error(`Failed to load workflow ${nextStepDef.workflowId}:`, e);
 			return NextResponse.json(
@@ -315,6 +317,15 @@ export async function POST(request: NextRequest) {
 			...newMappedInputs,
 		];
 
+		const getLocalParamValue = (key: string) =>
+			mergedTextInputs[`${nextStepDef.workflowId}_${key}`] ??
+			nextWorkflow?.localConfig?.[key];
+		const isLocalVideoConvert =
+			nextWorkflowIsLocal && nextWorkflow?.localOperation === "video-convert";
+		const deleteOriginal = getLocalParamValue("deleteOriginal");
+		const resolvedDeleteSourceFiles =
+			deleteSourceFiles || (isLocalVideoConvert && String(deleteOriginal) === "true");
+
 		// Validate all parameters
 		for (const param of nextStepDef.parameters) {
 			const validation = validateStepParameter(nextStepDef.stepNumber, param);
@@ -342,7 +353,7 @@ export async function POST(request: NextRequest) {
 					fileInputs: mergedFileInputs,
 					textInputs: mergedTextInputs,
 					folderPath: "",
-					deleteSourceFiles: deleteSourceFiles,
+					deleteSourceFiles: resolvedDeleteSourceFiles,
 					seriesId: body.executionId, // Identify as part of complex workflow
 				}),
 			},
@@ -366,7 +377,7 @@ export async function POST(request: NextRequest) {
 		const stepInputs = {
 			fileInputs: mergedFileInputs,
 			textInputs: mergedTextInputs,
-			deleteSourceFiles,
+			deleteSourceFiles: resolvedDeleteSourceFiles,
 		};
 
 		const updatedSteps = normalizedExecution.steps.map((step) => {
