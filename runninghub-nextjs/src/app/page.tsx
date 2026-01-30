@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Calculator } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 import { validateEnvironment } from "@/utils/validation";
 import { ENVIRONMENT_VARIABLES } from "@/constants";
 
@@ -16,6 +19,8 @@ export default function Home() {
 		warnings: string[];
 	} | null>(null);
 	const [mounted, setMounted] = useState(false);
+	const { aspectToolCollapsed, setAspectToolCollapsed } =
+		useUiPreferencesStore();
 
 	// Run validation only after client-side hydration
 	/* eslint-disable react-hooks/set-state-in-effect */
@@ -29,8 +34,19 @@ export default function Home() {
 		<div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:bg-[#0d1117] dark:from-[#0d1117] dark:to-[#161b22] p-8">
 			<div className="max-w-4xl mx-auto">
 				{/* Header with Theme Toggle */}
-				<div className="flex justify-end mb-4">
+				<div className="flex items-center justify-end gap-2 mb-4">
 					<ThemeToggle />
+					{aspectToolCollapsed && (
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={() => setAspectToolCollapsed(false)}
+							aria-label="Open aspect ratio tool"
+							title="Open aspect ratio tool"
+						>
+							<Calculator className="h-4 w-4" />
+						</Button>
+					)}
 				</div>
 				<div className="text-center mb-12">
 					<h1 className="text-4xl font-bold text-gray-900 mb-4">

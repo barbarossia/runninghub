@@ -5,8 +5,9 @@
 
 "use client";
 
-import { useState, useMemo } from "react";
-import { Play, AlertCircle, Video, ImageIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Play, AlertCircle, Video, ImageIcon, Layers, Monitor, Cloud, Settings } from "lucide-react";
+import { toast } from "sonner";
 import {
 	Dialog,
 	DialogContent,
@@ -24,7 +25,12 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import type { MediaFile, Workflow } from "@/types/workspace";
+import type {
+	LocalWorkflow,
+	LocalWorkflowOperationType,
+	MediaFile,
+	Workflow,
+} from "@/types/workspace";
 import { validateFileForParameter } from "@/utils/workspace-validation";
 
 export interface QuickRunWorkflowDialogProps {
@@ -43,6 +49,67 @@ export function QuickRunWorkflowDialog({
 	onConfirm,
 }: QuickRunWorkflowDialogProps) {
 	const [selectedWorkflow, setSelectedWorkflow] = useState<string>("");
+	const [localWorkflows, setLocalWorkflows] = useState<LocalWorkflow[]>([]);
+
+	const [filter, setFilter] = useState<'all' | 'local' | 'runninghub'>('all');
+
+	useEffect(() => {
+		if (!open) return;
+
+		const loadLocalWorkflows = async () => {
+			try {
+				const response = await fetch("/api/workspace/local-workflow/list");
+				const data = await response.json();
+				if (data.success) {
+					setLocalWorkflows(data.workflows || []);
+				} else {
+					toast.error(data.error || "Failed to load local workflows");
+				}
+			} catch (error) {
+				console.error("Failed to load local workflows:", error);
+				toast.error("Failed to load local workflows");
+			}
+		};
+
+		loadLocalWorkflows();
+	}, [open]);
+
+	const workflowItems = useMemo(() => {
+		const runningHubItems = workflows.map((workflow) => ({
+			kind: "runninghub" as const,
+			workflow,
+		}));
+		const localItems = localWorkflows.map((workflow) => ({
+			kind: "local" as const,
+			workflow,
+		}));
+		return [...runningHubItems, ...localItems];
+	}, [workflows, localWorkflows]);
+
+	const getLocalMediaType = (operation?: LocalWorkflowOperationType) => {
+		if (operation?.startsWith("video-")) {
+			return "video";
+		}
+		return "image";
+	};
+
+	// Filter workflows based on selected type
+	const filteredWorkflows = useMemo(() => {
+		if (filter === "all") return workflowItems;
+		return workflowItems.filter((item) => {
+			const isLocal = item.kind === "local";
+			return filter === "local" ? isLocal : !isLocal;
+		});
+	}, [workflowItems, filter]);
+
+	const counts = useMemo(() => {
+		const local = localWorkflows.length;
+		return {
+			all: workflowItems.length,
+			local,
+			runninghub: workflowItems.length - local,
+		};
+	}, [workflowItems, localWorkflows.length]);
 
 	// Calculate compatibility statistics
 	const compatibilityStats = useMemo(() => {
@@ -50,12 +117,29 @@ export function QuickRunWorkflowDialog({
 			return { compatible: 0, incompatible: 0, total: selectedFiles.length };
 		}
 
-		const workflow = workflows.find((w) => w.id === selectedWorkflow);
-		if (!workflow) {
+		const workflowItem = workflowItems.find(
+			(item) => item.workflow.id === selectedWorkflow,
+		);
+		if (!workflowItem) {
 			return { compatible: 0, incompatible: 0, total: selectedFiles.length };
 		}
 
-		const fileParams = workflow.inputs.filter((input) => input.type === "file");
+		if (workflowItem.kind === "local") {
+			const operation = workflowItem.workflow.inputs?.[0]?.operation;
+			const mediaType = getLocalMediaType(operation);
+			const compatible = selectedFiles.filter(
+				(file) => file.type === mediaType,
+			).length;
+			return {
+				compatible,
+				incompatible: selectedFiles.length - compatible,
+				total: selectedFiles.length,
+			};
+		}
+
+		const fileParams = workflowItem.workflow.inputs.filter(
+			(input) => input.type === "file",
+		);
 		let compatible = 0;
 		let incompatible = 0;
 
@@ -71,7 +155,7 @@ export function QuickRunWorkflowDialog({
 		});
 
 		return { compatible, incompatible, total: selectedFiles.length };
-	}, [selectedWorkflow, selectedFiles, workflows]);
+	}, [selectedWorkflow, selectedFiles, workflowItems]);
 
 	const handleConfirm = () => {
 		if (selectedWorkflow) {
@@ -88,7 +172,7 @@ export function QuickRunWorkflowDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-md">
+			<DialogContent className="sm:max-w-2xl">
 				<DialogTitle>Run Workflow with Selected Files</DialogTitle>
 
 				{/* File count and preview */}
@@ -172,7 +256,8 @@ export function QuickRunWorkflowDialog({
 
 				{/* Workflow selector */}
 				<div className="mb-4">
-					<Label htmlFor="workflow-select" className="mb-2 block">
+					<Label htmlFor="workflow-select" className="mb-2 flex items-center gap-2">
+						<Settings className="h-4 w-4 text-gray-500" />
 						Select Workflow
 					</Label>
 					<Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
@@ -180,21 +265,89 @@ export function QuickRunWorkflowDialog({
 							<SelectValue placeholder="Choose a workflow..." />
 						</SelectTrigger>
 						<SelectContent
-							className="z-[100] max-w-md"
+							className="z-[100] max-w-md max-h-[300px]"
 							position="popper"
 							align="start"
 						>
-							{workflows.length === 0 ? (
-								<div className="p-2 text-sm text-gray-500 text-center">
-									No workflows configured
-								</div>
-							) : (
-								workflows.map((workflow) => (
-									<SelectItem key={workflow.id} value={workflow.id}>
-										{workflow.name}
-									</SelectItem>
-								))
-							)}
+							<div
+								className="sticky top-0 z-10 bg-white border-b p-2 flex gap-1 justify-between select-none"
+								onPointerDown={(e) => e.stopPropagation()} // Prevent close on interaction
+							>
+								<Badge
+									variant={filter === 'all' ? 'default' : 'outline'}
+									className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setFilter('all');
+									}}
+								>
+									<Layers className="h-3 w-3" />
+									All ({counts.all})
+								</Badge>
+								<Badge
+									variant={filter === 'local' ? 'default' : 'outline'}
+									className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setFilter('local');
+									}}
+								>
+									<Monitor className="h-3 w-3" />
+									Local ({counts.local})
+								</Badge>
+								<Badge
+									variant={filter === 'runninghub' ? 'default' : 'outline'}
+									className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
+									onClick={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setFilter('runninghub');
+									}}
+								>
+									<Cloud className="h-3 w-3" />
+									Cloud ({counts.runninghub})
+								</Badge>
+							</div>
+
+							<div className="max-h-[200px] overflow-y-auto">
+								{filteredWorkflows.length === 0 ? (
+									<div className="p-2 text-sm text-gray-500 text-center">
+										No workflows found
+									</div>
+								) : (
+									filteredWorkflows.map((item) => (
+										<SelectItem
+											key={`${item.kind}_${item.workflow.id}`}
+											value={item.workflow.id}
+										>
+											<div className="flex flex-col gap-0.5 w-full py-0.5">
+												<div className="flex items-center gap-2 w-full">
+													{item.kind === 'local' ? (
+														<Monitor className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+													) : (
+														<Cloud className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+													)}
+													<span className="font-medium truncate flex-1">
+														{item.workflow.name}
+													</span>
+													{item.kind === "local" && (
+														<Badge variant="secondary" className="text-xs h-5 px-1 flex-shrink-0">
+															Local
+														</Badge>
+													)}
+												</div>
+												{item.workflow.description && (
+													<span className="text-[10px] text-muted-foreground truncate pl-5.5">
+														{item.workflow.description}
+													</span>
+												)}
+											</div>
+										</SelectItem>
+									))
+								)}
+							</div>
 						</SelectContent>
 					</Select>
 				</div>
@@ -229,7 +382,9 @@ export function QuickRunWorkflowDialog({
 					</Button>
 					<Button
 						onClick={handleConfirm}
-						disabled={!selectedWorkflow || compatibilityStats.compatible === 0}
+						disabled={
+							!selectedWorkflow || compatibilityStats.compatible === 0
+						}
 						className="gap-2"
 					>
 						<Play className="h-4 w-4" />

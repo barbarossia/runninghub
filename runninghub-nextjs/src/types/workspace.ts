@@ -138,7 +138,7 @@ export interface WorkflowTemplate {
 /**
  * Parameter type for workflow inputs
  */
-export type ParameterType = "text" | "file" | "number" | "boolean";
+export type ParameterType = "text" | "file" | "number" | "boolean" | "select";
 
 /**
  * Validation rules for workflow parameters
@@ -170,13 +170,15 @@ export interface WorkflowInputParameter {
 	placeholder?: string;
 	description?: string;
 	validation?: ParameterValidation;
+	options?: { value: string | number; label: string }[];
+	configKey?: string;
 }
 
 /**
  * Workflow output definition
  */
 export interface WorkflowOutput {
-	type: "none" | "text" | "image" | "mixed";
+	type: "none" | "text" | "image" | "video" | "mixed";
 	description?: string;
 }
 
@@ -184,7 +186,7 @@ export interface WorkflowOutput {
  * Workflow execution type
  * Determines which API endpoint to use for execution
  */
-export type WorkflowExecutionType = "ai-app" | "workflow";
+export type WorkflowExecutionType = "ai-app" | "workflow" | "local";
 
 /**
  * Workflow configuration
@@ -201,6 +203,8 @@ export interface Workflow {
 	sourceWorkflowId?: string; // RunningHub workflow ID (numeric ID from URL like "1980237776367083521")
 	sourceType?: "template" | "custom" | "local"; // How this workflow was created
 	executionType?: WorkflowExecutionType; // Which API endpoint to use ('ai-app' or 'workflow')
+	localOperation?: LocalWorkflowOperationType;
+	localConfig?: Record<string, any>;
 }
 
 /**
@@ -310,7 +314,7 @@ export interface MediaFileDetail {
 /**
  * Job status
  */
-export type JobStatus = "pending" | "running" | "completed" | "failed";
+export type JobStatus = "queued" | "pending" | "running" | "completed" | "failed";
 
 /**
  * File input assignment to a workflow parameter
@@ -371,6 +375,7 @@ export interface JobResult {
 export interface Job {
 	id: string;
 	workflowId: string;
+	sourceWorkflowId?: string;
 	workflowName: string;
 	fileInputs: FileInputAssignment[];
 	textInputs: Record<string, string>;
@@ -379,6 +384,7 @@ export interface Job {
 	runninghubTaskId?: string; // RunningHub task ID (numeric string)
 	startedAt?: number;
 	completedAt?: number;
+	queuedAt?: number;
 	results?: JobResult;
 	error?: string;
 	createdAt: number;
@@ -392,6 +398,9 @@ export interface Job {
 	parentJobId?: string; // ID of job this was recreated from
 	seriesId?: string; // Groups related jobs (auto-generated)
 	runNumber?: number; // Position in series (1, 2, 3, ...)
+
+	// Saved output tracking (Save to workspace actions)
+	savedOutputPaths?: string[];
 
 	// Complex workflow fields
 	complexWorkflowId?: string;
@@ -557,6 +566,60 @@ export interface ValidateFileResponse {
 }
 
 // ============================================================================
+// LOCAL WORKFLOW TYPES
+// ============================================================================
+
+export type LocalWorkflowOperationType =
+	| "video-convert"
+	| "video-fps-convert"
+	| "video-clip"
+	| "video-crop"
+	| "video-aspect-calc"
+	| "image-resize"
+	| "duck-decode"
+	| "caption";
+
+export type LocalWorkflowInput = {
+	id: string;
+	name: string;
+	type: "local";
+	operation: LocalWorkflowOperationType;
+	config: Record<string, any>;
+};
+
+export type LocalWorkflow = {
+	id: string;
+	name: string;
+	description?: string;
+	inputs: LocalWorkflowInput[];
+	output?: WorkflowOutput;
+	createdAt: number;
+	updatedAt: number;
+};
+
+export type SaveLocalWorkflowRequest = {
+	workflow: LocalWorkflow;
+};
+
+export type SaveLocalWorkflowResponse = {
+	success: boolean;
+	workflowId?: string;
+	error?: string;
+};
+
+export type ListLocalWorkflowResponse = {
+	success: boolean;
+	workflows: LocalWorkflow[];
+	error?: string;
+};
+
+export type GetLocalWorkflowResponse = {
+	success: boolean;
+	workflow?: LocalWorkflow;
+	error?: string;
+};
+
+// ============================================================================
 // COMPLEX WORKFLOW TYPES
 // ============================================================================
 
@@ -603,6 +666,7 @@ export interface ComplexWorkflowExecution {
 	status: "pending" | "running" | "paused" | "completed" | "failed";
 	currentStep: number;
 	steps: ExecutionStep[];
+	autoContinue?: boolean;
 	createdAt: number;
 	startedAt?: number;
 	completedAt?: number;
@@ -633,6 +697,7 @@ export interface SaveComplexWorkflowResponse {
 export interface ExecuteComplexWorkflowRequest {
 	complexWorkflowId: string;
 	initialParameters?: Record<string, any>;
+	autoContinue?: boolean;
 }
 
 export interface ExecuteComplexWorkflowResponse {

@@ -4,7 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { loadComplexWorkflow } from "@/lib/complex-workflow-utils";
+import {
+	loadComplexWorkflow,
+	updateComplexWorkflow,
+} from "@/lib/complex-workflow-utils";
+import type { ComplexWorkflow } from "@/types/workspace";
 
 export async function GET(
 	request: NextRequest,
@@ -77,6 +81,59 @@ export async function DELETE(
 					error instanceof Error
 						? error.message
 						: "Failed to delete complex workflow",
+			},
+			{ status: 500 },
+		);
+	}
+}
+
+export async function PUT(
+	request: NextRequest,
+	{ params }: { params: Promise<{ workflowId: string }> },
+) {
+	try {
+		const { workflowId } = await params;
+		const body = await request.json();
+		const workflow = body?.workflow as ComplexWorkflow | undefined;
+
+		if (!workflow) {
+			return NextResponse.json(
+				{
+					success: false,
+					error: "Missing workflow payload",
+				},
+				{ status: 400 },
+			);
+		}
+
+		if (workflow.id && workflow.id !== workflowId) {
+			return NextResponse.json(
+				{
+					success: false,
+					error: "Workflow ID mismatch",
+				},
+				{ status: 400 },
+			);
+		}
+
+		const updatedId = await updateComplexWorkflow({
+			...workflow,
+			id: workflowId,
+		});
+
+		return NextResponse.json({
+			success: true,
+			workflowId: updatedId,
+		});
+	} catch (error) {
+		console.error("Update complex workflow error:", error);
+		return NextResponse.json(
+			{
+				success: false,
+				error:
+					error instanceof Error
+						? error.message
+						: "Failed to update complex workflow",
 			},
 			{ status: 500 },
 		);

@@ -200,6 +200,8 @@ export function VideoClipSelectionToolbar({
 				className={className}
 				onDeselectAll={handleDeselectAllCallback}
 				showCancelButton={showCancelButton}
+				alwaysVisible={true}
+				fullWidth={true}
 			>
 				{(mode) => {
 					if (mode === "expanded") {

@@ -1,0 +1,2 @@
+- [x] Track folder changes and clear media list.
+- [ ] Manual check: switching to subfolder shows only that folder contents.

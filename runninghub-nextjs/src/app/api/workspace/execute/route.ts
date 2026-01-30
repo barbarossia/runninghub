@@ -8,6 +8,12 @@ import { randomUUID } from "crypto";
 import { spawn } from "child_process";
 import { writeLog } from "@/lib/logger";
 import { initTask, updateTask } from "@/lib/task-store";
+import {
+	enqueueJob,
+	releaseSlot,
+	takeNextQueued,
+	tryAcquireSlot,
+} from "@/lib/workspace-submit-queue";
 import type {
 	ExecuteJobRequest,
 	ExecuteJobResponse,
@@ -15,6 +21,13 @@ import type {
 	Job,
 	Workflow,
 } from "@/types/workspace";
+
+const MAX_CONCURRENT_SUBMISSIONS = parseInt(
+	process.env.RUNNINGHUB_MAX_CONCURRENT_PROCESSES || "3",
+	10,
+);
+
+let isDrainingQueue = false;
 
 export async function POST(request: NextRequest) {
 	try {
@@ -90,6 +103,7 @@ export async function POST(request: NextRequest) {
 			id: jobId,
 			workflowId: body.workflowId,
 			workflowName: body.workflowName || "Unknown Workflow",
+			sourceWorkflowId: body.sourceWorkflowId,
 			fileInputs: body.fileInputs || [],
 			textInputs: body.textInputs || {},
 			status: "pending",
@@ -106,21 +120,70 @@ export async function POST(request: NextRequest) {
 			JSON.stringify(initialJob, null, 2),
 		);
 
+		// Filter and validate file inputs
 		if (body.fileInputs && body.fileInputs.length > 0) {
-			const missingFiles: string[] = [];
+			const missingRequiredFiles: string[] = [];
+			const validFileInputs: FileInputAssignment[] = [];
+			
+			// Load workflow definition to check for required parameters
+			const workflow = await getWorkflowById(body.workflowId);
+
+			if (!workflow) {
+				await writeLog(
+					`Warning: Could not load workflow definition for ${body.workflowId}. Defaulting to strict existence check.`,
+					"warning",
+					taskId
+				);
+			}
 
 			for (const input of body.fileInputs) {
 				const exists = await fs
 					.stat(input.filePath)
 					.then(() => true)
 					.catch(() => false);
-				if (!exists) {
-					missingFiles.push(input.filePath);
+
+				if (workflow) {
+					// STRICT MODE: Validate against workflow definition
+					const param = workflow.inputs.find(p => p.id === input.parameterId);
+
+					if (!param) {
+						// Ghost input: Assigned in UI but not in workflow definition
+						await writeLog(
+							`Ignoring ghost input: ${input.parameterId} (not in workflow definition)`,
+							"warning",
+							taskId
+						);
+						continue; // Skip this input completely
+					}
+
+					if (exists) {
+						validFileInputs.push(input);
+					} else {
+						// File is missing, check requirement from workflow
+						if (param.required) {
+							missingRequiredFiles.push(input.filePath);
+						} else {
+							await writeLog(
+								`Skipping missing optional file: ${path.basename(input.filePath)} (param: ${input.parameterId})`,
+								"warning",
+								taskId
+							);
+						}
+					}
+				} else {
+					// FALLBACK MODE: Workflow not loaded
+					// Assume everything is required if it's missing (safety first)
+					// If it exists, we keep it (can't determine if it's a ghost input)
+					if (exists) {
+						validFileInputs.push(input);
+					} else {
+						missingRequiredFiles.push(input.filePath);
+					}
 				}
 			}
 
-			if (missingFiles.length > 0) {
-				const errorMessage = `Missing input file(s): ${missingFiles.join(", ")}`;
+			if (missingRequiredFiles.length > 0) {
+				const errorMessage = `Missing input file(s): ${missingRequiredFiles.join(", ")}`;
 				await updateTask(taskId, { status: "failed", error: errorMessage });
 				await updateJobFile(jobId, {
 					status: "failed",
@@ -135,9 +198,42 @@ export async function POST(request: NextRequest) {
 					{ status: 400 },
 				);
 			}
+
+			// Update body.fileInputs with only the valid ones
+			body.fileInputs = validFileInputs;
 		}
 
-		// Start background processing
+		const canStartNow = await tryAcquireSlot(MAX_CONCURRENT_SUBMISSIONS);
+		if (!canStartNow) {
+			const position = await enqueueJob({
+				jobId,
+				taskId,
+				workflowId: body.workflowId,
+				enqueuedAt: Date.now(),
+			});
+
+			await updateTask(taskId, { status: "pending", error: undefined });
+			await updateJobFile(jobId, {
+				status: "queued",
+				queuedAt: Date.now(),
+				error: undefined,
+				completedAt: undefined,
+			});
+
+			await writeLog(
+				`Job queued due to capacity limit (position ${position})`,
+				"info",
+				taskId,
+			);
+
+			return NextResponse.json({
+				success: true,
+				taskId,
+				jobId,
+				message: "Job queued successfully",
+			} as ExecuteJobResponse);
+		}
+
 		processWorkflowInBackground(
 			taskId,
 			jobId,
@@ -146,6 +242,7 @@ export async function POST(request: NextRequest) {
 			body.textInputs || {},
 			body.deleteSourceFiles || false,
 			env,
+			body.seriesId,
 		);
 
 		return NextResponse.json({
@@ -247,6 +344,139 @@ async function updateJobFile(jobId: string, updates: Partial<Job>) {
 		await fs.writeFile(jobFilePath, JSON.stringify(updatedJob, null, 2));
 	} catch (e) {
 		console.error(`Failed to update job file for ${jobId}:`, e);
+	}
+}
+
+async function readJobFile(jobId: string): Promise<Job | null> {
+	const fs = await import("fs/promises");
+	const path = await import("path");
+	const jobFilePath = path.join(
+		process.env.HOME || "~",
+		"Downloads",
+		"workspace",
+		jobId,
+		"job.json",
+	);
+
+	try {
+		const content = await fs.readFile(jobFilePath, "utf-8");
+		return JSON.parse(content) as Job;
+	} catch (error) {
+		console.error(`Failed to read job file for ${jobId}:`, error);
+		return null;
+	}
+}
+
+function buildEnvForJob(job: Job): NodeJS.ProcessEnv {
+	const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+	const apiHost =
+		process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
+	const downloadDir = process.env.RUNNINGHUB_DOWNLOAD_DIR;
+	const cliWorkflowId = job.sourceWorkflowId || job.workflowId;
+
+	const env: NodeJS.ProcessEnv = {
+		...process.env,
+		RUNNINGHUB_API_KEY: apiKey!,
+		RUNNINGHUB_WORKFLOW_ID: cliWorkflowId,
+		RUNNINGHUB_API_HOST: apiHost,
+	};
+
+	if (downloadDir) {
+		env.RUNNINGHUB_DOWNLOAD_DIR = downloadDir;
+	}
+
+	return env;
+}
+
+function extractCliCode(output: string): number | null {
+	const lines = output.split("\n");
+	const candidates: any[] = [];
+
+	for (let startIndex = 0; startIndex < lines.length; startIndex++) {
+		if (!lines[startIndex].includes("{")) continue;
+		const firstBracePos = lines[startIndex].indexOf("{");
+		let braceCount = 0;
+		let endIndex = -1;
+
+		for (let i = startIndex; i < lines.length; i++) {
+			const line =
+				i === startIndex ? lines[i].substring(firstBracePos) : lines[i];
+			for (const char of line) {
+				if (char === "{") braceCount++;
+				if (char === "}") braceCount--;
+			}
+			if (braceCount === 0) {
+				endIndex = i;
+				break;
+			}
+		}
+
+		if (endIndex >= 0) {
+			try {
+				const jsonStr = lines.slice(startIndex, endIndex + 1).join("\n");
+				const jsonStart = firstBracePos > 0 ? jsonStr.indexOf("{") : 0;
+				const parsed = JSON.parse(jsonStr.substring(jsonStart));
+				if (parsed && parsed.code !== undefined) {
+					candidates.push(parsed);
+				}
+			} catch {
+				continue;
+			}
+		}
+	}
+
+	if (candidates.length === 0) return null;
+	const last = candidates[candidates.length - 1];
+	const parsedCode = Number(last.code);
+	return Number.isFinite(parsedCode) ? parsedCode : null;
+}
+
+function isQueueFullError(stdout: string, stderr: string): boolean {
+	const combined = `${stdout}\n${stderr}`;
+	const code = extractCliCode(combined);
+	if (code === 805) return true;
+	if (combined.includes("TASK_QUEUE_MAXED")) return true;
+	return /code\s*[:=]\s*805/i.test(combined);
+}
+
+async function startQueuedJob(jobId: string, taskId: string) {
+	const job = await readJobFile(jobId);
+	if (!job) {
+		await releaseSlot();
+		await drainQueue();
+		return;
+	}
+
+	const env = buildEnvForJob(job);
+
+	await processWorkflowInBackground(
+		taskId,
+		jobId,
+		job.workflowId,
+		job.fileInputs || [],
+		job.textInputs || {},
+		job.deleteSourceFiles,
+		env,
+		job.seriesId,
+	);
+}
+
+async function drainQueue() {
+	if (isDrainingQueue) return;
+	isDrainingQueue = true;
+	try {
+		while (true) {
+			const next = await takeNextQueued(MAX_CONCURRENT_SUBMISSIONS);
+			if (!next) break;
+			await writeLog(
+				`Dequeued job ${next.jobId} for execution`,
+				"info",
+				next.taskId,
+			);
+			await startQueuedJob(next.jobId, next.taskId);
+		}
+	} finally {
+		isDrainingQueue = false;
 	}
 }
 
@@ -550,6 +780,49 @@ async function getWorkflowById(
 	const path = await import("path");
 	const fs = await import("fs/promises");
 
+	// Handle local workflows
+	if (workflowId.startsWith("local_")) {
+		try {
+			const localWorkflowDir = path.join(
+				process.env.HOME || "~",
+				"Downloads",
+				"workspace",
+				"local-workflows",
+			);
+			const workflowPath = path.join(localWorkflowDir, `${workflowId}.json`);
+
+			const content = await fs.readFile(workflowPath, "utf-8");
+			const localWorkflow = JSON.parse(content);
+
+			// Map inputs for validation
+			// Match logic in src/lib/local-workflow-mapper.ts where ID is ${workflowId}_file
+			const workflowInputs = [
+				{
+					id: `${localWorkflow.id}_file`,
+					name: "Input File",
+					type: "file",
+					required: true,
+				},
+			];
+
+			return {
+				id: localWorkflow.id,
+				name: localWorkflow.name,
+				description: localWorkflow.description,
+				inputs: workflowInputs,
+				output: localWorkflow.output,
+				createdAt: localWorkflow.createdAt,
+				updatedAt: localWorkflow.updatedAt,
+				executionType: "local",
+				localOperation: localWorkflow.inputs?.[0]?.operation,
+				localConfig: localWorkflow.inputs?.[0]?.config,
+			} as Workflow;
+		} catch (error) {
+			console.error("Failed to load local workflow:", error);
+			return undefined;
+		}
+	}
+
 	try {
 		const workflowDir = path.join(
 			process.env.HOME || "~",
@@ -636,6 +909,220 @@ async function copyInputFilesToJobDirectory(
 	}
 }
 
+/**
+ * Process local job outputs
+ * Scans job directory for new or modified files and moves them to result/
+ */
+async function processLocalJobOutputs(
+	taskId: string,
+	jobId: string,
+	inputs: FileInputAssignment[],
+	inputMtimes: Map<string, number>,
+) {
+	try {
+		await writeLog("Processing local job outputs...", "info", taskId);
+
+		const fs = await import("fs/promises");
+		const path = await import("path");
+
+		const workspaceJobDir = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			jobId,
+		);
+		const workspaceOutputsDir = path.join(workspaceJobDir, "result");
+
+		// Create result directory
+		await fs.mkdir(workspaceOutputsDir, { recursive: true });
+
+		const files = await fs.readdir(workspaceJobDir);
+		const processedOutputs: any[] = [];
+		const textOutputs: any[] = [];
+
+		const inputPaths = new Set(inputs.map((i) => i.filePath));
+
+		for (const fileName of files) {
+			// Skip system files and result dir
+			if (
+				fileName === "job.json" ||
+				fileName === "result" ||
+				fileName.startsWith(".")
+			)
+				continue;
+
+			const filePath = path.join(workspaceJobDir, fileName);
+			const stats = await fs.stat(filePath);
+
+			if (stats.isDirectory()) continue;
+
+			// Check if it's an output
+			let isOutput = false;
+
+			if (!inputPaths.has(filePath)) {
+				// New file
+				isOutput = true;
+			} else {
+				// Existing input file, check if modified
+				const originalMtime = inputMtimes.get(filePath);
+				if (originalMtime && stats.mtimeMs > originalMtime) {
+					isOutput = true;
+					await writeLog(`Input file modified: ${fileName}`, "info", taskId);
+				}
+			}
+
+			if (isOutput) {
+				// Move to result directory
+				const resultPath = path.join(workspaceOutputsDir, fileName);
+				await fs.rename(filePath, resultPath);
+
+				// Determine type
+				const ext = path.extname(fileName).toLowerCase();
+				let determinedFileType: "image" | "text" | "video" | "file" = "file";
+
+				if (
+					[".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg"].includes(
+						ext,
+					)
+				) {
+					determinedFileType = "image";
+				} else if ([".mp4", ".mov", ".avi", ".webm"].includes(ext)) {
+					determinedFileType = "video";
+				} else if (
+					[".txt", ".md", ".json", ".log", ".xml", ".csv"].includes(ext)
+				) {
+					determinedFileType = "text";
+				}
+
+				if (determinedFileType === "text") {
+					const content = await fs.readFile(resultPath, "utf-8");
+					textOutputs.push({
+						fileName,
+						filePath: resultPath,
+						content: {
+							original: content,
+							en: undefined,
+							zh: undefined,
+						},
+						autoTranslated: false,
+						translationError: undefined,
+					});
+				}
+
+				processedOutputs.push({
+					type: determinedFileType === "text" ? "text" : "file",
+					path: resultPath,
+					fileName: fileName,
+					fileType: determinedFileType,
+					workspacePath: path.join(jobId, "result", fileName),
+				});
+
+				await writeLog(`Found output: ${fileName}`, "success", taskId);
+			}
+		}
+
+		if (processedOutputs.length === 0) {
+			await writeLog("No output files found", "warning", taskId);
+		}
+
+		// Update job.json
+		await updateJobFile(jobId, {
+			results: {
+				outputs: processedOutputs,
+				textOutputs: textOutputs,
+			},
+		});
+	} catch (error) {
+		const errorMessage =
+			error instanceof Error ? error.message : "Local output processing failed";
+		await writeLog(`Output processing error: ${errorMessage}`, "error", taskId);
+	}
+}
+
+type ComplexExecutionUpdate = {
+	autoContinue: boolean;
+	stepNumber: number;
+	isLastStep: boolean;
+};
+
+async function updateComplexExecutionForJob(
+	seriesId: string,
+	jobId: string,
+	status: "completed" | "failed",
+): Promise<ComplexExecutionUpdate | null> {
+	try {
+		const fs = await import("fs/promises");
+		const path = await import("path");
+		const executionDir = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			"complex-executions",
+			seriesId,
+		);
+		const executionFile = path.join(executionDir, "execution.json");
+		const executionContent = await fs.readFile(executionFile, "utf-8");
+		const execution = JSON.parse(executionContent);
+
+		const stepIndex = execution.steps.findIndex(
+			(step: any) => step.jobId === jobId,
+		);
+		if (stepIndex === -1) return null;
+
+		const jobFile = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			jobId,
+			"job.json",
+		);
+		let jobResults: any = undefined;
+		try {
+			const jobContent = await fs.readFile(jobFile, "utf-8");
+			const job = JSON.parse(jobContent);
+			jobResults = job.results;
+		} catch (error) {
+			console.error("Failed to read job results for complex execution:", error);
+		}
+
+		const stepNumber = execution.steps[stepIndex].stepNumber;
+		const isLastStep = stepIndex === execution.steps.length - 1;
+		const autoContinue = Boolean(execution.autoContinue);
+
+		const updatedStep = {
+			...execution.steps[stepIndex],
+			status,
+			completedAt: Date.now(),
+			outputs:
+				status === "completed" && jobResults ? jobResults : execution.steps[stepIndex].outputs,
+		};
+
+		const nextExecution = {
+			...execution,
+			currentStep: stepNumber,
+			steps: execution.steps.map((step: any, index: number) =>
+				index === stepIndex ? updatedStep : step,
+			),
+		};
+
+		if (status === "failed") {
+			nextExecution.status = "failed";
+		} else if (isLastStep) {
+			nextExecution.status = "completed";
+			nextExecution.completedAt = Date.now();
+		} else {
+			nextExecution.status = autoContinue ? "running" : "paused";
+		}
+
+		await fs.writeFile(executionFile, JSON.stringify(nextExecution, null, 2));
+
+		return { autoContinue, stepNumber, isLastStep };
+	} catch (error) {
+		console.error("Failed to update complex execution for job:", error);
+		return null;
+	}
+}
+
 async function processWorkflowInBackground(
 	taskId: string,
 	jobId: string,
@@ -644,6 +1131,7 @@ async function processWorkflowInBackground(
 	textInputs: Record<string, string>,
 	deleteSourceFiles: boolean,
 	env: NodeJS.ProcessEnv,
+	seriesId?: string,
 ) {
 	try {
 		await writeLog(`=== WORKFLOW JOB STARTED: ${taskId} ===`, "info", taskId);
@@ -667,6 +1155,18 @@ async function processWorkflowInBackground(
 		// Update job.json with the copied file paths (from job folder)
 		// This ensures job history references files from job folder, not original location
 		await updateJobFile(jobId, { fileInputs: jobFileInputs });
+
+		// Capture input stats for local output detection
+		const fs = await import("fs/promises");
+		const inputMtimes = new Map<string, number>();
+		for (const input of jobFileInputs) {
+			try {
+				const stats = await fs.stat(input.filePath);
+				inputMtimes.set(input.filePath, stats.mtimeMs);
+			} catch (e) {
+				// Ignore missing files
+			}
+		}
 
 		// Handle source file deletion BEFORE execution
 		// Since we've already copied the files to the job directory, it's safe to remove the originals from the gallery
@@ -711,49 +1211,60 @@ async function processWorkflowInBackground(
 
 		// Clean up temporary uploads immediately after ensuring they are in the job folder
 		// This prevents accumulation of files in ~/Downloads/workspace/uploads
-		try {
-			const fs = await import("fs/promises");
-			const path = await import("path");
-			// Check for uploads folder in path (platform agnostic)
-			const uploadsDirMarker = path.join("workspace", "uploads");
+		// SKIP if this is part of a complex workflow execution (files might be needed by subsequent steps)
+		const isComplexExecution = seriesId && seriesId.startsWith("exec_");
+		
+		if (isComplexExecution) {
+			await writeLog(
+				"Skipping uploads cleanup (complex workflow execution detected)",
+				"info",
+				taskId,
+			);
+		} else {
+			try {
+				const fs = await import("fs/promises");
+				const path = await import("path");
+				// Check for uploads folder in path (platform agnostic)
+				const uploadsDirMarker = path.join("workspace", "uploads");
 
-			for (let i = 0; i < fileInputs.length; i++) {
-				const originalPath = fileInputs[i].filePath;
-				const newPath = jobFileInputs[i].filePath;
+				for (let i = 0; i < fileInputs.length; i++) {
+					const originalPath = fileInputs[i].filePath;
+					const newPath = jobFileInputs[i].filePath;
 
-				// Only delete if:
-				// 1. File was successfully copied (path changed)
-				// 2. Original file is in the uploads directory
-				// 3. We didn't already delete it in the deleteSourceFiles block above
-				if (
-					originalPath !== newPath &&
-					originalPath.includes(uploadsDirMarker)
-				) {
-					try {
-						// Check existence first to avoid errors if already deleted
-						const exists = await fs
-							.stat(originalPath)
-							.then(() => true)
-							.catch(() => false);
-						if (exists) {
-							await fs.unlink(originalPath);
-							await writeLog(
-								`Cleaned up temporary upload: ${path.basename(originalPath)}`,
-								"info",
-								taskId,
+					// Only delete if:
+					// 1. File was successfully copied (path changed)
+					// 2. Original file is in the uploads directory
+					// 3. We didn't already delete it in the deleteSourceFiles block above
+					if (
+						originalPath !== newPath &&
+						originalPath.includes(uploadsDirMarker)
+					) {
+						try {
+							// Check existence first to avoid errors if already deleted
+							const exists = await fs
+								.stat(originalPath)
+								.then(() => true)
+								.catch(() => false);
+							if (exists) {
+								await fs.unlink(originalPath);
+								await writeLog(
+									`Cleaned up temporary upload: ${path.basename(originalPath)}`,
+									"info",
+									taskId,
+								);
+							}
+						} catch (cleanupError) {
+							// Log but don't fail the job
+							console.warn(
+								`Failed to cleanup temporary file ${originalPath}:`,
+								cleanupError,
 							);
 						}
-					} catch (cleanupError) {
-						// Log but don't fail the job
-						console.warn(
-							`Failed to cleanup temporary file ${originalPath}:`,
-							cleanupError,
-						);
 					}
 				}
+			} catch (e) {
+				console.error("Error during temporary file cleanup:", e);
 			}
-		} catch (e) {
-			console.error("Error during temporary file cleanup:", e);
 		}
 
 		// Before executing CLI, get workflow info
@@ -886,7 +1397,141 @@ async function processWorkflowInBackground(
 
 		// DECISION: Use execution type to determine CLI command
 
-		if (executionType === "workflow") {
+		if (executionType === "local") {
+			const operation = workflow?.localOperation;
+			const prefix = `${workflowId}_`;
+			const getVal = (key: string) => textInputs[`${prefix}${key}`] || workflow?.localConfig?.[key];
+
+			if (operation === "video-convert") {
+				const input = jobFileInputs[0];
+				if (!input)
+					throw new Error("No input file provided for video conversion");
+
+				args.push("convert-video");
+				args.push(input.filePath);
+
+				const targetFps = getVal("targetFps");
+				const customFps = getVal("customFps");
+				const quality = getVal("quality");
+				const customCrf = getVal("customCrf");
+				const encodingPreset = getVal("encodingPreset");
+				const resizeEnabled = getVal("resizeEnabled");
+				const resizeMode = getVal("resizeMode");
+				const resizeLongestSide = getVal("resizeLongestSide");
+				const resizeWidth = getVal("resizeWidth");
+				const resizeHeight = getVal("resizeHeight");
+				const outputSuffix = getVal("outputSuffix");
+				const deleteOriginal = getVal("deleteOriginal");
+
+				if (targetFps === "custom" && customFps) {
+					args.push("--fps", String(customFps));
+				} else if (targetFps && targetFps !== "original" && targetFps !== "custom") {
+					args.push("--fps", String(targetFps));
+				}
+
+				if (quality === "custom" && customCrf) {
+					args.push("--crf", String(customCrf));
+				} else if (quality === "high") {
+					args.push("--crf", "18");
+				} else if (quality === "low") {
+					args.push("--crf", "23");
+				} else if (quality === "medium") {
+					args.push("--crf", "20");
+				}
+
+				if (encodingPreset) args.push("--preset", String(encodingPreset));
+
+				if (String(resizeEnabled) === "true") {
+					if (resizeMode) args.push("--resize-mode", String(resizeMode));
+					if (resizeLongestSide) args.push("--longest-side", String(resizeLongestSide));
+					if (resizeWidth) args.push("--width", String(resizeWidth));
+					if (resizeHeight) args.push("--height", String(resizeHeight));
+				}
+
+				if (outputSuffix) args.push("--output-suffix", String(outputSuffix));
+				if (String(deleteOriginal) === "false") args.push("--no-overwrite");
+				if (workflow?.localConfig?.timeout) args.push("--timeout", String(workflow.localConfig.timeout));
+
+			} else if (operation === "video-aspect-calc") {
+				const input = jobFileInputs[0];
+				if (!input)
+					throw new Error("No input file provided for aspect calculation");
+
+				args.push("aspect-calc");
+				args.push(input.filePath);
+
+				const mode = getVal("mode");
+				const targetWidth = getVal("targetWidth");
+				const targetHeight = getVal("targetHeight");
+				const rounding = getVal("rounding");
+
+				if (mode) args.push("--mode", String(mode));
+				if (targetWidth) args.push("--target-width", String(targetWidth));
+				if (targetHeight) args.push("--target-height", String(targetHeight));
+				if (rounding) args.push("--rounding", String(rounding));
+
+			} else if (operation === "video-clip") {
+				const input = jobFileInputs[0];
+				if (!input) throw new Error("No input file provided for video clipping");
+
+				args.push("clip");
+				args.push(input.filePath);
+				args.push("--output-dir", "."); // Output to job directory
+
+				const mode = getVal("mode");
+				const format = getVal("format");
+				const quality = getVal("quality");
+				const frameCount = getVal("frameCount");
+				const intervalSeconds = getVal("intervalSeconds");
+				const frameInterval = getVal("frameInterval");
+				const organizeByVideo = getVal("organizeByVideo");
+				const deleteOriginal = getVal("deleteOriginal");
+
+				if (mode) args.push("--mode", String(mode));
+				if (format) args.push("--format", String(format));
+				if (quality) args.push("--quality", String(quality));
+				if (frameCount) args.push("--frame-count", String(frameCount));
+				if (intervalSeconds) args.push("--interval", String(intervalSeconds));
+				if (frameInterval) args.push("--frame-interval", String(frameInterval));
+				if (String(organizeByVideo) === "false") args.push("--no-organize");
+				if (String(deleteOriginal) === "true") args.push("--delete");
+
+			} else if (operation === "video-crop") {
+				const input = jobFileInputs[0];
+				if (!input) throw new Error("No input file provided for video cropping");
+
+				args.push("crop");
+				args.push(input.filePath);
+
+				const mode = getVal("mode");
+				const width = getVal("width");
+				const height = getVal("height");
+				const x = getVal("x");
+				const y = getVal("y");
+				const preserveAudio = getVal("preserveAudio");
+				const outputSuffix = getVal("outputSuffix");
+
+				if (mode) args.push("--mode", String(mode));
+				if (width) args.push("--width", String(width));
+				if (height) args.push("--height", String(height));
+				if (x) args.push("--x", String(x));
+				if (y) args.push("--y", String(y));
+				if (String(preserveAudio) === "true") args.push("--preserve-audio");
+				if (outputSuffix) args.push("--output-suffix", String(outputSuffix));
+
+			} else if (operation === "duck-decode") {
+				const input = jobFileInputs[0];
+				if (!input) throw new Error("No input file provided for duck decoding");
+
+				args.push("duck-decode");
+				args.push(input.filePath);
+
+				const password = getVal("password");
+				if (password) args.push("--password", String(password));
+			} else {
+				throw new Error(`Unsupported local operation: ${operation}`);
+			}
+		} else if (executionType === "workflow") {
 			// Workflow execution -> use 'run-workflow' or 'run-text-workflow' command
 
 			if (jobFileInputs.length > 0) {
@@ -993,13 +1638,17 @@ async function processWorkflowInBackground(
 			}
 		}
 
-		// Add workflow ID explicitly if provided
-		if (env.RUNNINGHUB_WORKFLOW_ID) {
+		// Add workflow ID explicitly if provided, BUT ONLY for non-local execution
+		// Local commands (convert-video, etc.) don't support --workflow-id
+		if (env.RUNNINGHUB_WORKFLOW_ID && executionType !== "local") {
 			args.push("--workflow-id", env.RUNNINGHUB_WORKFLOW_ID);
 		}
 
 		// Add common flags
-		args.push("--json"); // Output JSON for better parsing (though we rely on logs mostly)
+		// Add --json flag only for non-local execution, as local commands don't support it
+		if (executionType !== "local") {
+			args.push("--json"); // Output JSON for better parsing (though we rely on logs mostly)
+		}
 
 		await writeLog(
 			`Executing command: python ${args.join(" ")}`,
@@ -1065,47 +1714,119 @@ async function processWorkflowInBackground(
 					completedCount: fileInputs.length + Object.keys(textInputs).length,
 				});
 
-				// Update job status
 				await updateJobFile(jobId, {
 					status: "completed",
 					completedAt: Date.now(),
 				});
 
-				// NEW: Process outputs - pass stdout for JSON parsing
-				await processJobOutputs(taskId, workflowId, jobId, env, stdout);
+				if (executionType === "local") {
+					await processLocalJobOutputs(
+						taskId,
+						jobId,
+						jobFileInputs,
+						inputMtimes,
+					);
+				} else {
+					await processJobOutputs(taskId, workflowId, jobId, env, stdout);
+				}
 
-				// Note: Manual cleanup moved to BEFORE execution block above.
-				// No further cleanup needed here.
-			} else {
+				if (seriesId && seriesId.startsWith("exec_")) {
+					const updateResult = await updateComplexExecutionForJob(
+						seriesId,
+						jobId,
+						"completed",
+					);
+
+					if (updateResult?.autoContinue && !updateResult.isLastStep) {
+						try {
+							await fetch(
+								`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workspace/complex-workflow/continue`,
+								{
+									method: "POST",
+									headers: { "Content-Type": "application/json" },
+									body: JSON.stringify({
+										executionId: seriesId,
+										stepNumber: updateResult.stepNumber,
+										parameters: {
+											fileInputs: [],
+											textInputs: {},
+											deleteSourceFiles: false,
+										},
+									}),
+								},
+							);
+						} catch (error) {
+							console.error("Failed to auto-continue complex workflow:", error);
+						}
+					}
+				}
+
+				await releaseSlot();
+				await drainQueue();
+				return;
+			}
+
+			if (isQueueFullError(stdout, stderr)) {
 				await writeLog(
-					`Workflow execution failed with code ${code}`,
-					"error",
+					"RunningHub queue is full (code 805). Re-queuing job.",
+					"warning",
 					taskId,
 				);
-				await updateTask(taskId, {
-					status: "failed",
-					error: `Exit code ${code}`,
-				});
-
-				// Update job status
+				await updateTask(taskId, { status: "pending", error: undefined });
 				await updateJobFile(jobId, {
-					status: "failed",
-					error: `Exit code ${code}`,
-					completedAt: Date.now(),
+					status: "queued",
+					queuedAt: Date.now(),
+					error: undefined,
+					completedAt: undefined,
 				});
+				await enqueueJob({
+					jobId,
+					taskId,
+					workflowId,
+					enqueuedAt: Date.now(),
+				});
+				await releaseSlot();
+				await drainQueue();
+				return;
 			}
+
+			await writeLog(
+				`Workflow execution failed with code ${code}`,
+				"error",
+				taskId,
+			);
+			await updateTask(taskId, {
+				status: "failed",
+				error: `Exit code ${code}`,
+			});
+
+			await updateJobFile(jobId, {
+				status: "failed",
+				error: `Exit code ${code}`,
+				completedAt: Date.now(),
+			});
+
+			if (seriesId && seriesId.startsWith("exec_")) {
+				await updateComplexExecutionForJob(seriesId, jobId, "failed");
+			}
+			await releaseSlot();
+			await drainQueue();
 		});
 
 		childProcess.on("error", async (error) => {
 			await writeLog(`Process error: ${error.message}`, "error", taskId);
 			await updateTask(taskId, { status: "failed", error: error.message });
 
-			// Update job status
 			await updateJobFile(jobId, {
 				status: "failed",
 				error: error.message,
 				completedAt: Date.now(),
 			});
+			if (seriesId && seriesId.startsWith("exec_")) {
+				await updateComplexExecutionForJob(seriesId, jobId, "failed");
+			}
+			await releaseSlot();
+			await drainQueue();
 		});
 	} catch (error) {
 		const errorMessage =
@@ -1119,5 +1840,10 @@ async function processWorkflowInBackground(
 			error: errorMessage,
 			completedAt: Date.now(),
 		});
+		if (seriesId && seriesId.startsWith("exec_")) {
+			await updateComplexExecutionForJob(seriesId, jobId, "failed");
+		}
+		await releaseSlot();
+		await drainQueue();
 	}
 }

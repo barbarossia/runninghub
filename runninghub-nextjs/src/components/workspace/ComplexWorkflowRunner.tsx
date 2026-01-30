@@ -54,6 +54,7 @@ export function ComplexWorkflowRunner() {
 		workflows,
 		activeComplexExecutionId,
 		setActiveComplexExecutionId,
+		setSelectedComplexWorkflowId,
 		setWorkflows,
 		setJobFiles,
 		clearJobInputs,
@@ -548,6 +549,7 @@ export function ComplexWorkflowRunner() {
 
 				const execution = execData.execution as ComplexWorkflowExecution;
 				setExecutionData(execution);
+				setSelectedComplexWorkflowId(execution.complexWorkflowId);
 
 				// Restore outputs from completed steps
 				const outputs: Record<number, JobResult> = {};
@@ -1158,6 +1160,7 @@ export function ComplexWorkflowRunner() {
 	};
 
 	const handleStartNew = (workflowId: string) => {
+		setSelectedComplexWorkflowId(workflowId);
 		// Navigate to execute page to start fresh
 		// Alternatively, we could reset state here and show Step 1 inputs
 		// But sticking to the URL pattern might be cleaner for "starting fresh"

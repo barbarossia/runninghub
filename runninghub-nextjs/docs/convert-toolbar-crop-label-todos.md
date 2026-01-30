@@ -1,0 +1,3 @@
+- [x] Update Convert tab toolbar to use `clipButtonText="Crop"`.
+- [ ] Verify label in expanded and floating toolbar modes.
+- [ ] Run `npm run build`.

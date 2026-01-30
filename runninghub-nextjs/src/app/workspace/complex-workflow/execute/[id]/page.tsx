@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WorkflowInputBuilder } from "@/components/workspace/WorkflowInputBuilder";
+import { useWorkflowLoader } from "@/hooks/useWorkflowLoader";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type {
@@ -37,8 +38,16 @@ const POLL_INTERVAL = 2000;
 export default function ComplexWorkflowExecutePage() {
 	const params = useParams();
 	const router = useRouter();
-	const { workflows, setWorkflows } = useWorkspaceStore();
+	const {
+		workflows,
+		jobFiles,
+		setJobFiles,
+		mediaFiles,
+		autoAssignSelectedFilesToWorkflow,
+		setSelectedComplexWorkflowId,
+	} = useWorkspaceStore();
 	const { selectedFolder } = useWorkspaceFolder();
+	const { isLoading: isLoadingWorkflows } = useWorkflowLoader();
 
 	const [complexWorkflow, setComplexWorkflow] =
 		useState<ComplexWorkflow | null>(null);
@@ -61,21 +70,93 @@ export default function ComplexWorkflowExecutePage() {
 	const [executionData, setExecutionData] =
 		useState<ComplexWorkflowExecution | null>(null);
 	const [stepOutputs, setStepOutputs] = useState<Record<number, JobResult>>({});
+	const [prefilledTextInputs, setPrefilledTextInputs] = useState<
+		Record<string, string>
+	>({});
 
 	const workflowId = params.id as string;
 	const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+	const prefillSignatureRef = useRef<string | null>(null);
 
-	// Load basic data
-	const loadWorkflows = async () => {
-		try {
-			const response = await fetch("/api/workflow/list");
-			const data = await response.json();
-			if (data.success && data.workflows) {
-				setWorkflows(data.workflows);
+	type OutputEntry = {
+		type: "file" | "text";
+		content?: string;
+		path?: string;
+		workspacePath?: string;
+		fileName?: string;
+		fileType?: "text" | "image" | "video";
+		fileSize?: number;
+		parameterId?: string;
+	};
+
+	const getBaseName = (value?: string) => {
+		if (!value) return "";
+		const parts = value.split("/");
+		return parts[parts.length - 1] || "";
+	};
+
+	const inferMediaTypeFromName = (value?: string) => {
+		if (!value) return null;
+		const lower = value.toLowerCase();
+		if (/\.(mp4|mov|avi|webm|mkv)$/i.test(lower)) return "video";
+		if (/\.(png|jpg|jpeg|bmp|webp|gif|tif|tiff|svg)$/i.test(lower))
+			return "image";
+		return null;
+	};
+
+	const buildOutputMap = (jobResult?: JobResult) => {
+		const outputMap = new Map<string, OutputEntry>();
+		const outputs = jobResult?.outputs || [];
+		const textOutputs = jobResult?.textOutputs || [];
+
+		for (const [index, output] of outputs.entries()) {
+			const matchingTextOutput =
+				output.type === "text"
+					? textOutputs.find(
+							(textOutput) =>
+								(textOutput.fileName &&
+									textOutput.fileName === output.fileName) ||
+								(textOutput.filePath && textOutput.filePath === output.path),
+						)
+					: null;
+			const normalizedOutput: OutputEntry =
+				output.type === "text"
+					? {
+							...output,
+							content: output.content ?? matchingTextOutput?.content?.original,
+						}
+					: output;
+
+			if (normalizedOutput.parameterId) {
+				outputMap.set(normalizedOutput.parameterId, normalizedOutput);
 			}
-		} catch (error) {
-			console.error("Failed to load workflows:", error);
+			outputMap.set(`output_${index}`, normalizedOutput);
+			outputMap.set(`${index + 1}-output`, normalizedOutput);
+			outputMap.set(`output-${index + 1}`, normalizedOutput);
+			if (normalizedOutput.fileName) {
+				outputMap.set(normalizedOutput.fileName, normalizedOutput);
+			}
 		}
+
+		for (const [index, textOutput] of textOutputs.entries()) {
+			const textEntry: OutputEntry = {
+				type: "text",
+				content: textOutput.content?.original,
+				fileName: textOutput.fileName,
+				path: textOutput.filePath,
+			};
+			if (!outputMap.has(`output_${index}`)) {
+				outputMap.set(`output_${index}`, textEntry);
+			}
+			if (!outputMap.has(`${index + 1}-output`)) {
+				outputMap.set(`${index + 1}-output`, textEntry);
+			}
+			if (textOutput.fileName && !outputMap.has(textOutput.fileName)) {
+				outputMap.set(textOutput.fileName, textEntry);
+			}
+		}
+
+		return outputMap;
 	};
 
 	const loadWorkflow = useCallback(async () => {
@@ -104,9 +185,14 @@ export default function ComplexWorkflowExecutePage() {
 	}, [workflowId, router]);
 
 	useEffect(() => {
-		loadWorkflows();
 		loadWorkflow();
 	}, [loadWorkflow]);
+
+	useEffect(() => {
+		if (workflowId) {
+			setSelectedComplexWorkflowId(workflowId);
+		}
+	}, [setSelectedComplexWorkflowId, workflowId]);
 
 	// Derived state for current step
 	const currentStep = useMemo(() => {
@@ -133,6 +219,167 @@ export default function ComplexWorkflowExecutePage() {
 			})),
 		};
 	}, [currentWorkflowTemplate]);
+
+	const mappedStepInputs = useMemo(() => {
+		if (!currentStep || !displayWorkflow) {
+			return { fileInputs: [], textInputs: {} };
+		}
+
+		const paramDefinitions = new Map(
+			displayWorkflow.inputs.map((input) => [input.id, input]),
+		);
+		const mappedTextInputs: Record<string, string> = {};
+		const mappedFileInputs: FileInputAssignment[] = [];
+		const outputMapCache = new Map<number, Map<string, OutputEntry>>();
+
+		const getStepOutputMap = (stepNumber: number) => {
+			if (outputMapCache.has(stepNumber)) return outputMapCache.get(stepNumber)!;
+			const map = buildOutputMap(stepOutputs[stepNumber]);
+			outputMapCache.set(stepNumber, map);
+			return map;
+		};
+
+		const getStepAliasOutput = (stepNumber: number) => {
+			const outputMap = getStepOutputMap(stepNumber);
+			return (
+				outputMap.get("1-output") ||
+				outputMap.get("output_0") ||
+				outputMap.get("output-1") ||
+				null
+			);
+		};
+
+		const getStepInputs = (stepNumber: number) => {
+			const step = executionData?.steps.find(
+				(candidate) => candidate.stepNumber === stepNumber,
+			);
+			return {
+				fileInputs: step?.inputs?.fileInputs || [],
+				textInputs: step?.inputs?.textInputs || {},
+			};
+		};
+
+		for (const param of currentStep.parameters) {
+			const definition = paramDefinitions.get(param.parameterId);
+			const isFileParam = definition?.type === "file";
+
+			if (param.valueType === "static") {
+				if (!isFileParam && param.staticValue !== undefined) {
+					mappedTextInputs[param.parameterId] = String(param.staticValue);
+				}
+				continue;
+			}
+
+			if (param.valueType === "dynamic" && param.dynamicMapping) {
+				const outputMap = getStepOutputMap(param.dynamicMapping.sourceStepNumber);
+				const stepAliasKey = `${param.dynamicMapping.sourceStepNumber}-output`;
+				const output =
+					outputMap.get(param.dynamicMapping.sourceParameterId) ||
+					outputMap.get(param.dynamicMapping.sourceOutputName) ||
+					(param.dynamicMapping.sourceParameterId === stepAliasKey ||
+					param.dynamicMapping.sourceOutputName === stepAliasKey
+						? getStepAliasOutput(param.dynamicMapping.sourceStepNumber)
+						: null);
+
+				if (!output) continue;
+
+				if (isFileParam || (!definition && output.type !== "text")) {
+					const path = output.path || output.workspacePath;
+					if (!path) continue;
+					const resolvedFileName = output.fileName || getBaseName(path);
+					const inferredType =
+						output.fileType === "image" || output.fileType === "video"
+							? output.fileType
+							: definition?.validation?.mediaType ||
+								inferMediaTypeFromName(resolvedFileName) ||
+								"image";
+					mappedFileInputs.push({
+						parameterId: param.parameterId,
+						filePath: path,
+						fileName: resolvedFileName || "output",
+						fileSize: output.fileSize || 0,
+						fileType: inferredType,
+						valid: true,
+					});
+				} else {
+					const value =
+						output.type === "text"
+							? output.content
+							: output.path || output.workspacePath || output.fileName;
+					if (value !== undefined) {
+						mappedTextInputs[param.parameterId] = String(value);
+					}
+				}
+				continue;
+			}
+
+			if (param.valueType === "previous-input" && param.previousInputMapping) {
+				const previousInputs = getStepInputs(
+					param.previousInputMapping.sourceStepNumber,
+				);
+				if (isFileParam) {
+					const matches = previousInputs.fileInputs.filter(
+						(input: FileInputAssignment) =>
+							input.parameterId ===
+							param.previousInputMapping?.sourceParameterId,
+					);
+					matches.forEach((input: FileInputAssignment) => {
+						mappedFileInputs.push({
+							...input,
+							parameterId: param.parameterId,
+						});
+					});
+				} else {
+					const value =
+						previousInputs.textInputs[
+							param.previousInputMapping.sourceParameterId
+						];
+					if (value !== undefined) {
+						mappedTextInputs[param.parameterId] = String(value);
+					}
+				}
+			}
+		}
+
+		return {
+			fileInputs: mappedFileInputs,
+			textInputs: mappedTextInputs,
+		};
+	}, [currentStep, displayWorkflow, executionData, stepOutputs]);
+
+	useEffect(() => {
+		if (!displayWorkflow || currentStepIndex !== 0) return;
+		if (jobFiles.length > 0) return;
+		const selectedFiles = mediaFiles.filter((file) => file.selected);
+		if (selectedFiles.length === 0) return;
+		autoAssignSelectedFilesToWorkflow(displayWorkflow.id);
+	}, [
+		displayWorkflow?.id,
+		currentStepIndex,
+		jobFiles.length,
+		mediaFiles,
+		autoAssignSelectedFilesToWorkflow,
+	]);
+
+	const prefillSignature = executionId
+		? `${executionId}:${currentStepIndex}:${Object.keys(stepOutputs).join(",")}`
+		: `step:${currentStepIndex}:${Object.keys(stepOutputs).join(",")}`;
+
+	useEffect(() => {
+		if (!currentStep) return;
+		if (prefillSignatureRef.current === prefillSignature) return;
+		if (jobFiles.length > 0) return;
+
+		prefillSignatureRef.current = prefillSignature;
+		setJobFiles(mappedStepInputs.fileInputs);
+		setPrefilledTextInputs(mappedStepInputs.textInputs);
+	}, [
+		currentStep,
+		prefillSignature,
+		jobFiles.length,
+		setJobFiles,
+		mappedStepInputs,
+	]);
 
 	// Load workflow details map
 	useEffect(() => {
@@ -338,7 +585,7 @@ export default function ComplexWorkflowExecutePage() {
 
 	const isStepCompleted = getStepStatus(currentStepIndex + 1) === "completed";
 
-	if (isLoading) {
+	if (isLoading || isLoadingWorkflows) {
 		return (
 			<div className="flex items-center justify-center h-full">
 				<Loader2 className="h-8 w-8 animate-spin text-gray-400" />
@@ -493,6 +740,8 @@ export default function ComplexWorkflowExecutePage() {
 								onRunJob={handleStepRun}
 								runLabel={isStepCompleted ? "Re-run Step" : "Run Step"}
 								isExecuting={isExecuting}
+								initialTextInputs={prefilledTextInputs}
+								prefillKey={prefillSignature}
 								extraActions={
 									<Button
 										onClick={handleNextStep}

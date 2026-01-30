@@ -6,17 +6,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-	Plus,
-	Trash2,
-	Loader2,
-	AlertCircle,
-	Settings2,
-	GripVertical,
-	User,
-	ArrowLeft,
-} from "lucide-react";
 import { Reorder } from "framer-motion";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,24 +28,41 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	Plus,
+	Trash2,
+	Loader2,
+	AlertCircle,
+	Settings2,
+	GripVertical,
+	User,
+	ArrowLeft,
+	Monitor,
+	Cloud,
+	Layers,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
-import type { Workflow, WorkflowStep } from "@/types/workspace";
+import type { ComplexWorkflow, Workflow, WorkflowStep, LocalWorkflow } from "@/types/workspace";
+import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
+import { LOCAL_OPS_DEFINITIONS } from "@/constants/local-ops";
 
 type BuilderStep = 1 | 2 | 3;
 
 interface ComplexWorkflowBuilderProps {
+	workflow?: ComplexWorkflow;
 	onSave?: () => void;
 	onCancel?: () => void;
 }
 
 export function ComplexWorkflowBuilder({
+	workflow,
 	onSave,
 	onCancel,
 }: ComplexWorkflowBuilderProps) {
 	const [currentStep, setCurrentStep] = useState<BuilderStep>(1);
 	const [isSaving, setIsSaving] = useState(false);
+	const isEditing = Boolean(workflow);
 
 	// Workflow data
 	const [name, setName] = useState("");
@@ -63,11 +71,34 @@ export function ComplexWorkflowBuilder({
 	const [availableWorkflows, setAvailableWorkflows] = useState<Workflow[]>([]);
 	const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
 	const [workflowsError, setWorkflowsError] = useState<string | null>(null);
+	const [filter, setFilter] = useState<'all' | 'local' | 'runninghub'>('all');
 
 	// Load available workflows on mount
 	useEffect(() => {
 		loadWorkflows();
 	}, []);
+
+	useEffect(() => {
+		if (!workflow) {
+			setName("");
+			setDescription("");
+			setSteps([]);
+			setCurrentStep(1);
+			return;
+		}
+
+		const normalizedSteps = [...workflow.steps]
+			.sort((a, b) => a.stepNumber - b.stepNumber)
+			.map((step, index) => ({
+				...step,
+				stepNumber: index + 1,
+			}));
+
+		setName(workflow.name);
+		setDescription(workflow.description || "");
+		setSteps(normalizedSteps);
+		setCurrentStep(1);
+	}, [workflow]);
 
 	// Handle reorder with step number update
 	const handleReorder = (newSteps: WorkflowStep[]) => {
@@ -84,19 +115,32 @@ export function ComplexWorkflowBuilder({
 
 		try {
 			console.log(
-				"[ComplexWorkflowBuilder] Fetching workflows from /api/workflow/list...",
+				"[ComplexWorkflowBuilder] Fetching workflows...",
 			);
-			const response = await fetch("/api/workflow/list");
-			console.log("[ComplexWorkflowBuilder] Response status:", response.status);
+			
+			const [standardRes, localRes] = await Promise.all([
+				fetch("/api/workflow/list"),
+				fetch("/api/workspace/local-workflow/list"),
+			]);
 
-			const data = await response.json();
-			console.log("[ComplexWorkflowBuilder] Response data:", data);
+			const standardData = await standardRes.json();
+			const localData = await localRes.json();
 
-			if (data.success) {
-				const workflows = data.workflows || [];
-				console.log("[ComplexWorkflowBuilder] Loaded workflows:", workflows);
-				setAvailableWorkflows(workflows);
-				if (workflows.length === 0) {
+			if (standardData.success) {
+				const standardWorkflows: Workflow[] = standardData.workflows || [];
+				let localWorkflows: Workflow[] = [];
+
+				if (localRes.ok && localData.success) {
+					localWorkflows = (localData.workflows || []).map((lw: LocalWorkflow) =>
+						mapLocalWorkflowToWorkflow(lw),
+					);
+				}
+
+				const allWorkflows = [...standardWorkflows, ...localWorkflows];
+				console.log("[ComplexWorkflowBuilder] Loaded workflows:", allWorkflows);
+				
+				setAvailableWorkflows(allWorkflows);
+				if (allWorkflows.length === 0) {
 					setWorkflowsError("No workflows found. Create a workflow first.");
 				} else {
 					setWorkflowsError(null);
@@ -104,10 +148,10 @@ export function ComplexWorkflowBuilder({
 			} else {
 				console.error(
 					"[ComplexWorkflowBuilder] API returned error:",
-					data.error,
+					standardData.error,
 				);
-				setWorkflowsError(data.error || "Failed to load workflows");
-				toast.error(data.error || "Failed to load workflows");
+				setWorkflowsError(standardData.error || "Failed to load workflows");
+				toast.error(standardData.error || "Failed to load workflows");
 			}
 		} catch (error) {
 			console.error(
@@ -123,6 +167,18 @@ export function ComplexWorkflowBuilder({
 		}
 	};
 
+	const filteredWorkflows = availableWorkflows.filter((w) => {
+		if (filter === 'all') return true;
+		const isLocal = w.sourceType === 'local';
+		return filter === 'local' ? isLocal : !isLocal;
+	});
+
+	const counts = {
+		all: availableWorkflows.length,
+		local: availableWorkflows.filter(w => w.sourceType === 'local').length,
+		runninghub: availableWorkflows.filter(w => w.sourceType !== 'local').length,
+	};
+
 	const handleAddWorkflow = (workflow: Workflow) => {
 		const newStep: WorkflowStep = {
 			id: `step_${Date.now()}`,
@@ -132,8 +188,8 @@ export function ComplexWorkflowBuilder({
 			parameters: workflow.inputs.map((param) => ({
 				parameterId: param.id,
 				parameterName: param.name,
-				valueType: "static",
-				staticValue: param.defaultValue,
+				valueType: param.type === 'file' ? "user-input" : "static",
+				staticValue: param.defaultValue ?? "",
 				required: param.required,
 				placeholder: param.placeholder,
 			})),
@@ -214,6 +270,28 @@ export function ComplexWorkflowBuilder({
 		paramId: string,
 		sourceParameterId: string,
 	) => {
+		const parseDynamicValue = (value: string) => {
+			if (value.includes("::")) {
+				const [stepValue, outputKey] = value.split("::");
+				return {
+					stepNumber: parseInt(stepValue, 10),
+					outputKey,
+				};
+			}
+
+			const legacyMatch = value.match(/^(\d+)-(.+)$/);
+			if (legacyMatch) {
+				return {
+					stepNumber: parseInt(legacyMatch[1], 10),
+					outputKey: value,
+				};
+			}
+
+			return { stepNumber: 0, outputKey: value };
+		};
+
+		const parsed = parseDynamicValue(sourceParameterId);
+
 		setSteps(
 			steps.map((step) => {
 				if (step.id === stepId) {
@@ -221,25 +299,13 @@ export function ComplexWorkflowBuilder({
 						...step,
 						parameters: step.parameters.map((param) => {
 							if (param.parameterId === paramId) {
-								const match = sourceParameterId.match(/^(.+)-(.+)$/);
-								const sourceStepNumber = match ? parseInt(match[1], 10) : 0;
-
-								// Find source output name
-								const sourceStep = steps.find(
-									(s) => s.stepNumber === sourceStepNumber,
-								);
-								const sourceWorkflow = availableWorkflows.find(
-									(w) => w.id === sourceStep?.workflowId,
-								);
-								// In reality we'd find the output definition, but here we assume outputs map to parameter IDs for now
-
 								return {
 									...param,
 									valueType: "dynamic",
 									dynamicMapping: {
-										sourceStepNumber,
-										sourceParameterId,
-										sourceOutputName: sourceParameterId,
+										sourceStepNumber: parsed.stepNumber,
+										sourceParameterId: parsed.outputKey,
+										sourceOutputName: parsed.outputKey,
 									},
 								};
 							}
@@ -330,40 +396,82 @@ export function ComplexWorkflowBuilder({
 			return;
 		}
 
-		if (!name.trim()) {
-			toast.error("Please enter a name for the complex workflow");
-			return;
-		}
+	if (!name.trim()) {
+		toast.error("Please enter a name for the complex workflow");
+		return;
+	}
 
-		setIsSaving(true);
+	if (isEditing && !workflow?.id) {
+		toast.error("Missing workflow ID for update");
+		return;
+	}
+
+	setIsSaving(true);
 
 		try {
-			const response = await fetch("/api/workspace/complex-workflow/save", {
-				method: "POST",
+			const endpoint = isEditing
+				? `/api/workspace/complex-workflow/${workflow?.id ?? ""}`
+				: "/api/workspace/complex-workflow/save";
+			const method = isEditing ? "PUT" : "POST";
+
+			const response = await fetch(endpoint, {
+				method,
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					workflow: {
-						name,
-						description,
-						steps,
-					},
+					workflow: isEditing
+						? {
+								id: workflow?.id,
+								name,
+								description,
+								steps,
+								createdAt: workflow?.createdAt,
+								updatedAt: workflow?.updatedAt,
+							}
+						: {
+								name,
+								description,
+								steps,
+							},
 				}),
 			});
 
 			const data = await response.json();
 
 			if (data.success) {
-				toast.success("Complex workflow saved successfully");
+				toast.success(
+					isEditing
+						? "Complex workflow updated successfully"
+						: "Complex workflow saved successfully",
+				);
 				if (onSave) onSave();
 			} else {
-				toast.error(data.error || "Failed to save complex workflow");
+				toast.error(
+					data.error ||
+						(isEditing
+							? "Failed to update complex workflow"
+							: "Failed to save complex workflow"),
+				);
 			}
 		} catch (error) {
 			console.error("Failed to save complex workflow:", error);
-			toast.error("Failed to save complex workflow");
+			toast.error(
+				isEditing
+					? "Failed to update complex workflow"
+					: "Failed to save complex workflow",
+			);
 		} finally {
 			setIsSaving(false);
 		}
+	};
+
+	const getDynamicMappingValue = (param: WorkflowStep["parameters"][number]) => {
+		if (!param.dynamicMapping) return "";
+		const { sourceStepNumber, sourceParameterId } = param.dynamicMapping;
+		const legacyPrefix = `${sourceStepNumber}-`;
+		if (sourceParameterId.startsWith(legacyPrefix)) {
+			return sourceParameterId;
+		}
+		return `${sourceStepNumber}::${sourceParameterId}`;
 	};
 
 	const getPreviousStepOutputs = (currentStepNumber: number) => {
@@ -380,13 +488,25 @@ export function ComplexWorkflowBuilder({
 				const workflow = availableWorkflows.find(
 					(w) => w.id === step.workflowId,
 				);
-				// For now assuming all inputs can be outputs or just generic output
-				// Ideally we should know the outputs of each workflow
+				const localOperation = workflow?.localOperation;
+				const opDefinition = localOperation
+					? LOCAL_OPS_DEFINITIONS[localOperation]
+					: undefined;
+
 				outputs.push({
 					id: `${step.stepNumber}-output`,
-					name: `Output`,
+					name: `Output (default)`,
 					stepNumber: step.stepNumber,
 					workflowName: step.workflowName,
+				});
+
+				opDefinition?.outputs?.forEach((output) => {
+					outputs.push({
+						id: `${step.stepNumber}::${output.key}`,
+						name: output.label,
+						stepNumber: step.stepNumber,
+						workflowName: step.workflowName,
+					});
 				});
 			});
 
@@ -480,8 +600,34 @@ export function ComplexWorkflowBuilder({
 					{currentStep === 2 && (
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 							<div className="flex flex-col h-[500px] border rounded-md overflow-hidden">
-								<div className="bg-muted/50 p-3 border-b flex-shrink-0">
+								<div className="bg-muted/50 p-3 border-b flex-shrink-0 flex flex-col gap-2">
 									<h3 className="font-medium text-sm">Available Workflows</h3>
+									<div className="flex gap-1">
+										<Badge
+											variant={filter === 'all' ? 'default' : 'outline'}
+											className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90 flex items-center gap-1"
+											onClick={() => setFilter('all')}
+										>
+											<Layers className="h-3 w-3" />
+											All ({counts.all})
+										</Badge>
+										<Badge
+											variant={filter === 'local' ? 'default' : 'outline'}
+											className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90 flex items-center gap-1"
+											onClick={() => setFilter('local')}
+										>
+											<Monitor className="h-3 w-3" />
+											Local ({counts.local})
+										</Badge>
+										<Badge
+											variant={filter === 'runninghub' ? 'default' : 'outline'}
+											className="cursor-pointer text-[10px] px-2 h-6 hover:bg-primary/90 flex items-center gap-1"
+											onClick={() => setFilter('runninghub')}
+										>
+											<Cloud className="h-3 w-3" />
+											Cloud ({counts.runninghub})
+										</Badge>
+									</div>
 								</div>
 								<div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
 									{isLoadingWorkflows ? (
@@ -493,27 +639,34 @@ export function ComplexWorkflowBuilder({
 											<AlertCircle className="h-8 w-8 text-red-500 mb-2" />
 											<p className="text-sm text-red-500">{workflowsError}</p>
 										</div>
-									) : availableWorkflows.length === 0 ? (
+									) : filteredWorkflows.length === 0 ? (
 										<p className="text-sm text-muted-foreground text-center pt-8">
-											No workflows available
+											No {filter !== 'all' ? filter : ''} workflows available
 										</p>
 									) : (
-										availableWorkflows.map((workflow) => (
+										filteredWorkflows.map((workflow) => (
 											<div
 												key={workflow.id}
 												className="flex items-center justify-between p-3 border rounded-md hover:bg-accent/50 transition-colors cursor-pointer group"
 												onClick={() => handleAddWorkflow(workflow)}
 											>
-												<div>
-													<p className="font-medium text-sm">{workflow.name}</p>
-													<p className="text-xs text-muted-foreground truncate max-w-[200px]">
+												<div className="min-w-0 flex-1 mr-2">
+													<div className="flex items-center gap-2 mb-1">
+														{workflow.sourceType === 'local' ? (
+															<Monitor className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+														) : (
+															<Cloud className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+														)}
+														<p className="font-medium text-sm truncate">{workflow.name}</p>
+													</div>
+													<p className="text-xs text-muted-foreground truncate">
 														{workflow.description}
 													</p>
 												</div>
 												<Button
 													size="sm"
 													variant="ghost"
-													className="opacity-0 group-hover:opacity-100 transition-opacity"
+													className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
 												>
 													<Plus className="h-4 w-4" />
 												</Button>
@@ -822,33 +975,62 @@ export function ComplexWorkflowBuilder({
 
 																<div className="md:col-span-5">
 																	{param.valueType === "static" ? (
-																		<Input
-																			value={
-																				param.staticValue?.toString() || ""
-																			}
-																			onChange={(e) =>
-																				updateStaticValue(
-																					step.id,
-																					param.parameterId,
-																					e.target.value,
-																				)
-																			}
-																			placeholder={
-																				param.placeholder || "Enter value"
-																			}
-																			className="h-8"
-																		/>
+																		originalParam?.options &&
+																		originalParam.options.length > 0 ? (
+																			<Select
+																				value={
+																					param.staticValue?.toString() || ""
+																				}
+																				onValueChange={(value) =>
+																					updateStaticValue(
+																						step.id,
+																						param.parameterId,
+																						value,
+																					)
+																				}
+																			>
+																				<SelectTrigger className="h-8">
+																					<SelectValue placeholder="Select option" />
+																				</SelectTrigger>
+																				<SelectContent>
+																					{originalParam.options.map(
+																						(option) => (
+																							<SelectItem
+																								key={option.value.toString()}
+																								value={option.value.toString()}
+																							>
+																								{option.label}
+																							</SelectItem>
+																						),
+																					)}
+																				</SelectContent>
+																			</Select>
+																		) : (
+																			<Input
+																				value={
+																					param.staticValue?.toString() || ""
+																				}
+																				onChange={(e) =>
+																					updateStaticValue(
+																						step.id,
+																						param.parameterId,
+																						e.target.value,
+																					)
+																				}
+																				placeholder={
+																					param.placeholder || "Enter value"
+																				}
+																				className="h-8"
+																			/>
+																		)
 																	) : param.valueType === "user-input" ? (
 																		<div className="flex items-center gap-2 h-8 px-3 bg-muted/50 rounded-md border border-dashed text-muted-foreground text-sm">
 																			<User className="h-3.5 w-3.5" />
 																			<span>Required at execution</span>
 																		</div>
 																	) : (
-																		<Select
-																			value={
-																				param.dynamicMapping
-																					?.sourceParameterId || ""
-																			}
+																			<Select
+																			value={getDynamicMappingValue(param)}
 																			onValueChange={(value) =>
 																				updateDynamicMapping(
 																					step.id,
@@ -869,7 +1051,7 @@ export function ComplexWorkflowBuilder({
 																						value={output.id}
 																					>
 																						Step {output.stepNumber}:{" "}
-																						{output.workflowName} - Output
+																						{output.workflowName} - {output.name}
 																					</SelectItem>
 																				))}
 																			</SelectContent>

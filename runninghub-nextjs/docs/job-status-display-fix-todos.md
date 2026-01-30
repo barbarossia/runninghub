@@ -1,0 +1,3 @@
+- [x] Add derived display status for jobs with error/completedAt.
+- [x] Use display status in filters and UI badges.
+- [ ] Manual check: failed job shows failed in list.

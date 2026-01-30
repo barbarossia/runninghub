@@ -8,20 +8,71 @@ import {
 	loadComplexWorkflowExecution,
 	loadComplexWorkflow,
 	mapOutputsToInputs,
+	mapPreviousInputsToInputs,
 	validateStepParameter,
 	ensureExecutionIdentity,
 } from "@/lib/complex-workflow-utils";
+import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
 import type {
 	ContinueComplexWorkflowRequest,
 	ContinueComplexWorkflowResponse,
 	FileInputAssignment,
 	JobResult,
 	Workflow,
+	LocalWorkflow,
 } from "@/types/workspace";
 
 const EXECUTION_DIR = process.env.HOME
 	? `${process.env.HOME}/Downloads/workspace/complex-executions`
 	: "~/Downloads/workspace/complex-executions";
+
+type LoadedWorkflowDefinition = {
+	workflow: Workflow;
+	sourceWorkflowId: string;
+	isLocal: boolean;
+};
+
+async function loadWorkflowDefinition(
+	workflowId: string,
+): Promise<LoadedWorkflowDefinition> {
+	const fs = await import("fs/promises");
+	const path = await import("path");
+
+	if (workflowId.startsWith("local_")) {
+		const localWorkflowPath = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			"local-workflows",
+			`${workflowId}.json`,
+		);
+		const localWorkflowContent = await fs.readFile(
+			localWorkflowPath,
+			"utf-8",
+		);
+		const localWorkflow = JSON.parse(localWorkflowContent) as LocalWorkflow;
+		return {
+			workflow: mapLocalWorkflowToWorkflow(localWorkflow),
+			sourceWorkflowId: "",
+			isLocal: true,
+		};
+	}
+
+	const workflowPath = path.join(
+		process.env.HOME || "~",
+		"Downloads",
+		"workspace",
+		"workflows",
+		`${workflowId}.json`,
+	);
+	const workflowContent = await fs.readFile(workflowPath, "utf-8");
+	const workflow = JSON.parse(workflowContent) as Workflow;
+	return {
+		workflow,
+		sourceWorkflowId: workflow.sourceWorkflowId || "",
+		isLocal: false,
+	};
+}
 
 export async function POST(request: NextRequest) {
 	try {
@@ -115,21 +166,16 @@ export async function POST(request: NextRequest) {
 		const fs = await import("fs/promises");
 		const path = await import("path");
 
-		// Load next step workflow definition to get RunningHub ID
-		const nextWorkflowPath = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"workflows",
-			`${nextStepDef.workflowId}.json`,
-		);
-
 		let sourceWorkflowId = "";
 		let nextWorkflow: Workflow | null = null;
+		let nextWorkflowIsLocal = false;
 		try {
-			const nextWorkflowContent = await fs.readFile(nextWorkflowPath, "utf-8");
-			nextWorkflow = JSON.parse(nextWorkflowContent) as Workflow;
-			sourceWorkflowId = nextWorkflow.sourceWorkflowId || "";
+			const loadedWorkflow = await loadWorkflowDefinition(
+				nextStepDef.workflowId,
+			);
+			nextWorkflow = loadedWorkflow.workflow;
+			sourceWorkflowId = loadedWorkflow.sourceWorkflowId;
+			nextWorkflowIsLocal = loadedWorkflow.isLocal;
 		} catch (e) {
 			console.error(`Failed to load workflow ${nextStepDef.workflowId}:`, e);
 			return NextResponse.json(
@@ -196,9 +242,15 @@ export async function POST(request: NextRequest) {
 			nextWorkflow?.inputs,
 		);
 
+		const previousInputs = await mapPreviousInputsToInputs(
+			normalizedExecution.steps,
+			nextStepDef.parameters,
+			nextWorkflow?.inputs,
+		);
+
 		// Extract parameters from request
 		const userParams = body.parameters || {};
-		const fileInputs = Array.isArray(userParams.fileInputs)
+		const userFileInputs = Array.isArray(userParams.fileInputs)
 			? userParams.fileInputs
 			: [];
 		const textInputs =
@@ -207,18 +259,72 @@ export async function POST(request: NextRequest) {
 				: {};
 		const deleteSourceFiles = userParams.deleteSourceFiles || false;
 
-		// Merge user-provided inputs with mapped inputs
-		// User inputs take precedence over mapped inputs
-		const mergedTextInputs = { ...mappedInputs.textInputs, ...textInputs };
-		const existingFileParams = new Set(
-			fileInputs.map((input: FileInputAssignment) => input.parameterId),
+		// Validation & Recovery: Check user inputs for missing files and try to recover from previousInputs
+		const validatedFileInputs: FileInputAssignment[] = [];
+		const previousInputMap = new Map(
+			previousInputs.fileInputs.map(p => [p.parameterId, p])
 		);
+
+		for (const input of userFileInputs) {
+			let finalInput = input;
+			let exists = false;
+			try {
+				await fs.stat(input.filePath);
+				exists = true;
+			} catch (e) {
+				exists = false;
+			}
+
+			if (!exists) {
+				// User input file is missing, check if we have a recovered version
+				const recovered = previousInputMap.get(input.parameterId);
+				if (recovered) {
+					console.log(`[ComplexWorkflow] Overriding broken user input for ${input.parameterId}.`);
+					console.log(`[ComplexWorkflow] Broken: ${input.filePath}`);
+					console.log(`[ComplexWorkflow] Recovered: ${recovered.filePath}`);
+					finalInput = recovered;
+				}
+			}
+			validatedFileInputs.push(finalInput);
+		}
+
+		// Merge user-provided inputs (validated/recovered) with mapped inputs
+		// User inputs take precedence over mapped inputs, then previous inputs, then dynamic outputs
+		const mergedTextInputs = {
+			...mappedInputs.textInputs,
+			...previousInputs.textInputs,
+			...textInputs,
+		};
+		
+		const existingFileParams = new Set(
+			validatedFileInputs.map((input: FileInputAssignment) => input.parameterId),
+		);
+		
+		// Helper to filter inputs that haven't been assigned yet
+		const filterNewInputs = (inputs: FileInputAssignment[]) => 
+			inputs.filter(input => !existingFileParams.has(input.parameterId));
+
+		// Add mapped previous inputs (if not overridden by user)
+		const newPreviousInputs = filterNewInputs(previousInputs.fileInputs);
+		newPreviousInputs.forEach(input => existingFileParams.add(input.parameterId));
+
+		// Add mapped dynamic outputs (if not overridden by user or previous input)
+		const newMappedInputs = filterNewInputs(mappedInputs.fileInputs);
+
 		const mergedFileInputs = [
-			...fileInputs,
-			...mappedInputs.fileInputs.filter(
-				(input) => !existingFileParams.has(input.parameterId),
-			),
+			...validatedFileInputs,
+			...newPreviousInputs,
+			...newMappedInputs,
 		];
+
+		const getLocalParamValue = (key: string) =>
+			mergedTextInputs[`${nextStepDef.workflowId}_${key}`] ??
+			nextWorkflow?.localConfig?.[key];
+		const isLocalVideoConvert =
+			nextWorkflowIsLocal && nextWorkflow?.localOperation === "video-convert";
+		const deleteOriginal = getLocalParamValue("deleteOriginal");
+		const resolvedDeleteSourceFiles =
+			deleteSourceFiles || (isLocalVideoConvert && String(deleteOriginal) === "true");
 
 		// Validate all parameters
 		for (const param of nextStepDef.parameters) {
@@ -247,7 +353,8 @@ export async function POST(request: NextRequest) {
 					fileInputs: mergedFileInputs,
 					textInputs: mergedTextInputs,
 					folderPath: "",
-					deleteSourceFiles: deleteSourceFiles,
+					deleteSourceFiles: resolvedDeleteSourceFiles,
+					seriesId: body.executionId, // Identify as part of complex workflow
 				}),
 			},
 		);
@@ -270,7 +377,7 @@ export async function POST(request: NextRequest) {
 		const stepInputs = {
 			fileInputs: mergedFileInputs,
 			textInputs: mergedTextInputs,
-			deleteSourceFiles,
+			deleteSourceFiles: resolvedDeleteSourceFiles,
 		};
 
 		const updatedSteps = normalizedExecution.steps.map((step) => {

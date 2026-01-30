@@ -1,0 +1,8 @@
+- [x] Add `aspect-calc` CLI command and ffprobe dimension helper.
+- [x] Write `aspect_width.txt` and `aspect_height.txt` outputs for the new command.
+- [x] Extend `LocalWorkflowOperationType` and `LOCAL_OPS_DEFINITIONS` with `aspect-calc`.
+- [x] Wire `aspect-calc` into `/api/workspace/execute` local operation dispatch.
+- [x] Show specific local-op outputs in the complex workflow output selector.
+- [x] Update Complex Workflow builder to list specific outputs for known local ops.
+- [x] Update dynamic mapping parsing to support output keys beyond `step-output`.
+- [ ] Manual verify: complex workflow maps width/height into a cloud step.

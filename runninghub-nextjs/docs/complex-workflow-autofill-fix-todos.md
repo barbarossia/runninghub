@@ -1,0 +1,3 @@
+- [x] Prefill step 1 user-input parameters in ComplexWorkflowRunDialog.
+- [x] Block navigation when no files are selected.
+- [ ] Manual check: selected files appear in step 1 inputs on execute page.

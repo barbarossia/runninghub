@@ -4,8 +4,10 @@
  */
 
 import { promises as fs } from "fs";
-import { join, basename } from "path";
+import { join, basename, sep } from "path";
 import { randomUUID } from "crypto";
+import os from "os";
+
 
 import type {
 	ComplexWorkflow,
@@ -20,14 +22,14 @@ import type {
 } from "@/types/workspace";
 
 const COMPLEX_WORKFLOW_DIR = join(
-	process.env.HOME || "~",
+	os.homedir(),
 	"Downloads",
 	"workspace",
 	"complex-workflows",
 );
 
 const COMPLEX_EXECUTION_DIR = join(
-	process.env.HOME || "~",
+	os.homedir(),
 	"Downloads",
 	"workspace",
 	"complex-executions",
@@ -69,6 +71,29 @@ export async function saveComplexWorkflow(
 	await fs.writeFile(filePath, JSON.stringify(fullWorkflow, null, 2));
 
 	return id;
+}
+
+/**
+ * Update complex workflow in file
+ */
+export async function updateComplexWorkflow(
+	workflow: ComplexWorkflow,
+): Promise<string> {
+	const existing = await loadComplexWorkflow(workflow.id);
+	const now = Date.now();
+
+	const fullWorkflow: ComplexWorkflow = {
+		...workflow,
+		createdAt: workflow.createdAt ?? existing?.createdAt ?? now,
+		updatedAt: now,
+	};
+
+	const filePath = join(COMPLEX_WORKFLOW_DIR, `${workflow.id}.json`);
+
+	await fs.mkdir(COMPLEX_WORKFLOW_DIR, { recursive: true });
+	await fs.writeFile(filePath, JSON.stringify(fullWorkflow, null, 2));
+
+	return workflow.id;
 }
 
 /**
@@ -438,6 +463,136 @@ export function validateStepParameter(
 	}
 
 	return { valid: true };
+}
+
+/**
+ * Map previous step inputs to next step inputs
+ */
+export async function mapPreviousInputsToInputs(
+	executionSteps: ExecutionStep[],
+	nextStepParameters: StepParameterConfig[],
+	workflowInputs?: WorkflowInputParameter[],
+): Promise<MappedStepInputs> {
+	const inputs: MappedStepInputs = {
+		fileInputs: [],
+		textInputs: {},
+	};
+	const workflowInputMap = new Map(
+		(workflowInputs || []).map((input) => [input.id, input]),
+	);
+
+	for (const param of nextStepParameters) {
+		if (
+			param.valueType === "previous-input" &&
+			param.previousInputMapping
+		) {
+			const { sourceStepNumber, sourceParameterId } = param.previousInputMapping;
+			const sourceStep = executionSteps.find(
+				(s) => s.stepNumber === sourceStepNumber,
+			);
+
+			if (!sourceStep || !sourceStep.inputs) continue;
+
+			// Check file inputs
+			const sourceFileInput = sourceStep.inputs.fileInputs?.find(
+				(f: FileInputAssignment) => f.parameterId === sourceParameterId,
+			);
+
+			if (sourceFileInput) {
+				let filePath = sourceFileInput.filePath;
+				let valid = true;
+
+				console.log(
+					`[ComplexWorkflow] Checking previous input file: ${filePath} for param ${param.parameterId}`,
+				);
+
+				try {
+					// Check if original file exists
+					await fs.stat(filePath);
+					console.log(`[ComplexWorkflow] Original file exists: ${filePath}`);
+				} catch {
+					console.log(
+						`[ComplexWorkflow] Original file missing: ${filePath}. Attempting fallback...`,
+					);
+					// File missing, try to find in job directory
+					if (sourceStep.jobId) {
+						// Strategy 1: Standard location (~/Downloads/workspace)
+						const jobDir = join(
+							os.homedir(),
+							"Downloads",
+							"workspace",
+							sourceStep.jobId,
+						);
+						let fallbackPath = join(jobDir, sourceFileInput.fileName);
+						let found = false;
+
+						console.log(`[ComplexWorkflow] Checking fallback path 1: ${fallbackPath}`);
+						try {
+							await fs.stat(fallbackPath);
+							found = true;
+						} catch {
+							// Strategy 2: Deduce from original path (handle custom workspace roots)
+							// Replace 'uploads' directory with job ID directory
+							// e.g. .../workspace/uploads/file.png -> .../workspace/{jobId}/file.png
+							const uploadMarker = `${sep}uploads${sep}`;
+							if (filePath.includes(uploadMarker)) {
+								const parts = filePath.split(uploadMarker);
+								if (parts.length > 1) {
+									// Reconstruct path: prefix + / + jobId + / + filename
+									// Note: We use the filename from sourceFileInput, not the one in the path (though they should be same)
+									const workspaceRoot = parts[0];
+									fallbackPath = join(workspaceRoot, sourceStep.jobId, sourceFileInput.fileName);
+									
+									console.log(`[ComplexWorkflow] Checking fallback path 2 (deduced): ${fallbackPath}`);
+									try {
+										await fs.stat(fallbackPath);
+										found = true;
+									} catch (e) {
+										console.log(`[ComplexWorkflow] Deduced path failed: ${e}`);
+									}
+								}
+							}
+						}
+
+						if (found) {
+							filePath = fallbackPath;
+							console.log(
+								`[ComplexWorkflow] Recovered missing input file from job dir: ${fallbackPath}`,
+							);
+						} else {
+							console.warn(
+								`[ComplexWorkflow] Failed to recover input file: ${sourceFileInput.fileName}`,
+							);
+							valid = false;
+						}
+					} else {
+						console.warn(
+							`[ComplexWorkflow] No job ID for step ${sourceStepNumber}, cannot recover file`,
+						);
+						valid = false;
+					}
+				}
+
+				if (valid) {
+					inputs.fileInputs.push({
+						...sourceFileInput,
+						parameterId: param.parameterId, // Remap to new parameter ID
+						filePath,
+					});
+				}
+				continue;
+			}
+
+			// Check text inputs
+			const sourceTextInputValue =
+				sourceStep.inputs.textInputs?.[sourceParameterId];
+			if (sourceTextInputValue !== undefined) {
+				inputs.textInputs[param.parameterId] = sourceTextInputValue;
+			}
+		}
+	}
+
+	return inputs;
 }
 
 export function getExecutionCreatedAtFromId(

@@ -29,6 +29,8 @@ export function JobSeriesNav({
 	// Get status color for job
 	const getStatusColor = (status: Job["status"]) => {
 		switch (status) {
+			case "queued":
+				return "bg-amber-100 text-amber-800 hover:bg-amber-200";
 			case "pending":
 				return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200";
 			case "running":
@@ -44,6 +46,8 @@ export function JobSeriesNav({
 	const getStatusIcon = (status: Job["status"]) => {
 		const iconClassName = "h-3 w-3";
 		switch (status) {
+			case "queued":
+				return <Clock className={iconClassName} />;
 			case "pending":
 				return <Clock className={iconClassName} />;
 			case "running":

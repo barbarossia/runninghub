@@ -1,0 +1,6 @@
+- [x] Add persisted UI preference store with `toastsEnabled`.
+- [x] Create `ToastToggle` component and `ToastGate` wrapper.
+- [x] Render `ToastGate` in `layout.tsx` instead of `Toaster`.
+- [x] Add `ToastToggle` next to `ThemeToggle` in `PageHeader`.
+- [ ] Verify persistence and toast suppression.
+- [ ] Run `npm run build`.

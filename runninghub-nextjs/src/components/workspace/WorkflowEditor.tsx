@@ -43,6 +43,7 @@ import type {
 	Workflow,
 	WorkflowInputParameter,
 	CliNode,
+	WorkflowExecutionType,
 } from "@/types/workspace";
 
 export interface WorkflowEditorProps {
@@ -101,12 +102,12 @@ export function WorkflowEditor({
 
 	// Execution type state
 	const [executionType, setExecutionType] = useState<
-		"ai-app" | "workflow" | undefined
+		WorkflowExecutionType | undefined
 	>(workflow?.executionType);
 
 	// Output configuration state
 	const [outputType, setOutputType] = useState<
-		"none" | "text" | "image" | "mixed"
+		"none" | "text" | "image" | "video" | "mixed"
 	>(workflow?.output?.type || "none");
 	const [outputDescription, setOutputDescription] = useState(
 		workflow?.output?.description || "",
@@ -815,7 +816,7 @@ export function WorkflowEditor({
 									<Select
 										value={outputType}
 										onValueChange={(
-											value: "none" | "text" | "image" | "mixed",
+											value: "none" | "text" | "image" | "video" | "mixed",
 										) => setOutputType(value)}
 									>
 										<SelectTrigger className="mt-1">
@@ -826,6 +827,9 @@ export function WorkflowEditor({
 											<SelectItem value="text">Text files (.txt)</SelectItem>
 											<SelectItem value="image">
 												Image files (.jpg, .png, etc.)
+											</SelectItem>
+											<SelectItem value="video">
+												Video files (.mp4, .mov, etc.)
 											</SelectItem>
 											<SelectItem value="mixed">
 												Mixed (text + images)

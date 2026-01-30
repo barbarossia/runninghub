@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { Settings, Plus, Loader2, AlertCircle, Key } from "lucide-react";
+import { Settings, Plus, Loader2, AlertCircle, Key, Cloud, Monitor, Layers } from "lucide-react";
 import {
 	Select,
 	SelectContent,
@@ -19,7 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { CustomWorkflowIdDialog } from "@/components/workspace/CustomWorkflowIdDialog";
-import type { Workflow } from "@/types/workspace";
+import type { Workflow, LocalWorkflow } from "@/types/workspace";
+import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
 
 export interface WorkflowSelectorProps {
 	onAddWorkflow?: () => void;
@@ -44,6 +45,8 @@ export function WorkflowSelector({
 	const [showCustomWorkflowDialog, setShowCustomWorkflowDialog] =
 		useState(false);
 
+	const [filter, setFilter] = useState<'all' | 'local' | 'runninghub'>('all');
+
 	// Load workflows from workspace folder on component mount
 	useEffect(() => {
 		const loadWorkflows = async () => {
@@ -51,22 +54,31 @@ export function WorkflowSelector({
 			setLoadError(null);
 
 			try {
-				const response = await fetch("/api/workflow/list");
+				// Fetch both standard and local workflows in parallel
+				const [standardRes, localRes] = await Promise.all([
+					fetch("/api/workflow/list"),
+					fetch("/api/workspace/local-workflow/list"),
+				]);
 
-				const text = await response.text();
-				let data;
-				try {
-					data = text ? JSON.parse(text) : { workflows: [] };
-				} catch (e) {
-					throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+				const standardData = await standardRes.json();
+				const localData = await localRes.json();
+
+				if (!standardRes.ok) {
+					throw new Error(standardData.error || "Failed to load workflows");
 				}
 
-				if (!response.ok) {
-					throw new Error(data.error || "Failed to load workflows");
+				const standardWorkflows: Workflow[] = standardData.workflows || [];
+				let localWorkflows: Workflow[] = [];
+
+				if (localRes.ok && localData.success) {
+					// Adapt LocalWorkflow to Workflow interface
+					localWorkflows = (localData.workflows || []).map((lw: LocalWorkflow) =>
+						mapLocalWorkflowToWorkflow(lw),
+					);
 				}
 
-				// Replace localStorage workflows with fetched workflows
-				setWorkflows(data.workflows || []);
+				// Merge and set workflows
+				setWorkflows([...standardWorkflows, ...localWorkflows]);
 			} catch (error) {
 				console.error("Failed to load workflows:", error);
 				setLoadError(
@@ -82,6 +94,23 @@ export function WorkflowSelector({
 
 		loadWorkflows();
 	}, [setWorkflows]);
+
+	const filteredWorkflows = useMemo(() => {
+		if (filter === 'all') return workflows;
+		return workflows.filter((w) => {
+			const isLocal = w.sourceType === 'local';
+			return filter === 'local' ? isLocal : !isLocal;
+		});
+	}, [workflows, filter]);
+
+	const counts = useMemo(() => {
+		const localCount = workflows.filter(w => w.sourceType === 'local').length;
+		return {
+			all: workflows.length,
+			local: localCount,
+			runninghub: workflows.length - localCount,
+		};
+	}, [workflows]);
 
 	const handleValueChange = (value: string) => {
 		if (value === "add_new") {
@@ -134,11 +163,84 @@ export function WorkflowSelector({
 								No workflows configured
 							</div>
 						) : (
-							workflows.map((workflow) => (
-								<SelectItem key={workflow.id} value={workflow.id}>
-									{workflow.name}
-								</SelectItem>
-							))
+							<>
+								<div
+									className="sticky top-0 z-10 bg-white border-b p-2 flex gap-1 justify-between select-none"
+									onPointerDown={(e) => e.stopPropagation()}
+								>
+									<Badge
+										variant={filter === 'all' ? 'default' : 'outline'}
+										className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
+										onClick={(e) => {
+											e.preventDefault();
+											e.stopPropagation();
+											setFilter('all');
+										}}
+									>
+										<Layers className="h-3 w-3" />
+										All ({counts.all})
+									</Badge>
+									<Badge
+										variant={filter === 'local' ? 'default' : 'outline'}
+										className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
+										onClick={(e) => {
+											e.preventDefault();
+											e.stopPropagation();
+											setFilter('local');
+										}}
+									>
+										<Monitor className="h-3 w-3" />
+										Local ({counts.local})
+									</Badge>
+									<Badge
+										variant={filter === 'runninghub' ? 'default' : 'outline'}
+										className="cursor-pointer text-xs px-2 h-7 hover:bg-primary/90 flex items-center gap-1"
+										onClick={(e) => {
+											e.preventDefault();
+											e.stopPropagation();
+											setFilter('runninghub');
+										}}
+									>
+										<Cloud className="h-3 w-3" />
+										Cloud ({counts.runninghub})
+									</Badge>
+								</div>
+
+								<div className="max-h-[300px] overflow-y-auto">
+									{filteredWorkflows.length === 0 ? (
+										<div className="p-4 text-sm text-gray-500 text-center">
+											No {filter !== 'all' ? filter : ''} workflows found
+										</div>
+									) : (
+										filteredWorkflows.map((workflow) => (
+											<SelectItem key={workflow.id} value={workflow.id}>
+												<div className="flex flex-col gap-0.5 w-full py-0.5">
+													<div className="flex items-center gap-2 w-full">
+														{workflow.sourceType === 'local' ? (
+															<Monitor className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+														) : (
+															<Cloud className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+														)}
+														<span className="font-medium truncate flex-1">
+															{workflow.name}
+														</span>
+														{workflow.sourceType === "local" && (
+															<Badge variant="secondary" className="text-xs h-5 px-1 flex-shrink-0">
+																Local
+															</Badge>
+														)}
+													</div>
+													{workflow.description && (
+														<span className="text-[10px] text-muted-foreground truncate pl-5.5">
+															{workflow.description}
+														</span>
+													)}
+												</div>
+											</SelectItem>
+										))
+									)}
+								</div>
+							</>
 						)}
 						{onAddWorkflow && (
 							<>
@@ -172,22 +274,69 @@ export function WorkflowSelector({
 						setLoadError(null);
 
 						try {
-							const response = await fetch("/api/workflow/list");
+							// Fetch both standard and local workflows in parallel
+							const [standardRes, localRes] = await Promise.all([
+								fetch("/api/workflow/list"),
+								fetch("/api/workspace/local-workflow/list"),
+							]);
 
-							const text = await response.text();
-							let data;
-							try {
-								data = text ? JSON.parse(text) : { workflows: [] };
-							} catch (e) {
-								throw new Error(`Invalid JSON response: ${text.slice(0, 100)}`);
+							const standardData = await standardRes.json();
+							const localData = await localRes.json();
+
+							if (!standardRes.ok) {
+								throw new Error(
+									standardData.error || "Failed to load workflows",
+								);
 							}
 
-							if (!response.ok) {
-								throw new Error(data.error || "Failed to load workflows");
+							const standardWorkflows: Workflow[] =
+								standardData.workflows || [];
+							let localWorkflows: Workflow[] = [];
+
+							if (localRes.ok && localData.success) {
+								// Adapt LocalWorkflow to Workflow interface
+								localWorkflows = (localData.workflows || []).map(
+									(lw: LocalWorkflow) => {
+										// Determine input type based on operation
+										const opType =
+											lw.inputs?.[0]?.operation || "video-convert";
+										const isVideoOp =
+											opType.startsWith("video-") || opType === "caption";
+										const isImageOp =
+											opType.startsWith("image-") ||
+											opType === "duck-decode";
+
+										// Create synthetic input for compatibility checks
+										const syntheticInput = {
+											id: "input_1",
+											name: "Input File",
+											type: "file" as const,
+											required: true,
+											validation: {
+												mediaType: isVideoOp
+													? ("video" as const)
+													: isImageOp
+														? ("image" as const)
+														: undefined,
+											},
+										};
+
+										return {
+											id: lw.id,
+											name: lw.name,
+											description:
+												lw.description || `Local ${opType} workflow`,
+											inputs: [syntheticInput],
+											createdAt: lw.createdAt,
+											updatedAt: lw.updatedAt,
+											sourceType: "local" as const,
+										};
+									},
+								);
 							}
 
-							// Replace localStorage workflows with fetched workflows
-							setWorkflows(data.workflows || []);
+							// Merge and set workflows
+							setWorkflows([...standardWorkflows, ...localWorkflows]);
 						} catch (error) {
 							console.error("Failed to load workflows:", error);
 							setLoadError(

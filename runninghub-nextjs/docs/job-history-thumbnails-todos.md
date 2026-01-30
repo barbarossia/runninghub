@@ -1,0 +1,3 @@
+- [x] Add preview derivation for job outputs in JobList.
+- [x] Render thumbnails/icons in job list cards.
+- [ ] Manual check: text/image/video outputs show correct previews.

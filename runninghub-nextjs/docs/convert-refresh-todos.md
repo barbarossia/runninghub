@@ -1,0 +1,2 @@
+- [x] Trigger refresh after convert task completes.
+- [ ] Manual check: conversion completion refreshes workspace content.

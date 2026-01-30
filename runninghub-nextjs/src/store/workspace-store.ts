@@ -82,6 +82,13 @@ interface WorkspaceState {
 	activeSeriesId: string | null;
 	// Currently active complex workflow execution (for runner tab)
 	activeComplexExecutionId: string | null;
+	// Currently selected complex workflow template
+	selectedComplexWorkflowId: string | null;
+
+	// Job List UI State
+	jobListPage: number;
+	jobListStatusFilter: JobStatus | "all";
+	jobListWorkflowFilter: string;
 
 	// ============================================================
 	// NEW STATE - UI State
@@ -220,7 +227,12 @@ interface WorkspaceActions extends WorkspaceState {
 	removeDatasetFile: (fileId: string) => void;
 	updateDatasetFile: (fileId: string, updates: Partial<MediaFile>) => void;
 	getSelectedDatasetFiles: () => MediaFile[];
-	deleteJob: (jobId: string) => void;
+	deleteJob: (jobId: string) => Promise<void>;
+	deleteJobs: (jobIds: string[]) => Promise<{
+		deletedIds: string[];
+		failedIds: string[];
+		message?: string;
+	}>;
 	clearJobs: () => void;
 	getJobsByWorkflow: (workflowId: string) => Job[];
 	getJobsByStatus: (status: JobStatus) => Job[];
@@ -231,6 +243,11 @@ interface WorkspaceActions extends WorkspaceState {
 	getRecentJobsForWorkflow: (workflowId: string, limit?: number) => Job[];
 	setActiveSeriesId: (seriesId: string | null) => void;
 	setActiveComplexExecutionId: (executionId: string | null) => void;
+	setSelectedComplexWorkflowId: (workflowId: string | null) => void;
+
+	setJobListPage: (page: number) => void;
+	setJobListStatusFilter: (status: JobStatus | "all") => void;
+	setJobListWorkflowFilter: (workflowId: string) => void;
 
 	// ============================================================
 	// NEW ACTIONS - UI State
@@ -282,11 +299,16 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 			jobs: [],
 			selectedJobId: null,
 			isLoadingJobs: false,
-			activeSeriesId: null,
-			activeComplexExecutionId: null,
-
-			// New state - UI State
-			viewMode: "grid",
+		activeSeriesId: null,
+				activeComplexExecutionId: null,
+				selectedComplexWorkflowId: null,
+	
+				jobListPage: 1,
+				jobListStatusFilter: "all",
+				jobListWorkflowFilter: "all",
+	
+				// New state - UI State
+				viewMode: "grid",
 			selectedExtension: null,
 			isLoading: false,
 
@@ -1049,12 +1071,49 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 				return newJob;
 			},
 
-			deleteJob: (jobId) =>
-				set((state) => ({
-					jobs: state.jobs.filter((j) => j.id !== jobId),
-					selectedJobId:
-						state.selectedJobId === jobId ? null : state.selectedJobId,
-				})),
+	deleteJob: async (jobId) => {
+		const response = await fetch(`/api/workspace/jobs/${jobId}`, {
+			method: "DELETE",
+		});
+		const data = await response.json();
+		if (!response.ok || !data.success) {
+			throw new Error(data.error || "Failed to delete job");
+		}
+		set((state) => ({
+			jobs: state.jobs.filter((j) => j.id !== jobId),
+			selectedJobId:
+				state.selectedJobId === jobId ? null : state.selectedJobId,
+		}));
+	},
+
+	deleteJobs: async (jobIds) => {
+		if (jobIds.length === 0) {
+			return { deletedIds: [], failedIds: [] };
+		}
+		const response = await fetch("/api/workspace/jobs/batch-delete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ jobIds }),
+		});
+		const data = await response.json();
+		if (!response.ok) {
+			throw new Error(data.error || "Failed to delete jobs");
+		}
+		const deletedIds: string[] = data.deleted || [];
+		const failedIds: string[] = data.failed || [];
+		set((state) => ({
+			jobs: state.jobs.filter((job) => !deletedIds.includes(job.id)),
+			selectedJobId:
+				state.selectedJobId && deletedIds.includes(state.selectedJobId)
+					? null
+					: state.selectedJobId,
+		}));
+		return {
+			deletedIds,
+			failedIds,
+			message: data.message,
+		};
+	},
 
 			clearJobs: () => set({ jobs: [], selectedJobId: null }),
 
@@ -1104,6 +1163,13 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 
 			setActiveComplexExecutionId: (executionId) =>
 				set({ activeComplexExecutionId: executionId }),
+			setSelectedComplexWorkflowId: (workflowId) =>
+				set({ selectedComplexWorkflowId: workflowId }),
+
+			setJobListPage: (page) => set({ jobListPage: page }),
+			setJobListStatusFilter: (status) => set({ jobListStatusFilter: status }),
+			setJobListWorkflowFilter: (filter) =>
+				set({ jobListWorkflowFilter: filter }),
 
 			// ============================================================
 			// NEW ACTIONS - UI State
@@ -1179,6 +1245,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 				workflows: state.workflows,
 				// jobs: state.jobs, // Jobs are now fetched from server
 				selectedWorkflowId: state.selectedWorkflowId,
+				jobListPage: state.jobListPage,
+				jobListStatusFilter: state.jobListStatusFilter,
+				jobListWorkflowFilter: state.jobListWorkflowFilter,
 
 				// UI state
 				viewMode: state.viewMode,

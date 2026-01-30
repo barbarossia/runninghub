@@ -1,0 +1,6 @@
+- [x] Review current job delete UI and API behavior (JobList, JobDetail, jobs API).
+- [x] Add batch delete API route for job history (validate IDs, delete folders, return results).
+- [x] Update workspace store with API-backed `deleteJob` and new `deleteJobs`.
+- [x] Add job selection and batch delete UI in JobList with confirmation and toasts.
+- [x] Update JobDetail delete to use API-backed delete and handle errors.
+- [ ] Manual check: delete single job, delete multiple jobs, verify list refresh.

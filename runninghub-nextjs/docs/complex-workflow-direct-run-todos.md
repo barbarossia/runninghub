@@ -1,0 +1,4 @@
+- [x] Update complex workflow run dialog navigation to the execute page.
+- [x] Auto-assign selected files to step 1 inputs on the execute page.
+- [x] Remove `/workspace/run-complex-workflow` page.
+- [ ] Manual check: selected files populate step 1 and execution starts.

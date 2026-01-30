@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useResizeConfigStore } from "@/store/resize-config-store";
 import { motion } from "framer-motion";
 import {
@@ -39,6 +39,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,7 +56,7 @@ import { BaseSelectionToolbar } from "@/components/selection/BaseSelectionToolba
 import { QuickRunWorkflowDialog } from "@/components/workspace/QuickRunWorkflowDialog";
 import { ComplexWorkflowRunDialog } from "@/components/workspace/ComplexWorkflowRunDialog";
 import { useWorkspaceStore } from "@/store/workspace-store";
-import type { MediaFile, Workflow } from "@/types/workspace";
+import type { ComplexWorkflow, MediaFile, Workflow } from "@/types/workspace";
 
 interface MediaSelectionToolbarProps {
 	selectedFiles: MediaFile[];
@@ -60,7 +67,10 @@ interface MediaSelectionToolbarProps {
 		password?: string,
 		progress?: { current: number; total: number },
 	) => Promise<void>;
-	onRunWorkflow?: (workflowId?: string) => void;
+	onRunWorkflow?: (workflowId?: string) => void | Promise<void>;
+	onBatchProcess?: () => void | Promise<void>;
+	batchWorkflowId?: string | null;
+	batchWorkflowName?: string | null;
 	onClip?: (files: MediaFile[]) => Promise<void>;
 	onPreview?: (file: MediaFile) => void;
 	onExport?: (files: MediaFile[]) => Promise<void>;
@@ -87,6 +97,9 @@ export function MediaSelectionToolbar({
 	onDelete,
 	onDecode,
 	onRunWorkflow,
+	onBatchProcess,
+	batchWorkflowId = null,
+	batchWorkflowName = null,
 	onClip,
 	onPreview,
 	onExport,
@@ -135,6 +148,7 @@ export function MediaSelectionToolbar({
 	const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
 	const [showComplexWorkflowDialog, setShowComplexWorkflowDialog] =
 		useState(false);
+	const [showBatchConfirmDialog, setShowBatchConfirmDialog] = useState(false);
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
 	const [newFileName, setNewFileName] = useState("");
 	const [decodePassword, setDecodePassword] = useState("");
@@ -143,6 +157,7 @@ export function MediaSelectionToolbar({
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isDecoding, setIsDecoding] = useState(false);
 	const [isClipping, setIsClipping] = useState(false);
+	const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 	const [isResizing, setIsResizing] = useState(false);
 	const [isCaptioning, setIsCaptioning] = useState(false);
 	const [captionProgress, setCaptionProgress] = useState({
@@ -153,12 +168,62 @@ export function MediaSelectionToolbar({
 		current: 0,
 		total: 0,
 	});
+	const [complexWorkflows, setComplexWorkflows] = useState<ComplexWorkflow[]>(
+		[],
+	);
+	const [isLoadingComplexWorkflows, setIsLoadingComplexWorkflows] =
+		useState(false);
+
+	const selectedBatchWorkflowLabel = useMemo(() => {
+		if (batchWorkflowName) return batchWorkflowName;
+		if (batchWorkflowId) {
+			return (
+				complexWorkflows.find((workflow) => workflow.id === batchWorkflowId)
+					?.name || batchWorkflowId
+			);
+		}
+		return "Not selected";
+	}, [batchWorkflowId, batchWorkflowName, complexWorkflows]);
 
 	// Get workflows from store
-	const { workflows } = useWorkspaceStore();
+	const { workflows, setSelectedComplexWorkflowId } = useWorkspaceStore();
 
 	// Get resize config from store
 	const { deleteOriginal, setDeleteOriginal } = useResizeConfigStore();
+
+	useEffect(() => {
+		if (!showBatchConfirmDialog) return;
+		let isActive = true;
+
+		const loadComplexWorkflows = async () => {
+			setIsLoadingComplexWorkflows(true);
+			try {
+				const response = await fetch("/api/workspace/complex-workflow/list");
+				const data = await response.json();
+				if (!isActive) return;
+				if (response.ok && data?.success) {
+					setComplexWorkflows(data.workflows || []);
+				} else {
+					toast.error(data?.error || "Failed to load complex workflows");
+				}
+			} catch (error) {
+				console.error("Failed to load complex workflows:", error);
+				if (isActive) {
+					toast.error("Failed to load complex workflows");
+				}
+			} finally {
+				if (isActive) {
+					setIsLoadingComplexWorkflows(false);
+				}
+			}
+		};
+
+		loadComplexWorkflows();
+
+		return () => {
+			isActive = false;
+		};
+	}, [showBatchConfirmDialog]);
 
 	// Handle rename
 	const handleRename = useCallback(async () => {
@@ -178,6 +243,17 @@ export function MediaSelectionToolbar({
 			setIsRenaming(false);
 		}
 	}, [onRename, isSingleSelection, selectedFiles, newFileName, onDeselectAll]);
+
+	const handleBatchProcess = useCallback(async () => {
+		if (!onBatchProcess) return;
+		setIsBatchProcessing(true);
+		try {
+			await Promise.resolve(onBatchProcess());
+			onDeselectAll?.();
+		} finally {
+			setIsBatchProcessing(false);
+		}
+	}, [onBatchProcess, onDeselectAll]);
 
 	// Open rename dialog
 	const openRenameDialog = useCallback(() => {
@@ -257,9 +333,9 @@ export function MediaSelectionToolbar({
 
 	// Handle quick run workflow
 	const handleQuickRunConfirm = useCallback(
-		(workflowId: string) => {
+		async (workflowId: string) => {
 			if (onRunWorkflow) {
-				onRunWorkflow(workflowId);
+				await Promise.resolve(onRunWorkflow(workflowId));
 				onDeselectAll?.(); // Clear selection after action
 			}
 		},
@@ -404,6 +480,7 @@ export function MediaSelectionToolbar({
 
 	const toolbarDisabled =
 		disabled ||
+		selectedCount === 0 ||
 		isRenaming ||
 		isDeleting ||
 		isDecoding ||
@@ -430,6 +507,8 @@ export function MediaSelectionToolbar({
 				badgeColor="bg-purple-600"
 				onDeselectAll={handleDeselectAll}
 				showCancelButton={showCancelButton}
+				alwaysVisible={true}
+				fullWidth={true}
 			>
 				{(mode) => {
 					if (mode === "expanded") {
@@ -461,6 +540,7 @@ export function MediaSelectionToolbar({
 									</Button>
 								)}
 
+
 								{/* Run Complex Workflow */}
 								<Button
 									variant="outline"
@@ -473,6 +553,25 @@ export function MediaSelectionToolbar({
 									<Zap className="h-4 w-4 mr-2 fill-indigo-700" />
 									Run Complex Workflow
 								</Button>
+
+								{/* Batch Process */}
+								{onBatchProcess && (
+									<Button
+										variant="default"
+										size="sm"
+										onClick={() => setShowBatchConfirmDialog(true)}
+										disabled={toolbarDisabled || isBatchProcessing}
+										className="h-9 bg-emerald-600 hover:bg-emerald-700"
+										title="Run selected complex workflow on each file"
+									>
+										{isBatchProcessing ? (
+											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+										) : (
+											<Zap className="h-4 w-4 mr-2" />
+										)}
+										{isBatchProcessing ? "Starting..." : "Batch Process"}
+									</Button>
+								)}
 
 								{/* Preview - when image or video files are selected */}
 								{onPreview &&
@@ -639,7 +738,7 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Decode - for single or multiple duck-encoded images */}
-								{hasDuckEncodedImages && onDecode && (
+								{onDecode && (
 									<Button
 										variant="outline"
 										size="sm"
@@ -656,7 +755,7 @@ export function MediaSelectionToolbar({
 												handleDecode();
 											}
 										}}
-										disabled={toolbarDisabled}
+										disabled={toolbarDisabled || !hasDuckEncodedImages}
 										className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700 shadow-md shadow-green-200/50"
 									>
 										<Eye className="h-4 w-4 mr-2" />
@@ -704,6 +803,7 @@ export function MediaSelectionToolbar({
 										<span className="text-xs">Run Workflow</span>
 									</Button>
 								)}
+
 
 								{/* Run Complex Workflow - floating mode */}
 								<Button
@@ -829,6 +929,27 @@ export function MediaSelectionToolbar({
 										</Button>
 									)}
 
+								{/* Batch Process - floating mode */}
+								{onBatchProcess && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => setShowBatchConfirmDialog(true)}
+										disabled={toolbarDisabled || isBatchProcessing}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Run selected complex workflow on each file"
+									>
+										{isBatchProcessing ? (
+											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+										) : (
+											<Zap className="h-3.5 w-3.5 mr-2 text-emerald-400" />
+										)}
+										<span className="text-xs">
+											{isBatchProcessing ? "Starting..." : "Batch"}
+										</span>
+									</Button>
+								)}
+
 								{/* FPS Convert - floating mode */}
 								{onConvertFps &&
 									selectedFiles.some((f) => f.type === "video") && (
@@ -875,7 +996,7 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Decode - for single or multiple duck-encoded images in floating mode */}
-								{hasDuckEncodedImages && onDecode && (
+								{onDecode && (
 									<motion.div
 										initial={{ scale: 0.8, opacity: 0 }}
 										animate={{ scale: 1, opacity: 1 }}
@@ -898,7 +1019,7 @@ export function MediaSelectionToolbar({
 													handleDecode();
 												}
 											}}
-											disabled={toolbarDisabled}
+											disabled={toolbarDisabled || !hasDuckEncodedImages}
 											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3 relative overflow-hidden"
 											title={
 												duckEncodedCount === 1
@@ -1257,6 +1378,98 @@ export function MediaSelectionToolbar({
 				onOpenChange={setShowComplexWorkflowDialog}
 				selectedFiles={selectedFiles}
 			/>
+
+			{/* Batch Process Confirm Dialog */}
+			{onBatchProcess && (
+				<Dialog
+					open={showBatchConfirmDialog}
+					onOpenChange={setShowBatchConfirmDialog}
+				>
+					<DialogContent className="max-w-md">
+						<DialogHeader>
+							<DialogTitle>Confirm Batch Process</DialogTitle>
+							<DialogDescription>
+								Run the selected complex workflow on {selectedCount} file
+								{selectedCount !== 1 ? "s" : ""}?
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-3 text-sm text-muted-foreground">
+							<div className="space-y-2">
+								<Label className="text-xs font-medium text-gray-700">
+									Workflow
+								</Label>
+								<Select
+									value={batchWorkflowId ?? "__none__"}
+									onValueChange={(value) => {
+										setSelectedComplexWorkflowId(
+											value === "__none__" ? null : value,
+										);
+									}}
+								>
+									<SelectTrigger className="h-9">
+										<SelectValue
+											placeholder={
+												isLoadingComplexWorkflows
+													? "Loading workflows..."
+													: "Select a workflow"
+											}
+										/>
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="__none__">Not selected</SelectItem>
+										{complexWorkflows.length === 0 ? (
+											<div className="px-2 py-1 text-xs text-muted-foreground">
+												No workflows found
+											</div>
+										) : (
+											complexWorkflows.map((workflow) => (
+												<SelectItem key={workflow.id} value={workflow.id}>
+													{workflow.name || workflow.id}
+												</SelectItem>
+											))
+										)}
+									</SelectContent>
+								</Select>
+								<div className="text-xs text-muted-foreground">
+									Selected: {selectedBatchWorkflowLabel}
+								</div>
+							</div>
+							<div>
+								<span className="font-medium text-gray-900">Mode:</span>{" "}
+								Parallel (one execution per file)
+							</div>
+						</div>
+						<DialogFooter>
+							<Button
+								variant="outline"
+								onClick={() => setShowBatchConfirmDialog(false)}
+								disabled={isBatchProcessing}
+							>
+								Cancel
+							</Button>
+							<Button
+								onClick={() => {
+									setShowBatchConfirmDialog(false);
+									handleBatchProcess();
+								}}
+								disabled={
+									isBatchProcessing || !batchWorkflowId || selectedCount === 0
+								}
+								className="bg-emerald-600 hover:bg-emerald-700"
+							>
+								{isBatchProcessing ? (
+									<>
+										<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+										Starting...
+									</>
+								) : (
+									"Confirm"
+								)}
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			)}
 		</>
 	);
 }

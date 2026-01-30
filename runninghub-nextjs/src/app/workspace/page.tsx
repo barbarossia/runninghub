@@ -65,7 +65,6 @@ import {
 	Settings,
 	FolderOpen,
 	Workflow as WorkflowIcon,
-	Clock,
 	AlertCircle,
 	Play,
 	Scissors,
@@ -77,6 +76,7 @@ import {
 	Wifi,
 	WifiOff,
 	Plus,
+	Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/utils/logger";
@@ -98,7 +98,11 @@ import type {
 	Job,
 	MediaFile,
 	FileInputAssignment,
+	ComplexWorkflow,
+	LocalWorkflow,
+	LocalWorkflowOperationType,
 } from "@/types/workspace";
+import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
 
 export default function WorkspacePage() {
 	// Folder store state - use page-specific folder state for workspace page
@@ -108,6 +112,7 @@ export default function WorkspacePage() {
 	const {
 		mediaFiles,
 		selectedWorkflowId,
+		selectedComplexWorkflowId,
 		workflows,
 		jobs,
 		selectedJobId,
@@ -170,6 +175,9 @@ export default function WorkspacePage() {
 	const [viewingComplexWorkflows, setViewingComplexWorkflows] = useState(false);
 	const [isCreatingComplexWorkflow, setIsCreatingComplexWorkflow] =
 		useState(false);
+	const [editingComplexWorkflow, setEditingComplexWorkflow] =
+		useState<ComplexWorkflow | null>(null);
+	const [complexWorkflowListKey, setComplexWorkflowListKey] = useState(0);
 	const [activeConsoleTaskId, setActiveConsoleTaskId] = useState<string | null>(
 		null,
 	);
@@ -179,6 +187,18 @@ export default function WorkspacePage() {
 	const [convertTaskId, setConvertTaskId] = useState<string | null>(null);
 	const [isConvertProgressModalOpen, setIsConvertProgressModalOpen] =
 		useState(false);
+	const lastFolderPathRef = useRef<string | null>(null);
+
+	const handleEditComplexWorkflow = (workflow: ComplexWorkflow) => {
+		setEditingComplexWorkflow(workflow);
+		setIsCreatingComplexWorkflow(false);
+	};
+
+	const handleComplexWorkflowSaved = () => {
+		setIsCreatingComplexWorkflow(false);
+		setEditingComplexWorkflow(null);
+		setComplexWorkflowListKey((prev) => prev + 1);
+	};
 
 	// Clear selectedJobId on mount to ensure we start fresh
 	useEffect(() => {
@@ -233,6 +253,8 @@ export default function WorkspacePage() {
 	const [showSelectDatasetDialog, setShowSelectDatasetDialog] = useState(false);
 	const [fileToExportToDataset, setFileToExportToDataset] =
 		useState<MediaFile | null>(null);
+	const [selectedComplexWorkflowName, setSelectedComplexWorkflowName] =
+		useState<string | null>(null);
 
 	// Resize dialog state
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
@@ -243,6 +265,35 @@ export default function WorkspacePage() {
 
 	// Get selected files from store
 	const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
+
+	useEffect(() => {
+		if (!selectedComplexWorkflowId) {
+			setSelectedComplexWorkflowName(null);
+			return;
+		}
+
+		let isActive = true;
+
+		const loadSelectedComplexWorkflow = async () => {
+			try {
+				const response = await fetch(
+					`/api/workspace/complex-workflow/${selectedComplexWorkflowId}`,
+				);
+				const data = await response.json();
+				if (response.ok && data?.success && data?.workflow && isActive) {
+					setSelectedComplexWorkflowName(data.workflow.name || null);
+				}
+			} catch (error) {
+				console.error("Failed to load selected complex workflow:", error);
+			}
+		};
+
+		loadSelectedComplexWorkflow();
+
+		return () => {
+			isActive = false;
+		};
+	}, [selectedComplexWorkflowId]);
 
 	// Filter videos for Clip tab
 	const filteredVideos = useMemo(() => {
@@ -490,6 +541,14 @@ export default function WorkspacePage() {
 
 	const startMediaSubscription = useCallback(
 		(folderPath: string) => {
+			const isPathInFolder = (filePath: string) => {
+				if (!filePath) return false;
+				const normalizedFolder = folderPath.endsWith("/")
+					? folderPath
+					: `${folderPath}/`;
+				return filePath === folderPath || filePath.startsWith(normalizedFolder);
+			};
+
 			logger.info(
 				`[Workspace] startMediaSubscription called for: ${folderPath} at ${new Date().toISOString()}`,
 				{ toast: false },
@@ -522,6 +581,9 @@ export default function WorkspacePage() {
 					const payload = JSON.parse(event.data);
 					const file = payload?.payload;
 					if (!file || !payload?.type) return;
+					if (!isPathInFolder(file.path)) {
+						return;
+					}
 
 					// Defensive check: skip if file already exists in store to prevent duplicates
 					const currentFiles = useWorkspaceStore.getState().mediaFiles;
@@ -574,6 +636,9 @@ export default function WorkspacePage() {
 					const payload = JSON.parse(event.data);
 					const filePath = payload?.filePath;
 					if (!filePath) return;
+					if (!isPathInFolder(filePath)) {
+						return;
+					}
 					updateMediaFile(filePath, {
 						caption: payload.caption,
 						captionPath: payload.captionPath,
@@ -587,6 +652,9 @@ export default function WorkspacePage() {
 				try {
 					const payload = JSON.parse(event.data);
 					if (!payload?.path) return;
+					if (!isPathInFolder(payload.path)) {
+						return;
+					}
 
 					// Check if file still exists in store before attempting removal
 					const mediaFiles = useWorkspaceStore.getState().mediaFiles;
@@ -691,8 +759,13 @@ export default function WorkspacePage() {
 					});
 				}
 			}
+
+			if (taskId === convertTaskId && status === "completed") {
+				handleRefresh(false);
+				setConvertTaskId(null);
+			}
 		},
-		[jobs, updateJob, handleRefresh, fetchJobs],
+		[jobs, updateJob, handleRefresh, fetchJobs, convertTaskId],
 	);
 
 	const handleStatusChange = useCallback(
@@ -705,7 +778,13 @@ export default function WorkspacePage() {
 
 			// Find and update job
 			const job = jobs.find((j) => j.taskId === taskId);
-			if (job && job.status !== jobStatus) {
+			if (
+				job &&
+				job.status !== jobStatus &&
+				!(job.status === "queued" && jobStatus === "pending") &&
+				job.status !== "failed" &&
+				job.status !== "completed"
+			) {
 				updateJob(job.id, {
 					status: jobStatus,
 					startedAt:
@@ -749,6 +828,11 @@ export default function WorkspacePage() {
 				"[WorkspacePage] Selected folder changed:",
 				selectedFolder.folder_path,
 			);
+			if (lastFolderPathRef.current !== selectedFolder.folder_path) {
+				setMediaFiles([]);
+				deselectAllMediaFiles();
+				lastFolderPathRef.current = selectedFolder.folder_path;
+			}
 			loadFolderContents(
 				selectedFolder.folder_path,
 				selectedFolder.session_id,
@@ -1072,12 +1156,49 @@ export default function WorkspacePage() {
 
 	// Handler for quick run workflow from Media Gallery
 	const handleQuickRunWorkflow = useCallback(
-		(workflowId?: string) => {
+		async (workflowId?: string) => {
 			if (!workflowId) {
 				// If no workflowId provided, just open the dialog
 				setShowQuickRunDialog(true);
 				return;
 			}
+
+			if (workflowId.startsWith("local_")) {
+				try {
+					const response = await fetch(
+						`/api/workspace/local-workflow/${workflowId}`,
+					);
+					const data = await response.json();
+					if (!response.ok || !data?.success || !data?.workflow) {
+						throw new Error(data?.error || "Failed to load local workflow");
+					}
+
+					const mappedWorkflow = mapLocalWorkflowToWorkflow(data.workflow);
+					const existing = workflows.find((w) => w.id === mappedWorkflow.id);
+
+					if (existing) {
+						updateWorkflow(mappedWorkflow.id, mappedWorkflow);
+					} else {
+						addWorkflow(mappedWorkflow);
+					}
+
+					setSelectedWorkflow(mappedWorkflow.id);
+					autoAssignSelectedFilesToWorkflow(mappedWorkflow.id);
+					deselectAllMediaFiles();
+					setActiveTab("run-workflow");
+					toast.success("Files assigned to workflow. You can now run the job.");
+				} catch (error) {
+					console.error("Failed to prepare local workflow:", error);
+					toast.error(
+						error instanceof Error
+							? error.message
+							: "Failed to load local workflow",
+					);
+				}
+				return;
+			}
+
+			setSelectedWorkflow(workflowId);
 
 			// Auto-assign files to workflow
 			autoAssignSelectedFilesToWorkflow(workflowId);
@@ -1090,8 +1211,222 @@ export default function WorkspacePage() {
 
 			toast.success("Files assigned to workflow. You can now run the job.");
 		},
-		[autoAssignSelectedFilesToWorkflow],
+		[
+			addWorkflow,
+			autoAssignSelectedFilesToWorkflow,
+			deselectAllMediaFiles,
+			setActiveTab,
+			setSelectedWorkflow,
+			setShowQuickRunDialog,
+			updateWorkflow,
+			workflows,
+		],
 	);
+
+	const handleBatchProcess = useCallback(async () => {
+		if (selectedFiles.length === 0) {
+			toast.error("Select files in the media gallery first");
+			return;
+		}
+
+		if (!selectedComplexWorkflowId) {
+			toast.error("Select a complex workflow in Run Complex Workflow first");
+			return;
+		}
+
+		try {
+			const response = await fetch(
+				`/api/workspace/complex-workflow/${selectedComplexWorkflowId}`,
+			);
+			const data = await response.json();
+
+			if (!response.ok || !data?.success || !data?.workflow) {
+				throw new Error(data?.error || "Failed to load complex workflow");
+			}
+
+			const complexWorkflow = data.workflow as ComplexWorkflow;
+			const firstStep = complexWorkflow.steps.find(
+				(step) => step.stepNumber === 1,
+			);
+
+			if (!firstStep) {
+				toast.error("Complex workflow has no step 1 definition");
+				return;
+			}
+
+			let stepWorkflow = workflows.find(
+				(workflow) => workflow.id === firstStep.workflowId,
+			);
+
+			if (!stepWorkflow) {
+				if (firstStep.workflowId.startsWith("local_")) {
+					const localRes = await fetch(
+						`/api/workspace/local-workflow/${firstStep.workflowId}`,
+					);
+					const localData = await localRes.json();
+					if (localRes.ok && localData?.success && localData?.workflow) {
+						stepWorkflow = mapLocalWorkflowToWorkflow(localData.workflow);
+						const existing = workflows.find(
+							(w) => w.id === stepWorkflow?.id,
+						);
+						if (stepWorkflow) {
+							if (existing) {
+								updateWorkflow(stepWorkflow.id, stepWorkflow);
+							} else {
+								addWorkflow(stepWorkflow);
+							}
+						}
+					}
+				} else {
+					const listRes = await fetch("/api/workflow/list");
+					const listData = await listRes.json();
+					if (listRes.ok && listData?.success && listData?.workflows) {
+						stepWorkflow = listData.workflows.find(
+							(workflow: Workflow) => workflow.id === firstStep.workflowId,
+						);
+						if (stepWorkflow) {
+							const existing = workflows.find(
+								(w) => w.id === stepWorkflow?.id,
+							);
+							if (existing) {
+								updateWorkflow(stepWorkflow.id, stepWorkflow);
+							} else {
+								addWorkflow(stepWorkflow);
+							}
+						}
+					}
+				}
+			}
+
+			if (!stepWorkflow) {
+				toast.error("Step 1 workflow definition not found");
+				return;
+			}
+
+			const inputDefinitions = new Map(
+				stepWorkflow.inputs.map((input) => [input.id, input]),
+			);
+
+			const fileParams = firstStep.parameters.filter((param) => {
+				if (param.valueType !== "user-input") return false;
+				return inputDefinitions.get(param.parameterId)?.type === "file";
+			});
+
+			if (fileParams.length === 0) {
+				toast.error("Step 1 has no file inputs for batch processing");
+				return;
+			}
+
+			const staticTextInputs = firstStep.parameters.reduce(
+				(acc, param) => {
+					if (
+						param.valueType === "static" &&
+						param.staticValue !== undefined
+					) {
+						const input = inputDefinitions.get(param.parameterId);
+						if (input?.type !== "file") {
+							acc[param.parameterId] = String(param.staticValue);
+						}
+					}
+					return acc;
+				},
+				{} as Record<string, string>,
+			);
+
+			const results = await Promise.allSettled(
+				selectedFiles.map(async (file) => {
+					const fileInputs: FileInputAssignment[] = fileParams.map((param) => ({
+						parameterId: param.parameterId,
+						filePath: file.path,
+						fileName: file.name,
+						fileSize: file.size || 0,
+						fileType: file.type,
+						valid: true,
+						width: file.width,
+						height: file.height,
+					}));
+
+					const execRes = await fetch(
+						"/api/workspace/complex-workflow/execute",
+						{
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({
+								complexWorkflowId: selectedComplexWorkflowId,
+								autoContinue: true,
+								initialParameters: {
+									fileInputs,
+									textInputs: staticTextInputs,
+									deleteSourceFiles: false,
+								},
+							}),
+						},
+					);
+
+					const execData = await execRes.json();
+					if (!execRes.ok || !execData?.success) {
+						throw new Error(execData?.error || "Failed to start execution");
+					}
+
+					return execData;
+				}),
+			);
+
+			const succeeded = results.filter((result) => result.status === "fulfilled")
+				.length;
+			const failed = results.length - succeeded;
+
+			if (failed > 0) {
+				toast.warning(
+					`Batch started: ${succeeded} succeeded, ${failed} failed`,
+				);
+			} else {
+				toast.success(`Batch started: ${succeeded} executions`);
+			}
+		} catch (error) {
+			console.error("Batch process failed:", error);
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to start batch process",
+			);
+		}
+	}, [
+		addWorkflow,
+		selectedFiles,
+		selectedComplexWorkflowId,
+		updateWorkflow,
+		workflows,
+	]);
+
+	const selectedWorkflow = useMemo(
+		() => workflows.find((w) => w.id === selectedWorkflowId) || null,
+		[workflows, selectedWorkflowId],
+	);
+
+	const localWorkflowPrefillInputs = useMemo(() => {
+		if (!selectedWorkflow || selectedWorkflow.sourceType !== "local") {
+			return undefined;
+		}
+		const config = selectedWorkflow.localConfig;
+		if (!config) return undefined;
+
+		const prefill: Record<string, string> = {};
+		selectedWorkflow.inputs.forEach((param) => {
+			if (param.type === "file") return;
+			if (!param.configKey) return;
+			if (Object.prototype.hasOwnProperty.call(config, param.configKey)) {
+				const value = config[param.configKey];
+				prefill[param.id] = value === undefined ? "" : String(value);
+				return;
+			}
+			if (param.defaultValue !== undefined) {
+				prefill[param.id] = String(param.defaultValue);
+			}
+		});
+
+		return prefill;
+	}, [selectedWorkflow]);
 
 	const handleRenameFile = async (file: MediaFile, newName: string) => {
 		try {
@@ -1255,10 +1590,34 @@ export default function WorkspacePage() {
 					: convertConfig.quality === "low"
 						? 23
 						: 20;
+		const resizeWidth = convertConfig.resizeWidth
+			? parseInt(convertConfig.resizeWidth, 10)
+			: undefined;
+		const resizeHeight = convertConfig.resizeHeight
+			? parseInt(convertConfig.resizeHeight, 10)
+			: undefined;
+		const resizeLongestSide = convertConfig.resizeLongestSide
+			? parseInt(convertConfig.resizeLongestSide, 10)
+			: undefined;
 
 		if (!targetFps || targetFps < 1 || targetFps > 120) {
 			toast.error("Invalid target FPS. Must be between 1 and 120.");
 			return;
+		}
+
+		if (convertConfig.resizeEnabled) {
+			if (
+				convertConfig.resizeMode === "longest-side" ||
+				convertConfig.resizeMode === "shortest-side"
+			) {
+				if (!resizeLongestSide) {
+					toast.error("Please provide a longest-side size");
+					return;
+				}
+			} else if (!resizeWidth && !resizeHeight) {
+				toast.error("Please provide a resize width or height");
+				return;
+			}
 		}
 
 		try {
@@ -1272,6 +1631,11 @@ export default function WorkspacePage() {
 					outputSuffix: convertConfig.outputSuffix,
 					crf,
 					preset: convertConfig.encodingPreset,
+					resizeEnabled: convertConfig.resizeEnabled,
+					resizeMode: convertConfig.resizeMode,
+					resizeWidth,
+					resizeHeight,
+					resizeLongestSide,
 					timeout: 3600,
 				}),
 			});
@@ -1284,6 +1648,7 @@ export default function WorkspacePage() {
 				toast.success(
 					`Started converting ${videos.length} video${videos.length > 1 ? "s" : ""} to ${targetFps} FPS`,
 				);
+				useVideoSelectionStore.getState().deselectAll();
 
 				// Folder updates handled by subscription
 			} else {
@@ -2243,22 +2608,23 @@ export default function WorkspacePage() {
 								<ExportConfiguration />
 
 								{/* Media Selection Toolbar */}
-								{selectedFiles.length > 0 && (
-									<MediaSelectionToolbar
-										selectedFiles={selectedFiles}
-										onRename={handleRenameFile}
-										onDelete={handleDeleteFile}
-										onDecode={handleDecodeFile}
-										onRunWorkflow={handleQuickRunWorkflow}
-										onPreview={handlePreviewFile}
-										onExport={handleExport}
-										onExportToDataset={() => {
-											setFileToExportToDataset(null); // null means use selectedFiles
-											setShowSelectDatasetDialog(true);
-										}}
-										onDeselectAll={deselectAllMediaFiles}
-									/>
-								)}
+								<MediaSelectionToolbar
+									selectedFiles={selectedFiles}
+									onRename={handleRenameFile}
+									onDelete={handleDeleteFile}
+									onDecode={handleDecodeFile}
+									onRunWorkflow={handleQuickRunWorkflow}
+									onBatchProcess={handleBatchProcess}
+									batchWorkflowId={selectedComplexWorkflowId}
+									batchWorkflowName={selectedComplexWorkflowName}
+									onPreview={handlePreviewFile}
+									onExport={handleExport}
+									onExportToDataset={() => {
+										setFileToExportToDataset(null); // null means use selectedFiles
+										setShowSelectDatasetDialog(true);
+									}}
+									onDeselectAll={deselectAllMediaFiles}
+								/>
 
 								{/* Sort Controls */}
 								<div className="flex items-center justify-between">
@@ -2375,7 +2741,7 @@ export default function WorkspacePage() {
 									{/* Crop Configuration */}
 									<CropConfiguration />
 
-									{/* FPS Convert Configuration */}
+								{/* Convert Configuration */}
 									<VideoConvertConfiguration />
 								</div>
 
@@ -2402,6 +2768,7 @@ export default function WorkspacePage() {
 											selectedVideoFiles.map((v) => ({ ...v, id: v.path })),
 										);
 									}}
+									clipButtonText="Crop"
 									onConvertFps={async (selectedPaths) => {
 										const selectedVideoFiles = filteredVideos.filter((v) =>
 											selectedPaths.includes(v.path),
@@ -2628,22 +2995,31 @@ export default function WorkspacePage() {
 
 							{/* Workflows Tab */}
 							<TabsContent value="workflows" className="mt-6">
-								{isCreatingComplexWorkflow ? (
+								{isCreatingComplexWorkflow || editingComplexWorkflow ? (
 									<div className="bg-white rounded-lg p-6 border shadow-sm">
 										<div className="flex justify-between items-center mb-6">
 											<h3 className="text-xl font-semibold">
-												Create Complex Workflow
+												{editingComplexWorkflow
+													? "Edit Complex Workflow"
+													: "Create Complex Workflow"}
 											</h3>
 											<Button
 												variant="outline"
-												onClick={() => setIsCreatingComplexWorkflow(false)}
+												onClick={() => {
+													setIsCreatingComplexWorkflow(false);
+													setEditingComplexWorkflow(null);
+												}}
 											>
 												Cancel
 											</Button>
 										</div>
 										<ComplexWorkflowBuilder
-											onSave={() => setIsCreatingComplexWorkflow(false)}
-											onCancel={() => setIsCreatingComplexWorkflow(false)}
+											workflow={editingComplexWorkflow || undefined}
+											onSave={handleComplexWorkflowSaved}
+											onCancel={() => {
+												setIsCreatingComplexWorkflow(false);
+												setEditingComplexWorkflow(null);
+											}}
 										/>
 									</div>
 								) : (
@@ -2679,13 +3055,19 @@ export default function WorkspacePage() {
 											<div className="space-y-4">
 												<div className="flex justify-end">
 													<Button
-														onClick={() => setIsCreatingComplexWorkflow(true)}
+														onClick={() => {
+															setIsCreatingComplexWorkflow(true);
+															setEditingComplexWorkflow(null);
+														}}
 													>
 														<Plus className="h-4 w-4 mr-2" />
 														Create Complex Workflow
 													</Button>
 												</div>
-												<ComplexWorkflowList />
+												<ComplexWorkflowList
+													key={complexWorkflowListKey}
+													onEdit={handleEditComplexWorkflow}
+												/>
 											</div>
 										) : (
 											<WorkflowList />
@@ -2717,6 +3099,7 @@ export default function WorkspacePage() {
 					taskId={activeConsoleTaskId}
 					defaultVisible={false}
 				/>
+
 
 				{/* Workflow Editor Dialog */}
 				{isEditingWorkflow && (
