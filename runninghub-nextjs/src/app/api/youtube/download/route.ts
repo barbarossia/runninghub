@@ -242,24 +242,24 @@ async function downloadVideoInBackground(
     // Attempt 1: Default download
     let result = await runYtDlpCommand("yt-dlp", baseArgs, taskId);
 
-    // Attempt 2: Fallback to android client if failed and no cookies provided (or strictly if failed)
+    // Attempt 2: Fallback to android client if failed
+    // We retry if failed, regardless of whether cookies were provided,
+    // because the provided cookies might be invalid or insufficient for the default client.
     if (!result.success) {
       const is403 = result.stderr.includes("HTTP Error 403") || result.stdout.includes("HTTP Error 403");
       
-      if (is403 || !actualCookieFile) {
-        await writeLog(
-          "Default download failed (likely HTTP 403). Retrying with 'android' client fallback...",
-          "warning",
-          taskId
-        );
-        
-        // Create new args with fallback
-        const fallbackArgs = [...baseArgs];
-        // Insert before URL (last argument)
-        fallbackArgs.splice(fallbackArgs.length - 1, 0, "--extractor-args", "youtube:player_client=android");
-        
-        result = await runYtDlpCommand("yt-dlp", fallbackArgs, taskId);
-      }
+      await writeLog(
+        `Default download failed (Code: ${result.code}). Retrying with 'android' client fallback...`,
+        "warning",
+        taskId
+      );
+      
+      // Create new args with fallback
+      const fallbackArgs = [...baseArgs];
+      // Insert before URL (last argument)
+      fallbackArgs.splice(fallbackArgs.length - 1, 0, "--extractor-args", "youtube:player_client=android");
+      
+      result = await runYtDlpCommand("yt-dlp", fallbackArgs, taskId);
     }
 
     if (result.success) {
