@@ -463,6 +463,25 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		}
 	};
 
+	// Select all logic
+	const isAllCurrentPageSelected =
+		pagedJobs.length > 0 &&
+		pagedJobs.every((job) => selectedJobIds.has(job.id));
+
+	const handleSelectAllCurrentPage = (checked: boolean) => {
+		setSelectedJobIds((prev) => {
+			const next = new Set(prev);
+			pagedJobs.forEach((job) => {
+				if (checked) {
+					next.add(job.id);
+				} else {
+					next.delete(job.id);
+				}
+			});
+			return next;
+		});
+	};
+
 	return (
 		<div className={cn("space-y-4", className)}>
 			{/* Header and filters */}
@@ -485,7 +504,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 					</Button>
 				</div>
 
-				<div className="flex flex-wrap gap-2">
+				<div className="flex flex-wrap gap-2 items-center">
 					{/* Status filter */}
 					<Select
 						value={statusFilter}
@@ -520,6 +539,23 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 							</SelectContent>
 						</Select>
 					)}
+
+					{/* Select All Checkbox */}
+					<div className="flex items-center gap-2 px-2">
+						<Checkbox
+							id="select-all-page"
+							checked={isAllCurrentPageSelected}
+							onCheckedChange={(checked) =>
+								handleSelectAllCurrentPage(checked === true)
+							}
+						/>
+						<label
+							htmlFor="select-all-page"
+							className="text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap"
+						>
+							Select Page
+						</label>
+					</div>
 
 					<Button
 						variant="destructive"
