@@ -574,6 +574,7 @@ export type LocalWorkflowOperationType =
 	| "video-fps-convert"
 	| "video-clip"
 	| "video-crop"
+	| "video-aspect-calc"
 	| "image-resize"
 	| "duck-decode"
 	| "caption";

@@ -6,20 +6,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-	Plus,
-	Trash2,
-	Loader2,
-	AlertCircle,
-	Settings2,
-	GripVertical,
-	User,
-	ArrowLeft,
-	Monitor,
-	Cloud,
-	Layers,
-} from "lucide-react";
 import { Reorder } from "framer-motion";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,11 +28,24 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	Plus,
+	Trash2,
+	Loader2,
+	AlertCircle,
+	Settings2,
+	GripVertical,
+	User,
+	ArrowLeft,
+	Monitor,
+	Cloud,
+	Layers,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 import type { ComplexWorkflow, Workflow, WorkflowStep, LocalWorkflow } from "@/types/workspace";
 import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
+import { LOCAL_OPS_DEFINITIONS } from "@/constants/local-ops";
 
 type BuilderStep = 1 | 2 | 3;
 
@@ -269,6 +270,28 @@ export function ComplexWorkflowBuilder({
 		paramId: string,
 		sourceParameterId: string,
 	) => {
+		const parseDynamicValue = (value: string) => {
+			if (value.includes("::")) {
+				const [stepValue, outputKey] = value.split("::");
+				return {
+					stepNumber: parseInt(stepValue, 10),
+					outputKey,
+				};
+			}
+
+			const legacyMatch = value.match(/^(\d+)-(.+)$/);
+			if (legacyMatch) {
+				return {
+					stepNumber: parseInt(legacyMatch[1], 10),
+					outputKey: value,
+				};
+			}
+
+			return { stepNumber: 0, outputKey: value };
+		};
+
+		const parsed = parseDynamicValue(sourceParameterId);
+
 		setSteps(
 			steps.map((step) => {
 				if (step.id === stepId) {
@@ -276,25 +299,13 @@ export function ComplexWorkflowBuilder({
 						...step,
 						parameters: step.parameters.map((param) => {
 							if (param.parameterId === paramId) {
-								const match = sourceParameterId.match(/^(.+)-(.+)$/);
-								const sourceStepNumber = match ? parseInt(match[1], 10) : 0;
-
-								// Find source output name
-								const sourceStep = steps.find(
-									(s) => s.stepNumber === sourceStepNumber,
-								);
-								const sourceWorkflow = availableWorkflows.find(
-									(w) => w.id === sourceStep?.workflowId,
-								);
-								// In reality we'd find the output definition, but here we assume outputs map to parameter IDs for now
-
 								return {
 									...param,
 									valueType: "dynamic",
 									dynamicMapping: {
-										sourceStepNumber,
-										sourceParameterId,
-										sourceOutputName: sourceParameterId,
+										sourceStepNumber: parsed.stepNumber,
+										sourceParameterId: parsed.outputKey,
+										sourceOutputName: parsed.outputKey,
 									},
 								};
 							}
@@ -453,6 +464,16 @@ export function ComplexWorkflowBuilder({
 		}
 	};
 
+	const getDynamicMappingValue = (param: WorkflowStep["parameters"][number]) => {
+		if (!param.dynamicMapping) return "";
+		const { sourceStepNumber, sourceParameterId } = param.dynamicMapping;
+		const legacyPrefix = `${sourceStepNumber}-`;
+		if (sourceParameterId.startsWith(legacyPrefix)) {
+			return sourceParameterId;
+		}
+		return `${sourceStepNumber}::${sourceParameterId}`;
+	};
+
 	const getPreviousStepOutputs = (currentStepNumber: number) => {
 		const outputs: {
 			id: string;
@@ -467,13 +488,25 @@ export function ComplexWorkflowBuilder({
 				const workflow = availableWorkflows.find(
 					(w) => w.id === step.workflowId,
 				);
-				// For now assuming all inputs can be outputs or just generic output
-				// Ideally we should know the outputs of each workflow
+				const localOperation = workflow?.localOperation;
+				const opDefinition = localOperation
+					? LOCAL_OPS_DEFINITIONS[localOperation]
+					: undefined;
+
 				outputs.push({
 					id: `${step.stepNumber}-output`,
-					name: `Output`,
+					name: `Output (default)`,
 					stepNumber: step.stepNumber,
 					workflowName: step.workflowName,
+				});
+
+				opDefinition?.outputs?.forEach((output) => {
+					outputs.push({
+						id: `${step.stepNumber}::${output.key}`,
+						name: output.label,
+						stepNumber: step.stepNumber,
+						workflowName: step.workflowName,
+					});
 				});
 			});
 
@@ -996,11 +1029,8 @@ export function ComplexWorkflowBuilder({
 																			<span>Required at execution</span>
 																		</div>
 																	) : (
-																		<Select
-																			value={
-																				param.dynamicMapping
-																					?.sourceParameterId || ""
-																			}
+																			<Select
+																			value={getDynamicMappingValue(param)}
 																			onValueChange={(value) =>
 																				updateDynamicMapping(
 																					step.id,
@@ -1021,7 +1051,7 @@ export function ComplexWorkflowBuilder({
 																						value={output.id}
 																					>
 																						Step {output.stepNumber}:{" "}
-																						{output.workflowName} - Output
+																						{output.workflowName} - {output.name}
 																					</SelectItem>
 																				))}
 																			</SelectContent>

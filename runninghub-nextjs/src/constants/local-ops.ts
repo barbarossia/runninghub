@@ -18,11 +18,18 @@ export interface LocalOpInputDefinition {
 	showIf?: (config: Record<string, any>) => boolean;
 }
 
+export interface LocalOpOutputDefinition {
+	key: string;
+	label: string;
+	type: 'text' | 'file';
+}
+
 export interface LocalOpDefinition {
 	type: LocalWorkflowOperationType;
 	label: string;
 	description: string;
 	inputs: LocalOpInputDefinition[];
+	outputs?: LocalOpOutputDefinition[];
 }
 
 export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDefinition> = {
@@ -162,6 +169,53 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 				defaultValue: false,
 				description: 'Permanently delete source file after conversion',
 			},
+		],
+	},
+	'video-aspect-calc': {
+		type: 'video-aspect-calc',
+		label: 'Aspect Ratio Calculator (Video)',
+		description: 'Calculate width/height values while preserving aspect ratio.',
+		inputs: [
+			{
+				name: 'mode',
+				label: 'Calculation Mode',
+				type: 'select',
+				defaultValue: 'from-width',
+				options: [
+					{ value: 'from-width', label: 'From Width' },
+					{ value: 'from-height', label: 'From Height' },
+				],
+			},
+			{
+				name: 'targetWidth',
+				label: 'Target Width (px)',
+				type: 'number',
+				defaultValue: 720,
+				min: 1,
+				showIf: (config) => config.mode === 'from-width',
+			},
+			{
+				name: 'targetHeight',
+				label: 'Target Height (px)',
+				type: 'number',
+				min: 1,
+				showIf: (config) => config.mode === 'from-height',
+			},
+			{
+				name: 'rounding',
+				label: 'Rounding',
+				type: 'select',
+				defaultValue: 'round',
+				options: [
+					{ value: 'round', label: 'Round' },
+					{ value: 'floor', label: 'Floor' },
+					{ value: 'ceil', label: 'Ceil' },
+				],
+			},
+		],
+		outputs: [
+			{ key: 'aspect_width.txt', label: 'Width (px)', type: 'text' },
+			{ key: 'aspect_height.txt', label: 'Height (px)', type: 'text' },
 		],
 	},
 	'video-fps-convert': {

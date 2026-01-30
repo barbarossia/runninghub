@@ -342,6 +342,71 @@ def check_ffmpeg_available() -> bool:
         return False
 
 
+def check_ffprobe_available() -> bool:
+    """Check if FFprobe is installed and accessible.
+
+    Returns:
+        True if FFprobe is available, False otherwise.
+    """
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-version"], capture_output=True, text=True, timeout=5
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def get_video_dimensions(video_path: Path) -> Tuple[int, int]:
+    """Get the width and height of a video using FFprobe.
+
+    Args:
+        video_path: Path to the video file.
+
+    Returns:
+        Tuple of (width, height).
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        RuntimeError: If dimensions cannot be determined.
+    """
+    if not video_path.exists():
+        raise FileNotFoundError(f"Input file does not exist: {video_path}")
+
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "csv=p=0:s=x",
+        str(video_path),
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "Failed to read video dimensions")
+
+    output = result.stdout.strip()
+    if "x" not in output:
+        raise RuntimeError("Invalid ffprobe output for dimensions")
+
+    width_str, height_str = output.split("x", 1)
+    try:
+        width = int(width_str)
+        height = int(height_str)
+    except ValueError as exc:
+        raise RuntimeError("Non-integer dimensions returned by ffprobe") from exc
+
+    if width <= 0 or height <= 0:
+        raise RuntimeError("Invalid dimensions returned by ffprobe")
+
+    return width, height
+
+
 def rename_video(current_path: Path, new_name: str) -> Path:
     """Rename a video file.
 

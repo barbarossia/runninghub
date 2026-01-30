@@ -1452,6 +1452,24 @@ async function processWorkflowInBackground(
 				if (String(deleteOriginal) === "false") args.push("--no-overwrite");
 				if (workflow?.localConfig?.timeout) args.push("--timeout", String(workflow.localConfig.timeout));
 
+			} else if (operation === "video-aspect-calc") {
+				const input = jobFileInputs[0];
+				if (!input)
+					throw new Error("No input file provided for aspect calculation");
+
+				args.push("aspect-calc");
+				args.push(input.filePath);
+
+				const mode = getVal("mode");
+				const targetWidth = getVal("targetWidth");
+				const targetHeight = getVal("targetHeight");
+				const rounding = getVal("rounding");
+
+				if (mode) args.push("--mode", String(mode));
+				if (targetWidth) args.push("--target-width", String(targetWidth));
+				if (targetHeight) args.push("--target-height", String(targetHeight));
+				if (rounding) args.push("--rounding", String(rounding));
+
 			} else if (operation === "video-clip") {
 				const input = jobFileInputs[0];
 				if (!input) throw new Error("No input file provided for video clipping");
