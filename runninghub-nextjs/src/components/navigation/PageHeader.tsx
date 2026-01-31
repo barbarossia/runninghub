@@ -2,12 +2,20 @@
 
 import React from "react";
 import Link from "next/link";
-import { Calculator, Home, ArrowLeft, LucideIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+	ArrowLeft,
+	Calculator,
+	Home,
+	LucideIcon,
+	MessageSquare,
+} from "lucide-react";
+import { useMessageCenterStore } from "@/store/message-center-store";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
+import { useWorkspaceStore } from "@/store/workspace-store";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { ToastToggle } from "@/components/ui/ToastToggle";
-import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 import { cn } from "@/lib/utils";
 
 type ColorVariant = "blue" | "purple" | "green";
@@ -56,6 +64,18 @@ export function PageHeader({
 	const colors = COLOR_STYLES[colorVariant];
 	const { aspectToolCollapsed, setAspectToolCollapsed } =
 		useUiPreferencesStore();
+	const { isOpen, dismissedJobIds, readJobIds, setOpen } =
+		useMessageCenterStore();
+	const jobs = useWorkspaceStore((state) => state.jobs);
+
+	const unreadCount = React.useMemo(() => {
+		if (jobs.length === 0) return 0;
+		const dismissedSet = new Set(dismissedJobIds);
+		const readSet = new Set(readJobIds);
+		return jobs.filter(
+			(job) => !dismissedSet.has(job.id) && !readSet.has(job.id),
+		).length;
+	}, [jobs, dismissedJobIds, readJobIds]);
 
 	return (
 		<div className={cn("flex items-center justify-between mb-8", className)}>
@@ -103,6 +123,23 @@ export function PageHeader({
 				)}
 				<ThemeToggle />
 				<ToastToggle />
+				{!isOpen && (
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={() => setOpen(true)}
+						aria-label="Open message center"
+						title="Open message center"
+						className="relative"
+					>
+						<MessageSquare className="h-4 w-4" />
+						{unreadCount > 0 && (
+							<span className="absolute -right-1 -top-1 min-w-[16px] rounded-full bg-blue-600 px-1 text-[10px] leading-4 text-white">
+								{unreadCount}
+							</span>
+						)}
+					</Button>
+				)}
 				{aspectToolCollapsed && (
 					<Button
 						variant="ghost"

@@ -36,8 +36,8 @@ export default function RootLayout({
 						{children}
 					</div>
 					<div className="fixed top-4 right-4 z-50 flex items-start gap-3">
-						<MessageCenter />
 						<AspectRatioTool />
+						<MessageCenter />
 					</div>
 					<ToastGate />
 				</ThemeProvider>

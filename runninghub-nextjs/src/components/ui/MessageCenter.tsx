@@ -57,7 +57,6 @@ export function MessageCenter() {
 		isOpen,
 		dockMode,
 		dismissedJobIds,
-		readJobIds,
 		setOpen,
 		toggleDockMode,
 		markRead,
@@ -79,11 +78,6 @@ export function MessageCenter() {
 			.sort((a, b) => getJobTimestamp(b) - getJobTimestamp(a));
 	}, [jobs, dismissedJobIds]);
 
-	const unreadCount = useMemo(() => {
-		const readSet = new Set(readJobIds);
-		return visibleJobs.filter((job) => !readSet.has(job.id)).length;
-	}, [visibleJobs, readJobIds]);
-
 	useEffect(() => {
 		if (isOpen && visibleJobs.length > 0) {
 			markRead(visibleJobs.map((job) => job.id));
@@ -93,36 +87,18 @@ export function MessageCenter() {
 	const isDocked = dockMode === "dock";
 
 	const containerClassName = cn(
-		"w-[320px]",
 		isDocked ? "" : "fixed bottom-4 right-4 z-50",
 	);
 
 	const headerActionClassName = "h-7 w-7";
 
 	if (!isOpen) {
-		return (
-			<div className={containerClassName}>
-				<Button
-					variant="outline"
-					size="sm"
-					className="w-full justify-between bg-white/90 shadow-md"
-					onClick={() => setOpen(true)}
-				>
-					<span className="flex items-center gap-2 text-sm">
-						<MessageSquare className="h-4 w-4 text-blue-600" />
-						Message Center
-					</span>
-					{unreadCount > 0 && (
-						<Badge className="bg-blue-600 text-white">{unreadCount}</Badge>
-					)}
-				</Button>
-			</div>
-		);
+		return null;
 	}
 
 	return (
 		<div className={containerClassName}>
-			<Card className="border border-blue-100 bg-white/95 shadow-lg backdrop-blur">
+			<Card className="w-[320px] border border-blue-100 bg-white/95 shadow-lg backdrop-blur">
 				<div className="flex items-center justify-between border-b border-blue-100 px-3 py-2">
 					<div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
 						<MessageSquare className="h-4 w-4 text-blue-600" />
