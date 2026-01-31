@@ -107,6 +107,16 @@ export function ImageGallery({
 		}
 	}, [isAllSelected, selectedCount, images.length, selectAll, deselectAll]);
 
+	// Click on empty gallery space should clear selection
+	const handleGalleryBackgroundClick = useCallback(
+		(event: React.MouseEvent<HTMLDivElement>) => {
+			if (event.target === event.currentTarget && hasSelection) {
+				deselectAll();
+			}
+		},
+		[hasSelection, deselectAll],
+	);
+
 	// Handle image click
 	const handleImageClick = useCallback(
 		(image: ImageFile, event: React.MouseEvent) => {
@@ -264,6 +274,7 @@ export function ImageGallery({
 				role="grid"
 				aria-label={`Image gallery - ${images.length} images`}
 				className={`grid gap-3 ${gridCols}`}
+				onClick={handleGalleryBackgroundClick}
 				transition={{ duration: 0.2 }}
 			>
 				<AnimatePresence mode="popLayout">

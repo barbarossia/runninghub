@@ -305,8 +305,20 @@ export function MediaGallery({
 		return files.filter((f) => f.selected).length;
 	}, [files]);
 
+	const hasSelection = selectedCount > 0;
+
 	const isAllSelected =
 		selectedCount > 0 && selectedCount === filteredFiles.length;
+
+	// Click blank area in grid to clear selection
+	const handleBackgroundClick = useCallback(
+		(event: React.MouseEvent<HTMLDivElement>) => {
+			if (event.target === event.currentTarget && hasSelection) {
+				deselectAll();
+			}
+		},
+		[hasSelection, deselectAll],
+	);
 
 	// Lazy validation: Validate selected images that haven't been validated yet (workspace mode only)
 	useEffect(() => {
@@ -557,7 +569,10 @@ export function MediaGallery({
 	}
 
 	return (
-		<div className={cn("space-y-4", className)}>
+		<div
+			className={cn("space-y-4", className)}
+			onClick={handleBackgroundClick}
+		>
 			{/* Toolbar */}
 			<div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
 				{/* Left: Search and filter */}
@@ -672,6 +687,7 @@ export function MediaGallery({
 				role="grid"
 				aria-label={`Media gallery - ${filteredFiles.length} files`}
 				className={cn("grid gap-3", gridCols)}
+				onClick={handleBackgroundClick}
 				transition={{ duration: 0.2 }}
 			>
 				<AnimatePresence mode="popLayout">

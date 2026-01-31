@@ -138,6 +138,16 @@ export function VideoGallery({
 		}
 	}, [isAllSelected, deselectAll, selectAll]);
 
+	// Click blank gallery background to clear selection
+	const handleGalleryBackgroundClick = useCallback(
+		(event: React.MouseEvent<HTMLDivElement>) => {
+			if (event.target === event.currentTarget && hasSelection) {
+				deselectAll();
+			}
+		},
+		[hasSelection, deselectAll],
+	);
+
 	// Handle play video
 	const handlePlayVideo = useCallback((video: VideoFile) => {
 		setPlayingVideo(video);
@@ -311,15 +321,16 @@ export function VideoGallery({
 
 			{/* Video Grid */}
 			<AnimatePresence mode="wait">
-				<motion.div
-					key={viewMode}
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					exit={{ opacity: 0 }}
-					transition={{ duration: 0.2 }}
-					className={cn("grid gap-3", getGridCols())}
-				>
-					{videos.map((video, index) => (
+			<motion.div
+				key={viewMode}
+				initial={{ opacity: 0 }}
+				animate={{ opacity: 1 }}
+				exit={{ opacity: 0 }}
+				transition={{ duration: 0.2 }}
+				className={cn("grid gap-3", getGridCols())}
+				onClick={handleGalleryBackgroundClick}
+			>
+				{videos.map((video, index) => (
 						<VideoCard
 							key={video.path}
 							video={video}
