@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ToastGate } from "@/components/ui/ToastGate";
 import { AspectRatioTool } from "@/components/ui/AspectRatioTool";
+import { MessageCenter } from "@/components/ui/MessageCenter";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const inter = Inter({
@@ -34,7 +35,10 @@ export default function RootLayout({
 					<div className="min-h-screen bg-background text-foreground">
 						{children}
 					</div>
-					<AspectRatioTool />
+					<div className="fixed top-4 right-4 z-50 flex items-start gap-3">
+						<AspectRatioTool />
+						<MessageCenter />
+					</div>
 					<ToastGate />
 				</ThemeProvider>
 			</body>

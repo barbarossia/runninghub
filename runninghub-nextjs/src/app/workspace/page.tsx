@@ -2648,12 +2648,33 @@ export default function WorkspacePage() {
 
 								{/* Media Gallery */}
 								<MediaGallery
+									onFileClick={(file) => {
+										// Optional: add custom click handling here if needed
+									}}
+									onFileDoubleClick={(file) => {
+										if (file.type === "video") {
+											setPreviewVideo(file);
+										} else {
+											setPreviewImage(file);
+										}
+									}}
 									onRename={handleRenameFile}
 									onDelete={handleDeleteFile}
-									onDecode={handleDecodeFile}
-									onPreview={handlePreviewFile}
 									onExport={handleExport}
+									onDecode={handleDecodeFile}
+									onPreview={(file) => {
+										if (file.type === "video") {
+											setPreviewVideo(file);
+										} else {
+											setPreviewImage(file);
+										}
+									}}
+									onConvertFps={handleConvertFps}
 									onExportToDataset={handleExportFileToDataset}
+									onResize={(file) => {
+										setResizeFile(file);
+										setShowResizeDialog(true);
+									}}
 								/>
 							</TabsContent>
 

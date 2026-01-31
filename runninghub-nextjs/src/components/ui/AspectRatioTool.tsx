@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calculator, Minimize2, RefreshCw } from "lucide-react";
+import { useSelectionStore } from "@/store/selection-store";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
+import { useVideoSelectionStore } from "@/store/video-selection-store";
+import { useWorkspaceStore } from "@/store/workspace-store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useUiPreferencesStore } from "@/store/ui-preferences-store";
-import { useWorkspaceStore } from "@/store/workspace-store";
-import { useSelectionStore } from "@/store/selection-store";
-import { useVideoSelectionStore } from "@/store/video-selection-store";
+import { cn } from "@/lib/utils";
+import { Calculator, Minimize2, RefreshCw } from "lucide-react";
 import type { MediaFile } from "@/types/workspace";
 
 type Mode = "width" | "height";
@@ -31,7 +32,11 @@ const gcd = (a: number, b: number): number => {
 	return x || 1;
 };
 
-export function AspectRatioTool() {
+interface AspectRatioToolProps {
+	className?: string;
+}
+
+export function AspectRatioTool({ className = "" }: AspectRatioToolProps) {
 	const workspaceMediaFiles = useWorkspaceStore((state) => state.mediaFiles);
 	const selectedImages = useSelectionStore((state) => state.selectedImages);
 	const lastSelectedImagePath = useSelectionStore(
@@ -119,7 +124,7 @@ export function AspectRatioTool() {
 	}
 
 	return (
-		<div className="fixed top-4 right-4 z-50 w-[280px]">
+		<div className={cn("w-[280px]", className)}>
 			<Card className="border border-blue-100 bg-white/95 shadow-lg backdrop-blur">
 				<div className="flex items-center justify-between border-b border-blue-100 px-3 py-2">
 					<div className="flex items-center gap-2 text-sm font-semibold text-gray-800">
