@@ -96,8 +96,24 @@ export const runAutoSaveDecodeBot = async ({
 		errors: [],
 	};
 
-	const completedJobs = jobs
-		.filter((job) => job.status === 'completed')
+	let completedJobs = jobs.filter((job) => job.status === 'completed');
+
+	if (config.workflowFilter) {
+		const filters = config.workflowFilter
+			.split(',')
+			.map((f) => f.trim().toLowerCase())
+			.filter((f) => f.length > 0);
+
+		if (filters.length > 0) {
+			completedJobs = completedJobs.filter((job) => {
+				const name = (job.workflowName || '').toLowerCase();
+				const id = (job.workflowId || '').toLowerCase();
+				return filters.some((f) => name.includes(f) || id.includes(f));
+			});
+		}
+	}
+
+	completedJobs = completedJobs
 		.sort((a, b) => getJobTimestamp(b) - getJobTimestamp(a))
 		.slice(0, Math.max(1, config.recentLimit));
 
@@ -173,7 +189,7 @@ export const runAutoSaveDecodeBot = async ({
 					body: JSON.stringify({
 						sourcePath,
 						targetFolder: workspaceFolderPath,
-						fileName: output.fileName,
+						fileName: sourcePath.split(/[/\\]/).pop(),
 						jobId: job.id,
 						jobOutputPath: sourcePath,
 					}),

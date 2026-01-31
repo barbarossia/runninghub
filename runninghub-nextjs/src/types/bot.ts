@@ -9,6 +9,7 @@ export type AutoSaveDecodeBotConfig = {
 	recentLimit: number;
 	onlyUnsaved: boolean;
 	decodeEnabled: boolean;
+	workflowFilter?: string;
 };
 
 export type BotConfig = JobStatusBotConfig | AutoSaveDecodeBotConfig;

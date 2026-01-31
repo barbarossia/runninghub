@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Bot, Plus, Save, Trash2, Play, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBotCenterStore } from '@/store/bot-center-store';
@@ -62,6 +62,8 @@ export function BotBuilderTab() {
 		setJobStatusResult,
 		setAutoSaveDecodeResult,
 	} = useBotCenterStore();
+	const jobs = useWorkspaceStore((state) => state.jobs);
+	const workflows = useWorkspaceStore((state) => state.workflows);
 	const fetchJobs = useWorkspaceStore((state) => state.fetchJobs);
 	const updateJob = useWorkspaceStore((state) => state.updateJob);
 	const { selectedFolder: workspaceFolder } = useWorkspaceFolder();
@@ -71,6 +73,19 @@ export function BotBuilderTab() {
 	const [newBotName, setNewBotName] = useState('');
 	const [newBotType, setNewBotType] = useState<BotType>('job-status');
 	const [newBotDescription, setNewBotDescription] = useState('');
+
+	const workflowOptions = useMemo(() => {
+		const names = new Set<string>();
+		jobs.forEach((job) => {
+			if (job.workflowName) names.add(job.workflowName);
+			else if (job.workflowId) names.add(job.workflowId);
+		});
+		workflows.forEach((w) => {
+			if (w.name) names.add(w.name);
+			else names.add(w.id);
+		});
+		return Array.from(names).sort();
+	}, [jobs, workflows]);
 
 	useEffect(() => {
 		setDrafts((prev) => {
@@ -401,7 +416,7 @@ export function BotBuilderTab() {
 							)}
 
 							{bot.type === 'auto-save-decode' && (
-								<div className='mt-4 grid gap-3 lg:grid-cols-3'>
+								<div className='mt-4 grid gap-3 lg:grid-cols-2'>
 									<div className='space-y-1'>
 										<label className='text-[11px] text-gray-500'>
 											Recent jobs limit
@@ -421,6 +436,31 @@ export function BotBuilderTab() {
 												})
 											}
 										/>
+									</div>
+									<div className='space-y-1'>
+										<label className='text-[11px] text-gray-500'>
+											Workflow Filter
+										</label>
+										<Select
+											value={(draft.config as AutoSaveDecodeBotConfig).workflowFilter || 'all'}
+											onValueChange={(value) =>
+												updateDraftConfig(bot.id, {
+													workflowFilter: value === 'all' ? '' : value,
+												})
+											}
+										>
+											<SelectTrigger>
+												<SelectValue placeholder="All Workflows" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value='all'>All Workflows</SelectItem>
+												{workflowOptions.map((opt) => (
+													<SelectItem key={opt} value={opt}>
+														{opt}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 									</div>
 									<div className='flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-600'>
 										Only unsaved outputs
