@@ -759,6 +759,10 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 														<Calendar className="h-3 w-3" />
 														<span>{formatDate(job.createdAt)}</span>
 													</div>
+													{/* Job ID */}
+													<div className="text-xs text-gray-500 break-all">
+														Job ID: <span className="font-mono break-all">{job.id}</span>
+													</div>
 
 													{/* Error message */}
 													{displayStatus === "failed" && job.error && (

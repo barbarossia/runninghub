@@ -934,8 +934,10 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 								</Badge>
 							)}
 						</div>
-						<div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-							<span>ID: {job.id.slice(0, 8)}</span>
+						<div className="flex flex-col gap-1 text-xs text-gray-500 mt-1">
+							<span className="break-all">
+								Job ID: <span className="font-mono break-all">{job.id}</span>
+							</span>
 							{job.startedAt && (
 								<span className="flex items-center gap-1">
 									<Clock className="h-3 w-3" />
