@@ -2640,12 +2640,49 @@ export default function WorkspacePage() {
                   </Button>
                 </div>
 
-                {/* Media Gallery */}
-                <Card className="min-h-[500px] flex flex-col">
-                  <CardContent className="p-4 flex-1 flex flex-col">
-                    <MediaGallery
-                      className="flex-1"
-                      mode="workspace"
+                								                        {/* Media Gallery */}
+
+                								                        <Card className="min-h-[500px] flex flex-col">
+
+                								                            <CardContent 
+
+                                                                                className="p-4 flex-1 flex flex-col"
+
+                                                                                onClick={(e) => {
+
+                                                                                    // Handle background clicks on the card content padding
+
+                                                                                    if (selectedFiles.length > 0) {
+
+                                                                                        const target = e.target as HTMLElement;
+
+                                                                                        const isInteractive = target.closest(
+
+                                                                                            'button, a, input, select, textarea, [role="button"], [role="checkbox"], [role="gridcell"]',
+
+                                                                                        );
+
+                                                                                        
+
+                                                                                        if (!isInteractive) {
+
+                                                                                            deselectAllMediaFiles();
+
+                                                                                        }
+
+                                                                                    }
+
+                                                                                }}
+
+                                                                            >
+
+                								                                <MediaGallery
+
+                								                                    className="flex-1"
+
+                								                                    mode="workspace"
+
+                
                       onFileClick={(file) => {
                         // Optional: add custom click handling here if needed
                       }}

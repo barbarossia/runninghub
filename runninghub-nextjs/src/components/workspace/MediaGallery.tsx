@@ -313,7 +313,20 @@ export function MediaGallery({
 	// Click blank area in grid to clear selection
 	const handleBackgroundClick = useCallback(
 		(event: React.MouseEvent<HTMLDivElement>) => {
-			if (event.target === event.currentTarget && hasSelection) {
+			// Check if we have a selection to clear
+			if (!hasSelection) return;
+
+			// Check if the click target or any of its parents is an interactive element
+			const target = event.target as HTMLElement;
+			const isInteractive = target.closest(
+				'button, a, input, select, textarea, [role="button"], [role="checkbox"]',
+			);
+
+			// Also check if we clicked on a card (which acts as a button but might be a div)
+			const isCard = target.closest('[role="gridcell"]');
+
+			// If it's not interactive and not a card, it's the background
+			if (!isInteractive && !isCard) {
 				deselectAll();
 			}
 		},
