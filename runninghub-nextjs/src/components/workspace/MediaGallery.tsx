@@ -583,7 +583,7 @@ export function MediaGallery({
 
 	return (
 		<div
-			className={cn("space-y-4", className)}
+			className={cn("space-y-4 min-h-[500px]", className)}
 			onClick={handleBackgroundClick}
 		>
 			{/* Toolbar */}
