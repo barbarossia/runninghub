@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bot, Plus, Save, Trash2 } from 'lucide-react';
+import { Bot, Plus, Save, Trash2, Play, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBotCenterStore } from '@/store/bot-center-store';
+import { useWorkspaceStore } from '@/store/workspace-store';
+import { useWorkspaceFolder } from '@/store/folder-store';
+import { runAutoSaveDecodeBot, runJobStatusBot } from '@/utils/bots';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -48,7 +51,21 @@ const createBotId = () =>
 	`bot_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 export function BotBuilderTab() {
-	const { bots, addBot, updateBot, removeBot, resetBots } = useBotCenterStore();
+	const {
+		bots,
+		addBot,
+		updateBot,
+		removeBot,
+		resetBots,
+		runStates,
+		setRunState,
+		setJobStatusResult,
+		setAutoSaveDecodeResult,
+	} = useBotCenterStore();
+	const fetchJobs = useWorkspaceStore((state) => state.fetchJobs);
+	const updateJob = useWorkspaceStore((state) => state.updateJob);
+	const { selectedFolder: workspaceFolder } = useWorkspaceFolder();
+
 	const [drafts, setDrafts] = useState<Record<string, BotDefinition>>({});
 	const [dirtyBots, setDirtyBots] = useState<Set<string>>(new Set());
 	const [newBotName, setNewBotName] = useState('');
@@ -91,7 +108,10 @@ export function BotBuilderTab() {
 		setDirtyBots((prev) => new Set(prev).add(botId));
 	};
 
-	const updateDraftConfig = (botId: string, configUpdates: Record<string, any>) => {
+	const updateDraftConfig = (
+		botId: string,
+		configUpdates: Record<string, any>,
+	) => {
 		setDrafts((prev) => ({
 			...prev,
 			[botId]: {
@@ -115,6 +135,66 @@ export function BotBuilderTab() {
 			return next;
 		});
 		toast.success('Bot settings saved');
+	};
+
+	const handleRunBot = async (botId: string) => {
+		// Use draft if available, otherwise store bot
+		const bot = drafts[botId] || bots.find((b) => b.id === botId);
+		if (!bot) return;
+
+		// Save first if dirty
+		if (dirtyBots.has(botId)) {
+			handleSave(botId);
+		}
+
+		if (!bot.enabled) {
+			toast.warning('Enable the bot to run it.');
+			return;
+		}
+
+		setRunState(bot.id, { status: 'running', startedAt: Date.now() });
+		toast.info(`Starting ${bot.name}...`);
+
+		try {
+			await fetchJobs();
+			const latestJobs = useWorkspaceStore.getState().jobs;
+
+			if (bot.type === 'job-status') {
+				const summary = runJobStatusBot(
+					latestJobs,
+					bot.config as JobStatusBotConfig,
+				);
+				setJobStatusResult(bot.id, summary);
+				toast.success(`${bot.name} run completed`);
+			}
+
+			if (bot.type === 'auto-save-decode') {
+				if (!workspaceFolder?.folder_path) {
+					throw new Error('Select a workspace folder first.');
+				}
+				const summary = await runAutoSaveDecodeBot({
+					jobs: latestJobs,
+					config: bot.config as AutoSaveDecodeBotConfig,
+					workspaceFolderPath: workspaceFolder.folder_path,
+					updateJob,
+				});
+				setAutoSaveDecodeResult(bot.id, summary);
+				toast.success(
+					`${bot.name} completed: ${summary.processedOutputs} processed`,
+				);
+			}
+
+			setRunState(bot.id, { status: 'completed', lastRunAt: Date.now() });
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Bot failed to run';
+			setRunState(bot.id, {
+				status: 'error',
+				lastRunAt: Date.now(),
+				error: message,
+			});
+			toast.error(message);
+		}
 	};
 
 	const handleSaveAll = () => {
@@ -250,16 +330,6 @@ export function BotBuilderTab() {
 											}
 										/>
 									</div>
-									<Button
-										variant='outline'
-										size='sm'
-										className='gap-2 text-xs'
-										disabled={!isDirty}
-										onClick={() => handleSave(bot.id)}
-									>
-										<Save className='h-3.5 w-3.5' />
-										Save
-									</Button>
 									{!DEFAULT_BOT_IDS.has(bot.id) && (
 										<Button
 											variant='ghost'
@@ -376,6 +446,32 @@ export function BotBuilderTab() {
 									</div>
 								</div>
 							)}
+
+							<div className='mt-4 flex items-center justify-end gap-2 border-t pt-4'>
+								<Button
+									variant='outline'
+									size='sm'
+									className='gap-2'
+									onClick={() => handleRunBot(bot.id)}
+									disabled={runStates[bot.id]?.status === 'running'}
+								>
+									{runStates[bot.id]?.status === 'running' ? (
+										<Loader2 className='h-4 w-4 animate-spin' />
+									) : (
+										<Play className='h-4 w-4' />
+									)}
+									Run Bot
+								</Button>
+								<Button
+									size='sm'
+									className='gap-2'
+									disabled={!isDirty}
+									onClick={() => handleSave(bot.id)}
+								>
+									<Save className='h-4 w-4' />
+									Save Changes
+								</Button>
+							</div>
 						</Card>
 					);
 				})}

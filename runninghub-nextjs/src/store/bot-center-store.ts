@@ -155,9 +155,9 @@ export const useBotCenterStore = create<BotCenterState>()(
 			},
 			migrate: (persistedState: any) => {
 				if (!persistedState) return persistedState;
-				const bots = Array.isArray(persistedState.bots)
+				const bots = (Array.isArray(persistedState.bots)
 					? persistedState.bots
-					: cloneDefaultBots();
+					: cloneDefaultBots()) as BotDefinition[];
 				const customBots = bots.filter((bot) => !DEFAULT_BOT_IDS.has(bot.id));
 				return {
 					...persistedState,

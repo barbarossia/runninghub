@@ -344,9 +344,15 @@ export function BotCenter() {
 							<div className='text-[11px] text-gray-500'>
 								{selectedBot?.description}
 							</div>
-							{runState?.status && runState.status !== 'idle' && (
+							{runState?.status === 'running' && (
 								<div className='text-[11px] text-gray-400'>
-									Last run: {formatTimestamp(runState?.lastRunAt)}
+									Started: {formatTimestamp(runState.startedAt)}
+								</div>
+							)}
+							{(runState?.status === 'completed' ||
+								runState?.status === 'error') && (
+								<div className='text-[11px] text-gray-400'>
+									Last run: {formatTimestamp(runState.lastRunAt)}
 								</div>
 							)}
 						</div>
