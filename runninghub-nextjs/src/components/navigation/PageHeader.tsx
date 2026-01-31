@@ -4,11 +4,13 @@ import React from "react";
 import Link from "next/link";
 import {
 	ArrowLeft,
+	Bot,
 	Calculator,
 	Home,
 	LucideIcon,
 	MessageSquare,
 } from "lucide-react";
+import { useBotCenterStore } from "@/store/bot-center-store";
 import { useMessageCenterStore } from "@/store/message-center-store";
 import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
@@ -66,6 +68,7 @@ export function PageHeader({
 		useUiPreferencesStore();
 	const { isOpen, dismissedJobIds, readJobIds, setOpen } =
 		useMessageCenterStore();
+	const { isOpen: isBotOpen, setOpen: setBotOpen } = useBotCenterStore();
 	const jobs = useWorkspaceStore((state) => state.jobs);
 
 	const unreadCount = React.useMemo(() => {
@@ -123,6 +126,17 @@ export function PageHeader({
 				)}
 				<ThemeToggle />
 				<ToastToggle />
+				{!isBotOpen && (
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={() => setBotOpen(true)}
+						aria-label="Open bot center"
+						title="Open bot center"
+					>
+						<Bot className="h-4 w-4" />
+					</Button>
+				)}
 				{!isOpen && (
 					<Button
 						variant="ghost"

@@ -171,5 +171,6 @@ export interface VideoConversionTask extends ProcessingTask {
 
 export * from "./caption";
 export * from "./crop";
+export * from "./bot";
 export * from "./video-clip";
 export * from "./workspace";
