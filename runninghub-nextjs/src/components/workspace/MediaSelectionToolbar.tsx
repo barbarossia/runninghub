@@ -574,29 +574,33 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Preview - when image or video files are selected */}
-								{onPreview &&
-									selectedFiles.some(
-										(f) => f.type === "image" || f.type === "video",
-									) && (
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={handlePreview}
-											disabled={toolbarDisabled}
-											className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
-										>
-											<Eye className="h-4 w-4 mr-2" />
-											Preview
-										</Button>
-									)}
+								{onPreview && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handlePreview}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) => f.type === "image" || f.type === "video",
+											)
+										}
+										className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
+									>
+										<Eye className="h-4 w-4 mr-2" />
+										Preview
+									</Button>
+								)}
 
 								{/* Clip - only when videos are selected */}
-								{onClip && selectedFiles.some((f) => f.type === "video") && (
+								{onClip && (
 									<Button
 										variant="default"
 										size="sm"
 										onClick={handleClip}
-										disabled={toolbarDisabled}
+										disabled={
+											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
+										}
 										className="h-9 bg-purple-600 hover:bg-purple-700"
 									>
 										{isClipping ? (
@@ -609,90 +613,95 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Add Caption (Manual) - only if selection has no caption */}
-								{showCaptionButton &&
-									onAddCaption &&
-									selectedFiles.some(
-										(f) =>
-											!f.captionPath &&
-											(f.type === "video" || f.type === "image"),
-									) && (
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => {
-												const filesWithoutCaption = selectedFiles.filter(
-													(f) => !f.captionPath,
-												);
-												onAddCaption(filesWithoutCaption);
-												onDeselectAll?.();
-											}}
-											disabled={toolbarDisabled}
-											className="h-9 border-yellow-100 bg-yellow-50/50 hover:bg-yellow-100 text-yellow-700"
-											title="Add caption text file"
-										>
-											<FilePlus className="h-4 w-4 mr-2" />
-											Add Caption
-										</Button>
-									)}
+								{showCaptionButton && onAddCaption && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											const filesWithoutCaption = selectedFiles.filter(
+												(f) => !f.captionPath,
+											);
+											onAddCaption(filesWithoutCaption);
+											onDeselectAll?.();
+										}}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) =>
+													!f.captionPath &&
+													(f.type === "video" || f.type === "image"),
+											)
+										}
+										className="h-9 border-yellow-100 bg-yellow-50/50 hover:bg-yellow-100 text-yellow-700"
+										title="Add caption text file"
+									>
+										<FilePlus className="h-4 w-4 mr-2" />
+										Add Caption
+									</Button>
+								)}
 
 								{/* Caption - only for videos/images in dataset tab */}
-								{showCaptionButton &&
-									onCaption &&
-									selectedFiles.some(
-										(f) => f.type === "video" || f.type === "image",
-									) && (
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={handleCaption}
-											disabled={toolbarDisabled}
-											className="h-9 border-teal-100 bg-teal-50/50 hover:bg-teal-100 text-teal-700"
-											title="Generate AI captions for media"
-										>
-											{isCaptioning ? (
-												<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-											) : (
-												<MessageSquare className="h-4 w-4 mr-2" />
-											)}
-											{isCaptioning
-												? `Captioning ${captionProgress.current}/${captionProgress.total}...`
-												: `Caption ${selectedCount > 1 ? selectedCount : ""}`}
-										</Button>
-									)}
+								{showCaptionButton && onCaption && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handleCaption}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) => f.type === "video" || f.type === "image",
+											)
+										}
+										className="h-9 border-teal-100 bg-teal-50/50 hover:bg-teal-100 text-teal-700"
+										title="Generate AI captions for media"
+									>
+										{isCaptioning ? (
+											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+										) : (
+											<MessageSquare className="h-4 w-4 mr-2" />
+										)}
+										{isCaptioning
+											? `Captioning ${captionProgress.current}/${captionProgress.total}...`
+											: `Caption ${selectedCount > 1 ? selectedCount : ""}`}
+									</Button>
+								)}
 
 								{/* Export - for images and videos */}
-								{onExport &&
-									selectedFiles.some(
-										(f) => f.type === "image" || f.type === "video",
-									) && (
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={handleExportClick}
-											disabled={toolbarDisabled}
-											className="h-9 border-orange-100 bg-orange-50/50 hover:bg-orange-100 text-orange-700"
-											title="Export to folder"
-										>
-											<Download className="h-4 w-4 mr-2" />
-											Export
-										</Button>
-									)}
+								{onExport && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handleExportClick}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) => f.type === "image" || f.type === "video",
+											)
+										}
+										className="h-9 border-orange-100 bg-orange-50/50 hover:bg-orange-100 text-orange-700"
+										title="Export to folder"
+									>
+										<Download className="h-4 w-4 mr-2" />
+										Export
+									</Button>
+								)}
 
 								{/* FPS Convert - for videos */}
-								{onConvertFps &&
-									selectedFiles.some((f) => f.type === "video") && (
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={handleConvertFpsClick}
-											disabled={toolbarDisabled}
-											className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
-											title="Convert video FPS"
-										>
-											<Zap className="h-4 w-4 mr-2" />
-											FPS Convert
-										</Button>
-									)}
+								{onConvertFps && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={handleConvertFpsClick}
+										disabled={
+											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
+										}
+										className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+										title="Convert video FPS"
+									>
+										<Zap className="h-4 w-4 mr-2" />
+										FPS Convert
+									</Button>
+								)}
 
 								{/* Resize - for images and videos */}
 								{onResize && (
@@ -724,12 +733,12 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Rename - only for single selection */}
-								{isSingleSelection && onRename && (
+								{onRename && (
 									<Button
 										variant="outline"
 										size="sm"
 										onClick={openRenameDialog}
-										disabled={toolbarDisabled}
+										disabled={toolbarDisabled || !isSingleSelection}
 										className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
 									>
 										<Pencil className="h-4 w-4 mr-2" />
@@ -819,30 +828,34 @@ export function MediaSelectionToolbar({
 								</Button>
 
 								{/* Preview - floating mode */}
-								{onPreview &&
-									selectedFiles.some(
-										(f) => f.type === "image" || f.type === "video",
-									) && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={handlePreview}
-											disabled={toolbarDisabled}
-											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-											title="Preview File"
-										>
-											<Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
-											<span className="text-xs">Preview</span>
-										</Button>
-									)}
+								{onPreview && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={handlePreview}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) => f.type === "image" || f.type === "video",
+											)
+										}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Preview File"
+									>
+										<Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
+										<span className="text-xs">Preview</span>
+									</Button>
+								)}
 
 								{/* Clip - floating mode */}
-								{onClip && selectedFiles.some((f) => f.type === "video") && (
+								{onClip && (
 									<Button
 										variant="ghost"
 										size="sm"
 										onClick={handleClip}
-										disabled={toolbarDisabled}
+										disabled={
+											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
+										}
 										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
 										title="Clip Videos"
 									>
@@ -858,76 +871,80 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* Add Caption (Manual) - floating mode */}
-								{showCaptionButton &&
-									onAddCaption &&
-									selectedFiles.some(
-										(f) =>
-											!f.captionPath &&
-											(f.type === "video" || f.type === "image"),
-									) && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => {
-												const filesWithoutCaption = selectedFiles.filter(
-													(f) => !f.captionPath,
-												);
-												onAddCaption(filesWithoutCaption);
-												onDeselectAll?.();
-											}}
-											disabled={toolbarDisabled}
-											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-											title="Add caption text file"
-										>
-											<FilePlus className="h-3.5 w-3.5 mr-2 text-yellow-400" />
-											<span className="text-xs">Add Caption</span>
-										</Button>
-									)}
+								{showCaptionButton && onAddCaption && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => {
+											const filesWithoutCaption = selectedFiles.filter(
+												(f) => !f.captionPath,
+											);
+											onAddCaption(filesWithoutCaption);
+											onDeselectAll?.();
+										}}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) =>
+													!f.captionPath &&
+													(f.type === "video" || f.type === "image"),
+											)
+										}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Add caption text file"
+									>
+										<FilePlus className="h-3.5 w-3.5 mr-2 text-yellow-400" />
+										<span className="text-xs">Add Caption</span>
+									</Button>
+								)}
 
 								{/* Caption - floating mode */}
-								{showCaptionButton &&
-									onCaption &&
-									selectedFiles.some(
-										(f) => f.type === "video" || f.type === "image",
-									) && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={handleCaption}
-											disabled={toolbarDisabled}
-											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-											title="Generate AI captions"
-										>
-											{isCaptioning ? (
-												<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-											) : (
-												<MessageSquare className="h-3.5 w-3.5 mr-2 text-teal-400" />
-											)}
-											<span className="text-xs">
-												{isCaptioning
-													? `${captionProgress.current}/${captionProgress.total}`
-													: "Caption"}
-											</span>
-										</Button>
-									)}
+								{showCaptionButton && onCaption && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={handleCaption}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) => f.type === "video" || f.type === "image",
+											)
+										}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Generate AI captions"
+									>
+										{isCaptioning ? (
+											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+										) : (
+											<MessageSquare className="h-3.5 w-3.5 mr-2 text-teal-400" />
+										)}
+										<span className="text-xs">
+											{isCaptioning
+												? `${captionProgress.current}/${captionProgress.total}`
+												: "Caption"}
+										</span>
+									</Button>
+								)}
 
 								{/* Export - floating mode */}
-								{onExport &&
-									selectedFiles.some(
-										(f) => f.type === "image" || f.type === "video",
-									) && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={handleExportClick}
-											disabled={toolbarDisabled}
-											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-											title="Export to folder"
-										>
-											<Download className="h-3.5 w-3.5 mr-2 text-orange-400" />
-											<span className="text-xs">Export</span>
-										</Button>
-									)}
+								{onExport && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={handleExportClick}
+										disabled={
+											toolbarDisabled ||
+											!selectedFiles.some(
+												(f) => f.type === "image" || f.type === "video",
+											)
+										}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Export to folder"
+									>
+										<Download className="h-3.5 w-3.5 mr-2 text-orange-400" />
+										<span className="text-xs">Export</span>
+									</Button>
+								)}
 
 								{/* Batch Process - floating mode */}
 								{onBatchProcess && (
@@ -951,28 +968,29 @@ export function MediaSelectionToolbar({
 								)}
 
 								{/* FPS Convert - floating mode */}
-								{onConvertFps &&
-									selectedFiles.some((f) => f.type === "video") && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={handleConvertFpsClick}
-											disabled={toolbarDisabled}
-											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-											title="Convert video FPS"
-										>
-											<Zap className="h-3.5 w-3.5 mr-2 text-blue-400" />
-											<span className="text-xs">FPS</span>
-										</Button>
-									)}
+								{onConvertFps && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={handleConvertFpsClick}
+										disabled={
+											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
+										}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title="Convert video FPS"
+									>
+										<Zap className="h-3.5 w-3.5 mr-2 text-blue-400" />
+										<span className="text-xs">FPS</span>
+									</Button>
+								)}
 
 								{/* Rename - only for single selection */}
-								{isSingleSelection && onRename && (
+								{onRename && (
 									<Button
 										variant="ghost"
 										size="sm"
 										onClick={openRenameDialog}
-										disabled={toolbarDisabled}
+										disabled={toolbarDisabled || !isSingleSelection}
 										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
 										title="Rename"
 									>
