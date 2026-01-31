@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
 	Select,
 	SelectContent,
@@ -439,28 +440,52 @@ export function BotBuilderTab() {
 									</div>
 									<div className='space-y-1'>
 										<label className='text-[11px] text-gray-500'>
-											Workflow Filter
+											Workflow Filter (Select multiple)
 										</label>
-										<Select
-											value={(draft.config as AutoSaveDecodeBotConfig).workflowFilter || 'all'}
-											onValueChange={(value) =>
-												updateDraftConfig(bot.id, {
-													workflowFilter: value === 'all' ? '' : value,
-												})
-											}
-										>
-											<SelectTrigger>
-												<SelectValue placeholder="All Workflows" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value='all'>All Workflows</SelectItem>
-												{workflowOptions.map((opt) => (
-													<SelectItem key={opt} value={opt}>
-														{opt}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+										<div className='max-h-32 space-y-2 overflow-y-auto rounded-md border border-gray-200 bg-white p-2'>
+											{workflowOptions.length === 0 && (
+												<div className='text-[11px] text-gray-500'>
+													No workflows available.
+												</div>
+											)}
+											{workflowOptions.map((workflow) => {
+												const currentFilter =
+													(draft.config as AutoSaveDecodeBotConfig)
+														.workflowFilter || '';
+												const selectedSet = new Set(
+													currentFilter
+														.split(',')
+														.map((s) => s.trim())
+														.filter((s) => s.length > 0),
+												);
+												const isSelected = selectedSet.has(workflow);
+
+												return (
+													<label
+														key={workflow}
+														className='flex items-center gap-2 text-xs'
+													>
+														<Checkbox
+															checked={isSelected}
+															onCheckedChange={(checked) => {
+																const next = new Set(selectedSet);
+																if (checked) {
+																	next.add(workflow);
+																} else {
+																	next.delete(workflow);
+																}
+																updateDraftConfig(bot.id, {
+																	workflowFilter: Array.from(next).join(','),
+																});
+															}}
+														/>
+														<span className='truncate text-gray-700'>
+															{workflow}
+														</span>
+													</label>
+												);
+											})}
+										</div>
 									</div>
 									<div className='flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-600'>
 										Only unsaved outputs
