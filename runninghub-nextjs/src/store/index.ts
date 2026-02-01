@@ -9,5 +9,4 @@ export { useCaptionStore } from "./caption-store";
 export { useMessageCenterStore } from "./message-center-store";
 export { useBotCenterStore } from "./bot-center-store";
 export { useWorkspaceStore } from "./workspace-store";
-export * from "./process-store";
 export * from "./video-clip-store";

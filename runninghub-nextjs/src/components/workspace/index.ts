@@ -26,8 +26,5 @@ export type { JobDetailProps } from "./JobDetail";
 
 export { DuckDecodeButton } from "./DuckDecodeButton";
 
-export { YoutubeDownloader } from "./YoutubeDownloader";
-export type { YoutubeDownloaderProps } from "./YoutubeDownloader";
-
 export { ComplexWorkflowRunDialog } from "./ComplexWorkflowRunDialog";
 export type { ComplexWorkflowRunDialogProps } from "./ComplexWorkflowRunDialog";
