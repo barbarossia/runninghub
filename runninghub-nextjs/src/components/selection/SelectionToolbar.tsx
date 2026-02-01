@@ -34,7 +34,7 @@ import { useImageStore } from "@/store/image-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { BaseSelectionToolbar } from "./BaseSelectionToolbar";
-import { DuckDecodeDialog } from "@/components/images/DuckDecodeDialog";
+import { DuckDecodeDialog } from "@/components/selection/DuckDecodeDialog";
 import { ComplexWorkflowRunDialog } from "@/components/workspace/ComplexWorkflowRunDialog";
 
 interface SelectionToolbarProps {

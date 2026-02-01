@@ -35,7 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MediaGallery } from "@/components/workspace/MediaGallery";
 import { MediaSelectionToolbar } from "@/components/workspace/MediaSelectionToolbar";
-import { MediaSortControls } from "@/components/images";
+import { MediaSortControls } from "@/components/workspace/MediaSortControls";
 import { QuickRunWorkflowDialog } from "@/components/workspace/QuickRunWorkflowDialog";
 import { WorkflowList } from "@/components/workspace/WorkflowList";
 import { WorkflowEditor } from "@/components/workspace/WorkflowEditor";
@@ -46,7 +46,6 @@ import { JobDetail } from "@/components/workspace/JobDetail";
 import { ComplexWorkflowBuilder } from "@/components/workspace/ComplexWorkflowBuilder";
 import { ComplexWorkflowList } from "@/components/workspace/ComplexWorkflowList";
 import { ComplexWorkflowRunner } from "@/components/workspace/ComplexWorkflowRunner";
-import { YoutubeDownloader } from "@/components/workspace/YoutubeDownloader";
 import { VideoClipConfiguration } from "@/components/videos/VideoClipConfiguration";
 import { VideoClipSelectionToolbar } from "@/components/videos/VideoClipSelectionToolbar";
 import { VideoGallery } from "@/components/videos/VideoGallery";
@@ -69,7 +68,6 @@ import {
 	AlertCircle,
 	Play,
 	Scissors,
-	Youtube,
 	Zap,
 	Database,
 	RefreshCw,
@@ -161,7 +159,6 @@ export default function WorkspacePage() {
 	// Default active tab to media
 	const [activeTab, setActiveTab] = useState<
 		| "media"
-		| "youtube"
 		| "clip"
 		| "convert"
 		| "dataset"
@@ -225,7 +222,6 @@ export default function WorkspacePage() {
 			tabParam &&
 			[
 				"media",
-				"youtube",
 				"clip",
 				"convert",
 				"dataset",
@@ -2548,13 +2544,6 @@ export default function WorkspacePage() {
 									Media Gallery
 								</TabsTrigger>
 								<TabsTrigger
-									value="youtube"
-									className="flex items-center gap-2 min-w-fit px-4"
-								>
-									<Youtube className="h-4 w-4" />
-									YouTube
-								</TabsTrigger>
-								<TabsTrigger
 									value="clip"
 									className="flex items-center gap-2 min-w-fit px-4"
 								>
@@ -2686,33 +2675,6 @@ export default function WorkspacePage() {
 										setShowResizeDialog(true);
 									}}
 								/>
-							</TabsContent>
-
-							{/* YouTube Download Tab */}
-							<TabsContent value="youtube" className="mt-6">
-								<div className="max-w-2xl mx-auto">
-									<div className="mb-6">
-										<h3 className="text-lg font-semibold">
-											Download YouTube Videos
-										</h3>
-										<p className="text-sm text-gray-600 mt-1">
-											Download videos from YouTube (including shorts) directly
-											to your workspace folder
-										</p>
-									</div>
-									<YoutubeDownloader
-										onDownloadStart={(taskId) => {
-											setActiveConsoleTaskId(taskId);
-										}}
-										onDownloadComplete={(success) => {
-											if (success) {
-												// Refresh media gallery to show downloaded video
-												handleRefresh(false);
-											}
-											setActiveConsoleTaskId(null);
-										}}
-									/>
-								</div>
 							</TabsContent>
 
 							{/* Clip Tab */}
