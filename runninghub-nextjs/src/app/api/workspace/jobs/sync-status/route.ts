@@ -104,7 +104,14 @@ const mapRemoteStatus = (
 	return { status: "unknown", isTerminal: false, error: message };
 };
 
+const isLocalWorkflowJob = (job: Job): boolean => {
+	if (job.workflowId?.startsWith("local_")) return true;
+	if (job.sourceWorkflowId?.startsWith("local_")) return true;
+	return false;
+};
+
 const shouldSyncRemotely = (job: Job, mode: SyncMode): boolean => {
+	if (isLocalWorkflowJob(job)) return false;
 	if (!job.runninghubTaskId) return false;
 	if (mode === "trusted") return true;
 	if (!job.lastStatusSyncAt) return true;
@@ -193,13 +200,6 @@ export async function POST(request: NextRequest) {
 		const apiHost =
 			process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST || "www.runninghub.cn";
 
-		if (!apiKey) {
-			return NextResponse.json(
-				{ success: false, error: "RUNNINGHUB_API_KEY not configured" },
-				{ status: 500 },
-			);
-		}
-
 		const allJobs = await loadJobsFromDisk();
 		const filteredJobs = body.jobIds?.length
 			? allJobs.filter((job) => body.jobIds?.includes(job.id))
@@ -210,6 +210,26 @@ export async function POST(request: NextRequest) {
 		const errors: Array<{ jobId: string; error: string }> = [];
 
 		await withConcurrency(targetJobs, 3, async (job, idx) => {
+			if (isLocalWorkflowJob(job)) {
+				const now = Date.now();
+				await updateJobFile(job.id, {
+					lastStatusSyncAt: now,
+					lastStatusSource: "local",
+				});
+
+				resolvedJobs[idx] = {
+					id: job.id,
+					workflowId: job.workflowId,
+					workflowName: job.workflowName,
+					status: job.status,
+					timestamp: getJobTimestamp(job),
+					verified: true,
+					source: "local",
+					reason: "local_workflow",
+				};
+				return;
+			}
+
 			if (!job.runninghubTaskId) {
 				resolvedJobs[idx] = {
 					id: job.id,
@@ -234,6 +254,20 @@ export async function POST(request: NextRequest) {
 					verified: true,
 					source: "runninghub",
 					reason: "recently_verified",
+				};
+				return;
+			}
+
+			if (!apiKey) {
+				resolvedJobs[idx] = {
+					id: job.id,
+					workflowId: job.workflowId,
+					workflowName: job.workflowName,
+					status: "unknown",
+					timestamp: getJobTimestamp(job),
+					verified: false,
+					source: "local",
+					reason: "missing_api_key",
 				};
 				return;
 			}
