@@ -55,6 +55,7 @@ import { ImagePreviewModal } from "@/components/workspace/ImagePreviewModal";
 import { ExportConfiguration } from "@/components/workspace/ExportConfiguration";
 import { ResizeConfiguration } from "@/components/workspace/ResizeConfiguration";
 import { VideoConvertConfiguration } from "@/components/workspace/VideoConvertConfiguration";
+import { BotBuilderTab } from "@/components/workspace/BotBuilderTab";
 import { CropConfiguration } from "@/components/videos/CropConfiguration";
 import { ProgressModal } from "@/components/progress/ProgressModal";
 import {
@@ -77,6 +78,7 @@ import {
 	WifiOff,
 	Plus,
 	Clock,
+	Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/utils/logger";
@@ -167,6 +169,7 @@ export default function WorkspacePage() {
 		| "run-complex-workflow"
 		| "workflows"
 		| "jobs"
+		| "bot-builder"
 	>("media");
 	const [isEditingWorkflow, setIsEditingWorkflow] = useState(false);
 	const [editingWorkflow, setEditingWorkflow] = useState<
@@ -2600,6 +2603,13 @@ export default function WorkspacePage() {
 									<Clock className="h-4 w-4" />
 									Job History
 								</TabsTrigger>
+								<TabsTrigger
+									value="bot-builder"
+									className="flex items-center gap-2 min-w-fit px-4"
+								>
+									<Bot className="h-4 w-4" />
+									Bot Builder
+								</TabsTrigger>
 							</TabsList>
 
 							{/* Media Gallery Tab */}
@@ -3107,6 +3117,11 @@ export default function WorkspacePage() {
 								) : (
 									<JobList onJobClick={(job) => setSelectedJob(job.id)} />
 								)}
+							</TabsContent>
+
+							{/* Bot Builder Tab */}
+							<TabsContent value="bot-builder" className="mt-6">
+								<BotBuilderTab />
 							</TabsContent>
 						</Tabs>
 					</div>
