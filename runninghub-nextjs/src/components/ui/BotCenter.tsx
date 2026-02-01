@@ -24,11 +24,18 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import {
-	runAutoSaveDecodeBot,
-	runJobStatusBot,
-} from '@/utils/bots';
+import { runAutoSaveDecodeBot, runJobStatusBot } from '@/utils/bots';
 import type { AutoSaveDecodeBotConfig, JobStatusBotConfig } from '@/types/bot';
+type ResolvedJobStatus = {
+	id: string;
+	workflowId: string;
+	workflowName?: string;
+	status: string;
+	timestamp: number;
+	verified: boolean;
+	source: 'runninghub' | 'local';
+	reason?: string;
+};
 
 const formatTimestamp = (timestamp?: number): string => {
 	if (!timestamp) return '—';
@@ -73,6 +80,26 @@ export function BotCenter() {
 		[bots, selectedBotId],
 	);
 
+	const syncJobStatuses = async (
+		config: JobStatusBotConfig,
+	): Promise<ResolvedJobStatus[]> => {
+		const response = await fetch('/api/workspace/jobs/sync-status', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				mode: 'trusted',
+				maxJobs: Math.max(1, config.recentLimit),
+			}),
+		});
+
+		const data = await response.json();
+		if (!response.ok || !data.success) {
+			throw new Error(data.error || 'Failed to sync job status');
+		}
+
+		return data.resolvedJobs as ResolvedJobStatus[];
+	};
+
 	const runBot = async (botId?: string) => {
 		const latestBots = useBotCenterStore.getState().bots;
 		const bot = latestBots.find((entry) => entry.id === botId);
@@ -84,12 +111,12 @@ export function BotCenter() {
 
 		setRunState(bot.id, { status: 'running', startedAt: Date.now() });
 		try {
-			await fetchJobs();
-			const latestJobs = useWorkspaceStore.getState().jobs;
-
 			if (bot.type === 'job-status') {
+				const resolvedJobs = await syncJobStatuses(
+					bot.config as JobStatusBotConfig,
+				);
 				const summary = runJobStatusBot(
-					latestJobs,
+					resolvedJobs,
 					bot.config as JobStatusBotConfig,
 				);
 				setJobStatusResult(bot.id, summary);
@@ -99,6 +126,8 @@ export function BotCenter() {
 				if (!workspaceFolder?.folder_path) {
 					throw new Error('Select a workspace folder first.');
 				}
+				await fetchJobs();
+				const latestJobs = useWorkspaceStore.getState().jobs;
 				const summary = await runAutoSaveDecodeBot({
 					jobs: latestJobs,
 					config: bot.config as AutoSaveDecodeBotConfig,
@@ -147,6 +176,13 @@ export function BotCenter() {
 		const statusEntries = Object.entries(summary.statusCounts);
 		return (
 			<div className='grid gap-3 text-xs text-gray-600 lg:grid-cols-[220px,1fr]'>
+				{summary.unverifiedCount ? (
+					<div className='rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 lg:col-span-2'>
+						{summary.unverifiedCount} job
+						{summary.unverifiedCount === 1 ? '' : 's'} could not be verified
+						from RunningHub and are marked as unknown.
+					</div>
+				) : null}
 				<div className='grid grid-cols-2 gap-2'>
 					{statusEntries.map(([status, count]) => (
 						<div

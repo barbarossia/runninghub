@@ -27,6 +27,17 @@ import type {
 	JobStatusBotConfig,
 } from '@/types/bot';
 
+type ResolvedJobStatus = {
+	id: string;
+	workflowId: string;
+	workflowName?: string;
+	status: string;
+	timestamp: number;
+	verified: boolean;
+	source: 'runninghub' | 'local';
+	reason?: string;
+};
+
 const DEFAULT_BOT_IDS = new Set(['job-status-bot', 'auto-save-decode-bot']);
 
 const typeLabels: Record<BotType, string> = {
@@ -172,12 +183,27 @@ export function BotBuilderTab() {
 		toast.info(`Starting ${bot.name}...`);
 
 		try {
-			await fetchJobs();
-			const latestJobs = useWorkspaceStore.getState().jobs;
-
 			if (bot.type === 'job-status') {
+				const response = await fetch('/api/workspace/jobs/sync-status', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						mode: 'trusted',
+						maxJobs: Math.max(
+							1,
+							(bot.config as JobStatusBotConfig).recentLimit,
+						),
+					}),
+				});
+
+				const data = await response.json();
+				if (!response.ok || !data.success) {
+					throw new Error(data.error || 'Failed to sync job status');
+				}
+
+				const resolvedJobs = data.resolvedJobs as ResolvedJobStatus[];
 				const summary = runJobStatusBot(
-					latestJobs,
+					resolvedJobs,
 					bot.config as JobStatusBotConfig,
 				);
 				setJobStatusResult(bot.id, summary);
@@ -188,6 +214,8 @@ export function BotBuilderTab() {
 				if (!workspaceFolder?.folder_path) {
 					throw new Error('Select a workspace folder first.');
 				}
+				await fetchJobs();
+				const latestJobs = useWorkspaceStore.getState().jobs;
 				const summary = await runAutoSaveDecodeBot({
 					jobs: latestJobs,
 					config: bot.config as AutoSaveDecodeBotConfig,

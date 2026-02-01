@@ -389,6 +389,10 @@ export interface Job {
 	error?: string;
 	createdAt: number;
 	folderPath?: string;
+	lastStatusSyncAt?: number; // Last time status was verified from RunningHub
+	lastStatusSource?: "runninghub" | "local";
+	lastRemoteCode?: number;
+	lastRemoteMessage?: string;
 
 	// Post-processing cleanup
 	deleteSourceFiles: boolean; // Whether to delete source files after completion
