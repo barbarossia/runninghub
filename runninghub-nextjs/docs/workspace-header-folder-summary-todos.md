@@ -1,0 +1,4 @@
+- [x] Review Workspace header and SelectedFolderHeader usage.
+- [x] Extend `PageHeader` to render optional folder summary + refresh action.
+- [x] Pass folder name/path/item count from Workspace page and remove `SelectedFolderHeader`.
+- [ ] Manual check: header layout on desktop/mobile, refresh still works.

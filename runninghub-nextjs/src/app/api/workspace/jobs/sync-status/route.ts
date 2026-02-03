@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import type { Job } from "@/types/workspace";
+import { getDisplayJobStatus } from "@/utils/job-status";
 
 type SyncMode = "trusted" | "smart";
 
@@ -231,11 +232,12 @@ export async function POST(request: NextRequest) {
 			}
 
 			if (!job.runninghubTaskId) {
+				const displayStatus = getDisplayJobStatus(job);
 				resolvedJobs[idx] = {
 					id: job.id,
 					workflowId: job.workflowId,
 					workflowName: job.workflowName,
-					status: "unknown",
+					status: displayStatus,
 					timestamp: getJobTimestamp(job),
 					verified: false,
 					source: "local",

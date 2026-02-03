@@ -47,6 +47,7 @@ import { downloadFile } from "@/lib/download";
 import { useOutputTranslation } from "@/hooks/useOutputTranslation";
 import { toast } from "sonner";
 import { API_ENDPOINTS } from "@/constants";
+import { getDisplayJobStatus } from "@/utils/job-status";
 import type { Job, JobResult } from "@/types/workspace";
 import { DuckDecodeButton } from "./DuckDecodeButton";
 import { JobInputEditor } from "./JobInputEditor";
@@ -85,6 +86,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	const [isReQuerying, setIsReQuerying] = useState(false);
 	const [isLoadingResults, setIsLoadingResults] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
+	const [isRefreshing, setIsRefreshing] = useState(false);
 
 	// State for split view language selection
 	const [leftLang, setLeftLang] = useState<"original" | "en" | "zh">("en");
@@ -141,6 +143,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	const { isTranslating, translatedCount } = useOutputTranslation(jobId);
 
 	const job = getJobById(jobId);
+	const displayStatus = job ? getDisplayJobStatus(job) : null;
 
 	// Fetch complex workflow execution if applicable
 	useEffect(() => {
@@ -204,30 +207,54 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 		}
 	}, [resolvedResults?.textOutputs]);
 
-	// Fetch fresh job data from local job.json when jobId changes
-	useEffect(() => {
-		const fetchJobFromDisk = async () => {
+	const refreshJobFromDisk = useCallback(
+		async (
+			options: { resetResults?: boolean; silent?: boolean } = {},
+		) => {
 			if (!jobId) return;
 
+			if (options.resetResults) {
+				setResultOverrides(null);
+				setHasLoadedResults(false);
+			}
+
+			setIsRefreshing(true);
 			try {
 				const response = await fetch(`/api/workspace/jobs/${jobId}`);
-				if (response.ok) {
-					const data = await response.json();
-					if (data.success && data.job) {
-						setResultOverrides(data.job.results || null);
-						// Update store with fresh data from disk
-						updateJob(jobId, data.job);
-					}
+				if (!response.ok) {
+					throw new Error(`Job refresh failed: ${response.status}`);
 				}
+				const data = await response.json();
+				if (data.success && data.job) {
+					setResultOverrides(data.job.results || null);
+					setHasLoadedResults(Boolean(data.job.results));
+					updateJob(jobId, data.job);
+					if (!options.silent) {
+						toast.success("Job refreshed from disk");
+					}
+					return;
+				}
+				throw new Error(data.error || "Failed to refresh job from disk");
 			} catch (error) {
 				console.error("Failed to fetch job from disk:", error);
+				if (!options.silent) {
+					const errorMessage =
+						error instanceof Error
+							? error.message
+							: "Failed to refresh job from disk";
+					toast.error(errorMessage);
+				}
+			} finally {
+				setIsRefreshing(false);
 			}
-		};
+		},
+		[jobId, updateJob],
+	);
 
-		setResultOverrides(null);
-		setHasLoadedResults(false);
-		fetchJobFromDisk();
-	}, [jobId]);
+	// Fetch fresh job data from local job.json when jobId changes
+	useEffect(() => {
+		refreshJobFromDisk({ resetResults: true, silent: true });
+	}, [refreshJobFromDisk]);
 
 	// Initialize editable inputs when job changes
 	useEffect(() => {
@@ -925,8 +952,13 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 					<div>
 						<div className="flex items-center gap-3">
 							<h2 className="text-lg font-semibold">{job.workflowName}</h2>
-							<Badge className={cn("capitalize", getStatusColor(job.status))}>
-								{job.status}
+							<Badge
+								className={cn(
+									"capitalize",
+									getStatusColor(displayStatus || job.status),
+								)}
+							>
+								{displayStatus || job.status}
 							</Badge>
 							{job.runNumber && (
 								<Badge variant="outline" className="text-xs">
@@ -949,7 +981,22 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 				</div>
 
 				<div className="flex gap-2">
-					{(job.runninghubTaskId || job.status === "failed") && (
+					<Button
+						onClick={() => refreshJobFromDisk({ silent: false })}
+						disabled={isRefreshing}
+						variant="outline"
+						size="sm"
+						title="Refresh job from disk"
+					>
+						<RefreshCw
+							className={cn(
+								"h-4 w-4 mr-1",
+								isRefreshing && "animate-spin",
+							)}
+						/>
+						Refresh
+					</Button>
+					{(job.runninghubTaskId || displayStatus === "failed") && (
 						<Button
 							onClick={handleReQueryStatus}
 							disabled={isReQuerying || !job.runninghubTaskId}
@@ -988,7 +1035,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 							</>
 						)}
 					</Button>
-					{(job.status === "completed" || job.status === "failed") && (
+					{(displayStatus === "completed" || displayStatus === "failed") && (
 						<Button onClick={handleReRun} disabled={isReRunning} size="sm">
 							<RefreshCw
 								className={cn("h-4 w-4 mr-1", isReRunning && "animate-spin")}
@@ -1127,7 +1174,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 
 					{/* Main Content Area */}
 					<div className="flex-1 min-h-0 flex flex-col gap-4">
-						{job.status === "failed" && job.error && (
+						{displayStatus === "failed" && job.error && (
 							<Card className="p-4 border-red-200 bg-red-50 shrink-0">
 								<h3 className="font-medium text-red-900 mb-1">Error</h3>
 								<p className="text-sm text-red-700">{job.error}</p>
@@ -1266,15 +1313,15 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 												{/* Show decoded file info if available */}
 												{decodedFile && (
 													<div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-														<div className="flex items-center justify-between">
-															<div className="flex items-center gap-2">
+														<div className="flex flex-wrap items-center gap-2">
+															<div className="flex items-center gap-2 min-w-0 flex-1">
 																<CheckCircle2 className="h-3 w-3 text-green-600" />
-																<p className="text-xs font-medium text-green-800">
+																<p className="text-xs font-medium text-green-800 break-all">
 																	Decoded:{" "}
 																	{getBasename(decodedFile.decodedPath)}
 																</p>
 															</div>
-															<div className="flex gap-2">
+															<div className="flex flex-wrap gap-2 sm:ml-auto">
 																<Button
 																	variant="outline"
 																	size="sm"

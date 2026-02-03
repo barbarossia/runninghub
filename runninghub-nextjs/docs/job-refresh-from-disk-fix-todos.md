@@ -1,0 +1,5 @@
+- [x] Review Job History and Job Detail refresh/re-query UI and current disk-fetch logic.
+- [x] Add a reusable "refresh from disk" handler in Job Detail and expose it via a header button.
+- [x] Add a per-job "refresh from disk" action in Job History for jobs missing `runninghubTaskId`.
+- [x] Update toast/loading states and ensure store updates reflect refreshed job data.
+- [ ] Manual check: refresh a stuck-running job without `runninghubTaskId` and confirm status updates.

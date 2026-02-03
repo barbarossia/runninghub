@@ -14,7 +14,6 @@ import { useFolderSelection } from "@/hooks/useFolderSelection";
 import { useAutoLoadFolder } from "@/hooks/useAutoLoadFolder";
 import { useFileSystem } from "@/hooks";
 import { FolderSelectionLayout } from "@/components/folder/FolderSelectionLayout";
-import { SelectedFolderHeader } from "@/components/folder/SelectedFolderHeader";
 import { ConsoleViewer } from "@/components/ui/ConsoleViewer";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -2459,6 +2458,18 @@ export default function WorkspacePage() {
 					showBackButton={!!selectedFolder}
 					onBackClick={handleBackToSelection}
 					colorVariant="purple"
+					folderSummary={
+						selectedFolder
+							? {
+									name: selectedFolder.folder_name,
+									path: selectedFolder.folder_path,
+									itemCount: mediaFiles.length,
+									itemType: "images",
+									onRefresh: () => handleRefresh(false),
+									isLoading: false,
+								}
+							: undefined
+					}
 				/>
 
 				{/* Error Display */}
@@ -2486,16 +2497,6 @@ export default function WorkspacePage() {
 				) : (
 					/* Selected Folder Display */
 					<div className="space-y-6">
-						<SelectedFolderHeader
-							folderName={selectedFolder.folder_name}
-							folderPath={selectedFolder.folder_path}
-							itemCount={mediaFiles.length}
-							itemType="images"
-							isVirtual={selectedFolder.is_virtual}
-							isLoading={false}
-							onRefresh={() => handleRefresh(false)}
-							colorVariant="purple"
-						/>
 						<div className="flex items-center gap-2 text-xs text-muted-foreground">
 							<button
 								onClick={() => {

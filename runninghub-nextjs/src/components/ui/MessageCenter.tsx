@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getDisplayJobStatus } from "@/utils/job-status";
 import {
 	AlertCircle,
 	CheckCircle2,
@@ -147,8 +148,9 @@ export function MessageCenter() {
 						</div>
 					) : (
 						visibleJobs.map((job) => {
-							const status = statusStyles[job.status];
-							const StatusIcon = statusIcons[job.status];
+							const displayStatus = getDisplayJobStatus(job);
+							const status = statusStyles[displayStatus];
+							const StatusIcon = statusIcons[displayStatus];
 							return (
 								<div
 									key={job.id}
@@ -160,7 +162,7 @@ export function MessageCenter() {
 												className={cn(
 													"h-4 w-4",
 													status.className,
-													job.status === "running" && "animate-spin",
+													displayStatus === "running" && "animate-spin",
 												)}
 											/>
 											<div className="min-w-0">
@@ -176,7 +178,7 @@ export function MessageCenter() {
 													{formatTimestamp(getJobTimestamp(job))}
 													{job.taskId && ` • Task ${job.taskId}`}
 												</div>
-												{job.error && job.status === "failed" && (
+												{job.error && displayStatus === "failed" && (
 													<div className="mt-1 text-[11px] text-red-600 line-clamp-2">
 														{job.error}
 													</div>
