@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
 	Bot,
 	Loader2,
@@ -56,6 +56,7 @@ const statusBadgeClasses: Record<string, string> = {
 };
 
 export function BotCenter() {
+	const containerRef = useRef<HTMLDivElement | null>(null);
 	const {
 		isOpen,
 		dockMode,
@@ -318,12 +319,34 @@ export function BotCenter() {
 		);
 	};
 
+	useEffect(() => {
+		if (!isOpen) return;
+
+		const handlePointerDown = (event: PointerEvent) => {
+			const target = event.target as HTMLElement | null;
+			if (!target) return;
+
+			const ignoredParent = target.closest(
+				'[data-bot-center-ignore-outside="true"]',
+			);
+			if (ignoredParent) return;
+
+			if (containerRef.current?.contains(target)) return;
+			setOpen(false);
+		};
+
+		document.addEventListener('pointerdown', handlePointerDown);
+		return () => {
+			document.removeEventListener('pointerdown', handlePointerDown);
+		};
+	}, [isOpen, setOpen]);
+
 	if (!isOpen) {
 		return null;
 	}
 
 	return (
-		<div className={containerClassName}>
+		<div className={containerClassName} ref={containerRef}>
 			<Card className='w-[720px] border border-blue-100 bg-white/95 shadow-lg backdrop-blur'>
 				<div className='flex items-center justify-between border-b border-blue-100 px-3 py-2'>
 					<div className='flex items-center gap-2 text-sm font-semibold text-gray-800'>
@@ -363,7 +386,7 @@ export function BotCenter() {
 						<SelectTrigger className='w-full'>
 							<SelectValue placeholder='Select a bot' />
 						</SelectTrigger>
-						<SelectContent>
+						<SelectContent data-bot-center-ignore-outside="true">
 							{bots.map((bot) => (
 								<SelectItem key={bot.id} value={bot.id}>
 									{bot.name}

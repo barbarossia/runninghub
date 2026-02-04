@@ -327,6 +327,7 @@ export default function WorkspacePage() {
 	// Store mediaSubscription in a ref to avoid state-dependent effect loops
 	const mediaSubscriptionRef = useRef<EventSource | null>(null);
 	const isMediaMountedRef = useRef(true);
+	const selectedFolderPathRef = useRef<string | null>(null);
 	const [isMediaLive, setIsMediaLive] = useState(false);
 	// Manual override for live media subscription
 	// true = forced on, false = forced off, null = auto (default)
@@ -340,6 +341,7 @@ export default function WorkspacePage() {
 			"[Workspace] Resetting manualLiveOverride due to folder change",
 			{ toast: false },
 		);
+		selectedFolderPathRef.current = selectedFolder?.folder_path ?? null;
 		setManualLiveOverride(null);
 	}, [selectedFolder]);
 
@@ -409,8 +411,54 @@ export default function WorkspacePage() {
 
 	// Helper to process and update media files
 	const processFolderContents = useCallback(
-		(result: any) => {
+		(result: any, expectedFolderPath?: string | null) => {
 			if (!result) return;
+			const normalizePath = (value: string) => value.replace(/\/+$/, "");
+			const currentPath = selectedFolderPathRef.current
+				? normalizePath(selectedFolderPathRef.current)
+				: null;
+			const requestPath = expectedFolderPath
+				? normalizePath(expectedFolderPath)
+				: null;
+			const responsePath = result.current_path
+				? normalizePath(result.current_path)
+				: null;
+
+			if (currentPath && requestPath && currentPath !== requestPath) {
+				console.warn(
+					"[processFolderContents] Ignoring stale folder contents (folder changed before response)",
+					{
+						currentPath,
+						requestPath,
+						responsePath,
+					},
+				);
+				return;
+			}
+
+			if (requestPath && responsePath && requestPath !== responsePath) {
+				console.warn(
+					"[processFolderContents] Ignoring mismatched folder contents (request/response mismatch)",
+					{
+						currentPath,
+						requestPath,
+						responsePath,
+					},
+				);
+				return;
+			}
+
+			if (currentPath && responsePath && currentPath !== responsePath) {
+				console.warn(
+					"[processFolderContents] Ignoring mismatched folder contents (response/current mismatch)",
+					{
+						currentPath,
+						requestPath,
+						responsePath,
+					},
+				);
+				return;
+			}
 
 			// DEBUG: Log raw API data
 			console.log(
@@ -500,7 +548,7 @@ export default function WorkspacePage() {
 			// Images will be validated lazily when selected instead
 			// validateAllImagesForDuck(uniqueFiles as MediaFile[]);
 		},
-		[setMediaFiles, validateAllImagesForDuck],
+		[mergeMediaFiles, validateAllImagesForDuck],
 	);
 
 	const handleRefresh = useCallback(
@@ -511,7 +559,7 @@ export default function WorkspacePage() {
 					selectedFolder.session_id,
 					silent,
 				);
-				processFolderContents(result);
+				processFolderContents(result, selectedFolder.folder_path);
 			}
 		},
 		[selectedFolder, loadFolderContents, processFolderContents],
@@ -806,7 +854,7 @@ export default function WorkspacePage() {
 			// Folder is automatically set as selected by the hook
 			// If contents were provided during validation, use them directly
 			if (contents) {
-				processFolderContents(contents);
+				processFolderContents(contents, folder?.folder_path);
 			}
 			// Otherwise, the useEffect below will load contents when selectedFolder changes
 		},
@@ -835,7 +883,7 @@ export default function WorkspacePage() {
 				selectedFolder.folder_path,
 				selectedFolder.session_id,
 			).then((result) => {
-				processFolderContents(result);
+				processFolderContents(result, selectedFolder.folder_path);
 			});
 		} else {
 			console.log("[WorkspacePage] Selected folder cleared");
