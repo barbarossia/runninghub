@@ -918,6 +918,7 @@ async function processLocalJobOutputs(
 	jobId: string,
 	inputs: FileInputAssignment[],
 	inputMtimes: Map<string, number>,
+	outputFileName?: string,
 ) {
 	try {
 		await writeLog("Processing local job outputs...", "info", taskId);
@@ -941,6 +942,21 @@ async function processLocalJobOutputs(
 		const textOutputs: any[] = [];
 
 		const inputPaths = new Set(inputs.map((i) => i.filePath));
+		const primaryInputPath = inputs[0]?.filePath;
+
+		const resolveOutputFileName = (rawName: string, inputPath: string) => {
+			const trimmed = rawName.trim();
+			if (!trimmed) return null;
+
+			const baseName = path.basename(trimmed);
+			if (!baseName) return null;
+
+			const hasExtension = path.extname(baseName);
+			if (hasExtension) return baseName;
+
+			const inputExt = path.extname(inputPath);
+			return inputExt ? `${baseName}${inputExt}` : baseName;
+		};
 
 		for (const fileName of files) {
 			// Skip system files and result dir
@@ -1021,6 +1037,58 @@ async function processLocalJobOutputs(
 			}
 		}
 
+		if (outputFileName && primaryInputPath) {
+			if (processedOutputs.length === 1) {
+				const resolvedName = resolveOutputFileName(
+					outputFileName,
+					primaryInputPath,
+				);
+				if (resolvedName) {
+					const targetPath = path.join(workspaceOutputsDir, resolvedName);
+					const outputEntry = processedOutputs[0];
+					const previousPath = outputEntry.path;
+					if (path.basename(outputEntry.path) !== resolvedName) {
+						try {
+							await fs.access(targetPath);
+							await writeLog(
+								`Output rename skipped; target already exists: ${resolvedName}`,
+								"warning",
+								taskId,
+							);
+						} catch {
+							await fs.rename(previousPath, targetPath);
+							outputEntry.path = targetPath;
+							outputEntry.fileName = resolvedName;
+							outputEntry.workspacePath = path.join(
+								jobId,
+								"result",
+								resolvedName,
+							);
+
+							textOutputs.forEach((output) => {
+								if (output.filePath === previousPath) {
+									output.filePath = targetPath;
+									output.fileName = resolvedName;
+								}
+							});
+
+							await writeLog(
+								`Renamed output to ${resolvedName}`,
+								"success",
+								taskId,
+							);
+						}
+					}
+				}
+			} else {
+				await writeLog(
+					`Output rename skipped; expected 1 output, found ${processedOutputs.length}`,
+					"warning",
+					taskId,
+				);
+			}
+		}
+
 		if (processedOutputs.length === 0) {
 			await writeLog("No output files found", "warning", taskId);
 		}
@@ -1037,6 +1105,164 @@ async function processLocalJobOutputs(
 			error instanceof Error ? error.message : "Local output processing failed";
 		await writeLog(`Output processing error: ${errorMessage}`, "error", taskId);
 	}
+}
+
+async function getOriginalFileNameFromExecution(
+	seriesId: string | undefined,
+): Promise<string | null> {
+	if (!seriesId || !seriesId.startsWith("exec_")) {
+		return null;
+	}
+
+	try {
+		const fs = await import("fs/promises");
+		const path = await import("path");
+		const executionPath = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			"complex-executions",
+			seriesId,
+			"execution.json",
+		);
+		const content = await fs.readFile(executionPath, "utf-8");
+		const execution = JSON.parse(content);
+		const filePath =
+			execution?.steps?.[0]?.inputs?.fileInputs?.[0]?.filePath || "";
+		if (!filePath) return null;
+		return path.basename(filePath);
+	} catch (error) {
+		console.error("Failed to read execution.json:", error);
+		return null;
+	}
+}
+
+async function applyDuckDecodeWorkspaceOptions(params: {
+	taskId: string;
+	jobId: string;
+	seriesId?: string;
+	saveToWorkspace: boolean;
+	renameToOriginal: boolean;
+}) {
+	const { taskId, jobId, seriesId, saveToWorkspace, renameToOriginal } = params;
+
+	if (!saveToWorkspace && !renameToOriginal) {
+		return;
+	}
+
+	if (renameToOriginal && !saveToWorkspace) {
+		await writeLog(
+			"Rename to original skipped; enable save to workspace first",
+			"warning",
+			taskId,
+		);
+		return;
+	}
+
+	const fs = await import("fs/promises");
+	const path = await import("path");
+	const job = await readJobFile(jobId);
+	const output = job?.results?.outputs?.[0];
+
+	if (!output?.path || !output?.fileName) {
+		await writeLog("Duck decode output missing; cannot move/rename", "warning", taskId);
+		return;
+	}
+
+	if (job?.results?.outputs?.length !== 1) {
+		await writeLog(
+			`Duck decode output move skipped; expected 1 output, found ${job?.results?.outputs?.length || 0}`,
+			"warning",
+			taskId,
+		);
+		return;
+	}
+
+	const workspaceFolderPath = job?.folderPath;
+	if (!workspaceFolderPath) {
+		await writeLog(
+			"No workspace folder selected; cannot move decoded output",
+			"warning",
+			taskId,
+		);
+		return;
+	}
+
+	let targetName = output.fileName;
+	if (renameToOriginal) {
+		const originalName = await getOriginalFileNameFromExecution(seriesId);
+		if (originalName) {
+			targetName = originalName;
+		} else {
+			await writeLog(
+				"Original filename not found; keeping decoded output name",
+				"warning",
+				taskId,
+			);
+		}
+	}
+
+	const targetPath = path.join(workspaceFolderPath, targetName);
+	if (path.resolve(targetPath) === path.resolve(output.path)) {
+		return;
+	}
+
+	try {
+		await fs.access(targetPath);
+		const ext = path.extname(targetName);
+		const base = ext ? targetName.slice(0, -ext.length) : targetName;
+		const suffixedName = `${base}_processed${ext}`;
+		const suffixedPath = path.join(workspaceFolderPath, suffixedName);
+
+		try {
+			await fs.access(suffixedPath);
+			await writeLog(
+				`Target file already exists: ${targetName} (and ${suffixedName})`,
+				"warning",
+				taskId,
+			);
+			return;
+		} catch {
+			await fs.rename(output.path, suffixedPath);
+			output.path = suffixedPath;
+			output.fileName = suffixedName;
+			output.workspacePath = suffixedPath;
+
+			await updateJobFile(jobId, {
+				results: {
+					...job?.results,
+					outputs: [output],
+				},
+			});
+
+			await writeLog(
+				`Decoded output saved to workspace: ${suffixedName}`,
+				"success",
+				taskId,
+			);
+			return;
+		}
+	} catch {
+		// target does not exist
+	}
+
+	await fs.rename(output.path, targetPath);
+	output.path = targetPath;
+	output.fileName = targetName;
+	output.workspacePath = targetPath;
+
+	await updateJobFile(jobId, {
+		results: {
+			...job?.results,
+			outputs: [output],
+		},
+	});
+
+	await writeLog(
+		`Decoded output saved to workspace: ${targetName}`,
+		"success",
+		taskId,
+	);
 }
 
 type ComplexExecutionUpdate = {
@@ -1271,6 +1497,146 @@ async function processWorkflowInBackground(
 		const workflow = await getWorkflowById(workflowId);
 		const executionType = workflow?.executionType || "ai-app"; // Default to ai-app for backward compatibility
 		await writeLog(`Execution type: ${executionType}`, "info", taskId);
+		const localOperation = workflow?.localOperation;
+
+		if (executionType === "local" && localOperation === "rename-output") {
+			const fs = await import("fs/promises");
+			const path = await import("path");
+			const prefix = `${workflowId}_`;
+			const outputFileNameValue =
+				textInputs[`${prefix}outputFileName`] ||
+				workflow?.localConfig?.outputFileName;
+
+			const rawOutputName =
+				typeof outputFileNameValue === "string"
+					? outputFileNameValue.trim()
+					: "";
+
+			if (!rawOutputName) {
+				await writeLog("Output file name is required", "error", taskId);
+				await updateTask(taskId, {
+					status: "failed",
+					error: "Missing output file name",
+				});
+				await updateJobFile(jobId, {
+					status: "failed",
+					error: "Missing output file name",
+					completedAt: Date.now(),
+				});
+				await releaseSlot();
+				await drainQueue();
+				return;
+			}
+
+			const input = jobFileInputs[0];
+			if (!input) {
+				await writeLog("No input file provided for rename", "error", taskId);
+				await updateTask(taskId, {
+					status: "failed",
+					error: "No input file provided",
+				});
+				await updateJobFile(jobId, {
+					status: "failed",
+					error: "No input file provided",
+					completedAt: Date.now(),
+				});
+				await releaseSlot();
+				await drainQueue();
+				return;
+			}
+
+			const baseName = path.basename(rawOutputName);
+			const hasExtension = path.extname(baseName);
+			const inputExtension = path.extname(input.filePath);
+			const resolvedName = hasExtension
+				? baseName
+				: inputExtension
+					? `${baseName}${inputExtension}`
+					: baseName;
+			const targetPath = path.join(path.dirname(input.filePath), resolvedName);
+
+			if (targetPath !== input.filePath) {
+				try {
+					await fs.access(targetPath);
+					await writeLog(
+						`Output rename failed; target already exists: ${resolvedName}`,
+						"error",
+						taskId,
+					);
+					await updateTask(taskId, {
+						status: "failed",
+						error: "Target output file already exists",
+					});
+					await updateJobFile(jobId, {
+						status: "failed",
+						error: "Target output file already exists",
+						completedAt: Date.now(),
+					});
+					await releaseSlot();
+					await drainQueue();
+					return;
+				} catch {
+					await fs.rename(input.filePath, targetPath);
+					await writeLog(
+						`Renamed file to ${resolvedName}`,
+						"success",
+						taskId,
+					);
+				}
+			}
+
+			await updateTask(taskId, {
+				status: "completed",
+				completedCount: fileInputs.length + Object.keys(textInputs).length,
+			});
+			await updateJobFile(jobId, {
+				status: "completed",
+				completedAt: Date.now(),
+			});
+
+			await processLocalJobOutputs(
+				taskId,
+				jobId,
+				jobFileInputs,
+				inputMtimes,
+				rawOutputName,
+			);
+
+			if (seriesId && seriesId.startsWith("exec_")) {
+				const updateResult = await updateComplexExecutionForJob(
+					seriesId,
+					jobId,
+					"completed",
+				);
+
+				if (updateResult?.autoContinue && !updateResult.isLastStep) {
+					try {
+						await fetch(
+							`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workspace/complex-workflow/continue`,
+							{
+								method: "POST",
+								headers: { "Content-Type": "application/json" },
+								body: JSON.stringify({
+									executionId: seriesId,
+									stepNumber: updateResult.stepNumber,
+									parameters: {
+										fileInputs: [],
+										textInputs: {},
+										deleteSourceFiles: false,
+									},
+								}),
+							},
+						);
+					} catch (error) {
+						console.error("Failed to auto-continue complex workflow:", error);
+					}
+				}
+			}
+
+			await releaseSlot();
+			await drainQueue();
+			return;
+		}
 
 		// Upload files to RunningHub if workflow execution type is 'workflow'
 		// (workflow API requires remote file IDs, not local paths)
@@ -1307,6 +1673,9 @@ async function processWorkflowInBackground(
 
 		// Force unbuffered output (-u) so logs appear in real-time
 		const args: string[] = ["-u", "-m", "runninghub_cli.cli"];
+		let requestedOutputFileName: string | undefined;
+		let decodeSaveToWorkspace = false;
+		let decodeRenameToOriginal = false;
 
 		// Helper to extract node ID from parameter ID (e.g., "param_203" -> "203", "param_69_image" -> "69")
 		const getNodeId = (paramId: string) => {
@@ -1400,7 +1769,21 @@ async function processWorkflowInBackground(
 		if (executionType === "local") {
 			const operation = workflow?.localOperation;
 			const prefix = `${workflowId}_`;
-			const getVal = (key: string) => textInputs[`${prefix}${key}`] || workflow?.localConfig?.[key];
+			const getVal = (key: string) =>
+				textInputs[`${prefix}${key}`] || workflow?.localConfig?.[key];
+			const outputFileNameValue = getVal("outputFileName");
+			if (typeof outputFileNameValue === "string" && outputFileNameValue.trim()) {
+				requestedOutputFileName = outputFileNameValue.trim();
+			}
+			const parseBoolean = (value: unknown) =>
+				value === true ||
+				value === "true" ||
+				value === 1 ||
+				value === "1";
+			if (operation === "duck-decode") {
+				decodeSaveToWorkspace = parseBoolean(getVal("saveToWorkspace"));
+				decodeRenameToOriginal = parseBoolean(getVal("renameToOriginal"));
+			}
 
 			if (operation === "video-convert") {
 				const input = jobFileInputs[0];
@@ -1725,7 +2108,17 @@ async function processWorkflowInBackground(
 						jobId,
 						jobFileInputs,
 						inputMtimes,
+						requestedOutputFileName,
 					);
+					if (localOperation === "duck-decode") {
+						await applyDuckDecodeWorkspaceOptions({
+							taskId,
+							jobId,
+							seriesId,
+							saveToWorkspace: decodeSaveToWorkspace,
+							renameToOriginal: decodeRenameToOriginal,
+						});
+					}
 				} else {
 					await processJobOutputs(taskId, workflowId, jobId, env, stdout);
 				}

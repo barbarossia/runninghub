@@ -169,6 +169,14 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 				defaultValue: false,
 				description: 'Permanently delete source file after conversion',
 			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. result.mp4',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
+			},
 		],
 	},
 	'video-aspect-calc': {
@@ -212,6 +220,14 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 					{ value: 'ceil', label: 'Ceil' },
 				],
 			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. result.mp4',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
+			},
 		],
 		outputs: [
 			{ key: 'aspect_width.txt', label: 'Width (px)', type: 'text' },
@@ -240,6 +256,14 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 				type: 'text',
 				defaultValue: '_fps',
 			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. result.mp4',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
+			},
 		],
 	},
 	'video-clip': {
@@ -266,6 +290,14 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 				label: 'Output Suffix',
 				type: 'text',
 				defaultValue: '_clip',
+			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. result.mp4',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
 			},
 		],
 	},
@@ -304,6 +336,14 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 				type: 'text',
 				defaultValue: '_crop',
 			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. result.mp4',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
+			},
 		],
 	},
 	'image-resize': {
@@ -335,6 +375,14 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 				type: 'text',
 				defaultValue: '_resized',
 			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. result.png',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
+			},
 		],
 	},
 	'duck-decode': {
@@ -354,6 +402,29 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 				type: 'text',
 				defaultValue: '_decoded',
 			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. result.png',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
+			},
+			{
+				name: 'saveToWorkspace',
+				label: 'Save decoded output to workspace',
+				type: 'boolean',
+				defaultValue: false,
+				description: 'Move decoded output into the current workspace folder.',
+			},
+			{
+				name: 'renameToOriginal',
+				label: 'Rename decoded output to original name',
+				type: 'boolean',
+				defaultValue: false,
+				description:
+					'Use the original source filename from complex execution metadata.',
+			},
 		],
 	},
 	'caption': {
@@ -370,6 +441,30 @@ export const LOCAL_OPS_DEFINITIONS: Record<LocalWorkflowOperationType, LocalOpDe
 					{ value: 'blip', label: 'BLIP' },
 					{ value: 'git-large', label: 'GIT Large' },
 				],
+			},
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				placeholder: 'e.g. caption.txt',
+				description:
+					'Optional. Uses the input file extension if you do not include one.',
+			},
+		],
+	},
+	'rename-output': {
+		type: 'rename-output',
+		label: 'Rename Output',
+		description: 'Rename the previous step output using a custom file name.',
+		inputs: [
+			{
+				name: 'outputFileName',
+				label: 'Output File Name',
+				type: 'text',
+				required: true,
+				placeholder: 'e.g. result.mp4',
+				description:
+					'Use the input file extension if you do not include one.',
 			},
 		],
 	},

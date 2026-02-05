@@ -87,6 +87,9 @@ export function QuickRunWorkflowDialog({
 	}, [workflows, localWorkflows]);
 
 	const getLocalMediaType = (operation?: LocalWorkflowOperationType) => {
+		if (operation === "rename-output") {
+			return undefined;
+		}
 		if (operation?.startsWith("video-")) {
 			return "video";
 		}
@@ -127,6 +130,13 @@ export function QuickRunWorkflowDialog({
 		if (workflowItem.kind === "local") {
 			const operation = workflowItem.workflow.inputs?.[0]?.operation;
 			const mediaType = getLocalMediaType(operation);
+			if (!mediaType) {
+				return {
+					compatible: selectedFiles.length,
+					incompatible: 0,
+					total: selectedFiles.length,
+				};
+			}
 			const compatible = selectedFiles.filter(
 				(file) => file.type === mediaType,
 			).length;

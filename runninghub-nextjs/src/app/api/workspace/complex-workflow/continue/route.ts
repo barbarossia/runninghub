@@ -188,6 +188,12 @@ export async function POST(request: NextRequest) {
 		}
 
 		const executionDir = path.join(EXECUTION_DIR, body.executionId);
+		const baseWorkspaceFolder =
+			normalizedExecution.steps?.[0]?.inputs?.fileInputs?.[0]?.filePath
+				? path.dirname(
+						normalizedExecution.steps[0].inputs.fileInputs[0].filePath,
+					)
+				: "";
 		const stepOutputsCache = new Map<number, JobResult | null>();
 		const loadStepOutputs = async (stepNumber: number) => {
 			if (stepOutputsCache.has(stepNumber))
@@ -317,6 +323,48 @@ export async function POST(request: NextRequest) {
 			...newMappedInputs,
 		];
 
+		if (
+			nextWorkflowIsLocal &&
+			nextWorkflow?.localOperation === "duck-decode" &&
+			mergedFileInputs.length === 0
+		) {
+			const fallbackOutput = currentStep.outputs?.outputs?.[0];
+			const fallbackPath = fallbackOutput?.path || fallbackOutput?.workspacePath;
+
+			if (fallbackPath) {
+				const resolvedFileName =
+					fallbackOutput?.fileName || path.basename(fallbackPath);
+				const ext = path.extname(resolvedFileName).toLowerCase();
+				const inferredType =
+					fallbackOutput?.fileType ||
+					(ext.match(/\.(mp4|mov|avi|webm|mkv)$/)
+						? "video"
+						: "image");
+				let resolvedSize = fallbackOutput?.fileSize || 0;
+
+				try {
+					const stats = await fs.stat(fallbackPath);
+					if (stats.isFile()) {
+						resolvedSize = stats.size;
+					}
+				} catch (error) {
+					console.warn(
+						"[ComplexWorkflow] Failed to stat fallback output",
+						error,
+					);
+				}
+
+				mergedFileInputs.push({
+					parameterId: `${nextStepDef.workflowId}_file`,
+					filePath: fallbackPath,
+					fileName: resolvedFileName,
+					fileSize: resolvedSize,
+					fileType: inferredType,
+					valid: true,
+				});
+			}
+		}
+
 		const getLocalParamValue = (key: string) =>
 			mergedTextInputs[`${nextStepDef.workflowId}_${key}`] ??
 			nextWorkflow?.localConfig?.[key];
@@ -352,7 +400,7 @@ export async function POST(request: NextRequest) {
 					workflowName: nextStepDef.workflowName,
 					fileInputs: mergedFileInputs,
 					textInputs: mergedTextInputs,
-					folderPath: "",
+					folderPath: baseWorkspaceFolder,
 					deleteSourceFiles: resolvedDeleteSourceFiles,
 					seriesId: body.executionId, // Identify as part of complex workflow
 				}),

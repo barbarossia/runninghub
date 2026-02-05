@@ -581,7 +581,8 @@ export type LocalWorkflowOperationType =
 	| "video-aspect-calc"
 	| "image-resize"
 	| "duck-decode"
-	| "caption";
+	| "caption"
+	| "rename-output";
 
 export type LocalWorkflowInput = {
 	id: string;

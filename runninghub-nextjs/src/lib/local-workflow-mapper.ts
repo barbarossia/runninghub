@@ -8,7 +8,10 @@ import type {
 
 const getLocalWorkflowMediaType = (
 	operation?: LocalWorkflowOperationType,
-): 'image' | 'video' => {
+): 'image' | 'video' | undefined => {
+	if (operation === 'rename-output') {
+		return undefined;
+	}
 	return operation?.startsWith('video-') ? 'video' : 'image';
 };
 
@@ -42,9 +45,7 @@ export const mapLocalWorkflowToWorkflow = (
 		name: 'Input File',
 		type: 'file',
 		required: true,
-		validation: {
-			mediaType,
-		},
+		validation: mediaType ? { mediaType } : undefined,
 	};
 
 	const configInputs: WorkflowInputParameter[] =
