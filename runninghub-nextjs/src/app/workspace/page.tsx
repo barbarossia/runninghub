@@ -411,7 +411,11 @@ export default function WorkspacePage() {
 
 	// Helper to process and update media files
 	const processFolderContents = useCallback(
-		(result: any, expectedFolderPath?: string | null) => {
+		(
+			result: any,
+			expectedFolderPath?: string | null,
+			mode: "merge" | "replace" = "merge",
+		) => {
 			if (!result) return;
 			const normalizePath = (value: string) => value.replace(/\/+$/, "");
 			const currentPath = selectedFolderPathRef.current
@@ -476,6 +480,7 @@ export default function WorkspacePage() {
 			const imageFiles = (result.images || []).map((file: any) => {
 				// DEBUG: Log each file's dimensions
 				// console.log(`[processFolderContents] Processing ${file.name}: width=${file.width}, height=${file.height}`);
+				const cacheBuster = file.modified_at || file.created_at || Date.now();
 
 				return {
 					id: file.path,
@@ -488,7 +493,7 @@ export default function WorkspacePage() {
 					height: file.height,
 					created_at: file.created_at,
 					modified_at: file.modified_at,
-					thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
+					thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
 					selected: false,
 					// Initialize duck encoding fields
 					isDuckEncoded: undefined,
@@ -501,7 +506,10 @@ export default function WorkspacePage() {
 			});
 
 			// Convert videos to MediaFile format with serve URLs
-			const videoFiles = (result.videos || []).map((file: any) => ({
+			const videoFiles = (result.videos || []).map((file: any) => {
+				const cacheBuster = file.modified_at || file.created_at || Date.now();
+
+				return {
 				id: file.path,
 				name: file.name,
 				path: file.path,
@@ -515,14 +523,15 @@ export default function WorkspacePage() {
 				created_at: file.created_at,
 				modified_at: file.modified_at,
 				thumbnail: file.thumbnail
-					? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}`
+					? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}&v=${cacheBuster}`
 					: undefined,
-				blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
+				blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
 				selected: false,
 				// Caption from associated txt file
 				caption: file.caption,
 				captionPath: file.captionPath,
-			}));
+				};
+			});
 
 			// Combine both types and deduplicate by ID (path)
 			const allFiles = [...imageFiles, ...videoFiles];
@@ -542,13 +551,34 @@ export default function WorkspacePage() {
 			}
 
 			const uniqueFiles = Array.from(uniqueMap.values());
-			mergeMediaFiles(uniqueFiles as MediaFile[]);
+			if (mode === "replace") {
+				const currentFiles = useWorkspaceStore.getState().mediaFiles;
+				const existingById = new Map(
+					currentFiles.map((file) => [file.id, file]),
+				);
+				const nextFiles = uniqueFiles.map((file) => {
+					const existing = existingById.get(file.id);
+					if (!existing) return file;
+					return {
+						...file,
+						selected: existing.selected,
+						isDuckEncoded: existing.isDuckEncoded ?? file.isDuckEncoded,
+						duckRequiresPassword:
+							existing.duckRequiresPassword ?? file.duckRequiresPassword,
+						duckValidationPending:
+							existing.duckValidationPending ?? file.duckValidationPending,
+					};
+				});
+				setMediaFiles(nextFiles as MediaFile[]);
+			} else {
+				mergeMediaFiles(uniqueFiles as MediaFile[]);
+			}
 
 			// NOTE: Disabled automatic validation on folder load for performance
 			// Images will be validated lazily when selected instead
 			// validateAllImagesForDuck(uniqueFiles as MediaFile[]);
 		},
-		[mergeMediaFiles, validateAllImagesForDuck],
+		[mergeMediaFiles, setMediaFiles, validateAllImagesForDuck],
 	);
 
 	const handleRefresh = useCallback(
@@ -559,7 +589,7 @@ export default function WorkspacePage() {
 					selectedFolder.session_id,
 					silent,
 				);
-				processFolderContents(result, selectedFolder.folder_path);
+				processFolderContents(result, selectedFolder.folder_path, "replace");
 			}
 		},
 		[selectedFolder, loadFolderContents, processFolderContents],
@@ -631,6 +661,23 @@ export default function WorkspacePage() {
 						return;
 					}
 
+					const incomingName = file.name;
+
+					if (incomingName) {
+						const currentFiles = useWorkspaceStore.getState().mediaFiles;
+						const conflicts = currentFiles.filter(
+							(existing) =>
+								existing.name === incomingName &&
+								existing.path !== file.path,
+						);
+
+						if (conflicts.length > 0) {
+							conflicts.forEach((existing) =>
+								removeMediaFileByPath(existing.path),
+							);
+						}
+					}
+
 					// Defensive check: skip if file already exists in store to prevent duplicates
 					const currentFiles = useWorkspaceStore.getState().mediaFiles;
 					if (currentFiles.some((f) => f.id === file.path)) {
@@ -641,6 +688,7 @@ export default function WorkspacePage() {
 						return;
 					}
 
+					const cacheBuster = file.modified_at || file.created_at || Date.now();
 					const mediaFile: MediaFile = {
 						id: file.path,
 						name: file.name,
@@ -656,13 +704,13 @@ export default function WorkspacePage() {
 						modified_at: file.modified_at,
 						thumbnail:
 							payload.type === "image"
-								? `/api/images/serve?path=${encodeURIComponent(file.path)}`
+								? `/api/images/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`
 								: file.thumbnail
-									? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}`
+									? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}&v=${cacheBuster}`
 									: undefined,
 						blobUrl:
 							payload.type === "video"
-								? `/api/videos/serve?path=${encodeURIComponent(file.path)}`
+								? `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`
 								: undefined,
 						caption: file.caption,
 						captionPath: file.captionPath,
@@ -854,7 +902,7 @@ export default function WorkspacePage() {
 			// Folder is automatically set as selected by the hook
 			// If contents were provided during validation, use them directly
 			if (contents) {
-				processFolderContents(contents, folder?.folder_path);
+				processFolderContents(contents, folder?.folder_path, "replace");
 			}
 			// Otherwise, the useEffect below will load contents when selectedFolder changes
 		},
@@ -883,7 +931,7 @@ export default function WorkspacePage() {
 				selectedFolder.folder_path,
 				selectedFolder.session_id,
 			).then((result) => {
-				processFolderContents(result, selectedFolder.folder_path);
+				processFolderContents(result, selectedFolder.folder_path, "replace");
 			});
 		} else {
 			console.log("[WorkspacePage] Selected folder cleared");
