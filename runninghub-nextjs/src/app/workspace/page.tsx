@@ -257,12 +257,109 @@ export default function WorkspacePage() {
 	// Resize dialog state
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
 	const [resizeFile, setResizeFile] = useState<MediaFile | null>(null);
+	const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+	const [promptContent, setPromptContent] = useState<string | null>(null);
+	const [promptFileName, setPromptFileName] = useState<string | null>(null);
+	const [isPromptLoading, setIsPromptLoading] = useState(false);
+	const [isPromptFormatted, setIsPromptFormatted] = useState(true);
+	const [promptAvailability, setPromptAvailability] = useState<
+		Record<string, boolean>
+	>({});
+	const [promptCache, setPromptCache] = useState<Record<string, string>>({});
 
 	// Export config from store
 	const { deleteAfterExport } = useExportConfigStore();
 
 	// Get selected files from store
 	const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
+	const isSingleSelectedFile = selectedFiles.length === 1;
+	const selectedPromptAvailable = isSingleSelectedFile
+		? !!promptAvailability[selectedFiles[0].path]
+		: false;
+
+	const formatPrompt = useCallback((value: string | null) => {
+		if (!value) return null;
+		try {
+			const parsed = JSON.parse(value);
+			if (typeof parsed === "object" && parsed !== null) {
+				if (
+					"prompt" in parsed &&
+					typeof (parsed as { prompt?: unknown }).prompt === "string"
+				) {
+					return JSON.stringify(
+						JSON.parse((parsed as { prompt: string }).prompt),
+						null,
+						2,
+					);
+				}
+				return JSON.stringify(parsed, null, 2);
+			}
+		} catch {
+			return value;
+		}
+		return value;
+	}, []);
+
+	const fetchPromptMetadata = useCallback(
+		async (file: MediaFile, silent = true) => {
+			try {
+				const response = await fetch("/api/workspace/metadata", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ path: file.path }),
+				});
+				const data = await response.json();
+				if (!response.ok || !data?.success) {
+					throw new Error(data?.error || "Failed to read prompt metadata");
+				}
+				const prompt = data?.metadata?.prompt;
+				setPromptAvailability((prev) => ({
+					...prev,
+					[file.path]: !!prompt,
+				}));
+				if (typeof prompt === "string" && prompt.length > 0) {
+					setPromptCache((prev) => ({ ...prev, [file.path]: prompt }));
+				}
+				return prompt as string | null;
+			} catch (error) {
+				if (!silent) {
+					toast.error("Failed to read prompt metadata");
+				}
+				setPromptAvailability((prev) => ({
+					...prev,
+					[file.path]: false,
+				}));
+				return null;
+			}
+		},
+		[],
+	);
+
+	useEffect(() => {
+		if (selectedFiles.length !== 1) return;
+		const file = selectedFiles[0];
+		if (promptAvailability[file.path] !== undefined) return;
+		fetchPromptMetadata(file, true);
+	}, [selectedFiles, promptAvailability, fetchPromptMetadata]);
+
+	const handleViewPrompt = useCallback(async () => {
+		if (selectedFiles.length !== 1) return;
+		const file = selectedFiles[0];
+		setIsPromptLoading(true);
+		setPromptFileName(file.name);
+		const cached = promptCache[file.path];
+		let prompt = cached ?? null;
+		if (!prompt) {
+			prompt = await fetchPromptMetadata(file, false);
+		}
+		setIsPromptLoading(false);
+		if (!prompt) {
+			toast.info("No embedded prompt found");
+			return;
+		}
+		setPromptContent(prompt);
+		setPromptDialogOpen(true);
+	}, [selectedFiles, promptCache, fetchPromptMetadata]);
 
 	useEffect(() => {
 		if (!selectedComplexWorkflowId) {
@@ -317,6 +414,7 @@ export default function WorkspacePage() {
 			fps: file.fps,
 			duration: file.duration,
 			thumbnail: file.thumbnail,
+			blob_url: file.blobUrl,
 			created_at: file.created_at,
 			modified_at: file.modified_at,
 		}));
@@ -491,6 +589,8 @@ export default function WorkspacePage() {
 					size: file.size || 0,
 					width: file.width,
 					height: file.height,
+					format: file.format,
+					prompt: file.prompt,
 					created_at: file.created_at,
 					modified_at: file.modified_at,
 					thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
@@ -510,22 +610,28 @@ export default function WorkspacePage() {
 				const cacheBuster = file.modified_at || file.created_at || Date.now();
 
 				return {
-				id: file.path,
-				name: file.name,
-				path: file.path,
-				type: "video" as const,
-				extension: "." + (file.name.split(".").pop() || "").toLowerCase(),
-				size: file.size || 0,
-				width: file.width,
-				height: file.height,
-				fps: file.fps,
-				duration: file.duration,
-				created_at: file.created_at,
-				modified_at: file.modified_at,
-				thumbnail: file.thumbnail
-					? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}&v=${cacheBuster}`
-					: undefined,
-				blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
+					id: file.path,
+					name: file.name,
+					path: file.path,
+					type: "video" as const,
+					extension: "." + (file.name.split(".").pop() || "").toLowerCase(),
+					size: file.size || 0,
+					width: file.width,
+					height: file.height,
+					fps: file.fps,
+					duration: file.duration,
+					codec: file.codec,
+					codecLongName: file.codecLongName,
+					bitrate: file.bitrate,
+					containerFormat: file.containerFormat,
+					containerFormatLong: file.containerFormatLong,
+					prompt: file.prompt,
+					created_at: file.created_at,
+					modified_at: file.modified_at,
+					thumbnail: file.thumbnail
+						? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}&v=${cacheBuster}`
+						: undefined,
+					blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
 				selected: false,
 				// Caption from associated txt file
 				caption: file.caption,
@@ -584,6 +690,7 @@ export default function WorkspacePage() {
 	const handleRefresh = useCallback(
 		async (silent = false) => {
 			if (selectedFolder) {
+				selectedFolderPathRef.current = selectedFolder.folder_path;
 				const result = await loadFolderContents(
 					selectedFolder.folder_path,
 					selectedFolder.session_id,
@@ -700,6 +807,13 @@ export default function WorkspacePage() {
 						height: file.height,
 						fps: file.fps,
 						duration: file.duration,
+						codec: file.codec,
+						codecLongName: file.codecLongName,
+						bitrate: file.bitrate,
+						containerFormat: file.containerFormat,
+						containerFormatLong: file.containerFormatLong,
+						format: file.format,
+						prompt: file.prompt,
 						created_at: file.created_at,
 						modified_at: file.modified_at,
 						thumbnail:
@@ -2719,6 +2833,9 @@ export default function WorkspacePage() {
 										setFileToExportToDataset(null); // null means use selectedFiles
 										setShowSelectDatasetDialog(true);
 									}}
+									onPrompt={handleViewPrompt}
+									promptAvailable={selectedPromptAvailable}
+									promptLoading={isPromptLoading}
 									onDeselectAll={deselectAllMediaFiles}
 								/>
 
@@ -3249,6 +3366,64 @@ export default function WorkspacePage() {
 					isOpen={!!previewImage}
 					onClose={() => setPreviewImage(null)}
 				/>
+
+				{/* Prompt Metadata Dialog */}
+				<Dialog
+					open={promptDialogOpen}
+					onOpenChange={(open) => {
+						setPromptDialogOpen(open);
+						if (!open) {
+							setIsPromptFormatted(true);
+						}
+					}}
+				>
+					<DialogContent className="max-w-3xl w-full">
+						<DialogHeader>
+							<DialogTitle>
+								Prompt Metadata{promptFileName ? `: ${promptFileName}` : ""}
+							</DialogTitle>
+							<DialogDescription>
+								Embedded prompt/comment metadata from the file.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-3">
+							<div className="flex items-center justify-between">
+								<span className="text-xs text-muted-foreground">
+									Prompt JSON
+								</span>
+								<div className="flex items-center gap-2">
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setIsPromptFormatted((prev) => !prev)}
+										disabled={!promptContent}
+									>
+										{isPromptFormatted ? "Show Raw" : "Pretty JSON"}
+									</Button>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											const content = isPromptFormatted
+												? formatPrompt(promptContent) || ""
+												: promptContent || "";
+											navigator.clipboard.writeText(content);
+											toast.success("Prompt copied to clipboard");
+										}}
+										disabled={!promptContent}
+									>
+										Copy
+									</Button>
+								</div>
+							</div>
+							<pre className="max-h-[60vh] overflow-auto rounded border bg-gray-50 p-3 text-[11px] leading-relaxed text-gray-700 whitespace-pre-wrap">
+								{isPromptFormatted
+									? formatPrompt(promptContent) || "No prompt metadata found."
+									: promptContent || "No prompt metadata found."}
+							</pre>
+						</div>
+					</DialogContent>
+				</Dialog>
 
 				{/* Progress Modal */}
 				{isConvertProgressModalOpen && (

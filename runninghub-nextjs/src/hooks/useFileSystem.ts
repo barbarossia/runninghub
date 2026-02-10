@@ -143,6 +143,7 @@ export function useFileSystem({
 			try {
 				const response = await fetch(API_ENDPOINTS.FOLDER_LIST, {
 					method: "POST",
+					cache: "no-store",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						folder_path: folderPath,

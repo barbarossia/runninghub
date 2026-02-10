@@ -248,7 +248,8 @@ export interface MediaFile {
 	// Image-specific metadata
 	width?: number; // Image width in pixels
 	height?: number; // Image height in pixels
-	format?: string; // Image format (JPEG, PNG, etc.)
+	format?: string; // Image or container format
+	prompt?: string; // Embedded prompt/comment metadata
 
 	// Timestamps
 	created_at?: number;
@@ -259,6 +260,10 @@ export interface MediaFile {
 	fps?: number; // Frames per second
 	bitrate?: number; // Video bitrate
 	codec?: string; // Video codec
+	codecLongName?: string; // Video codec (long name)
+	containerFormat?: string; // Container format (short name)
+	containerFormatLong?: string; // Container format (long name)
+	prompt?: string; // Embedded prompt/comment metadata
 
 	// Preview
 	thumbnail?: string; // Thumbnail URL

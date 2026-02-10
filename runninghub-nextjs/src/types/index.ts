@@ -11,6 +11,8 @@ export interface ImageFile {
 	extension: string;
 	width?: number; // Image width in pixels
 	height?: number; // Image height in pixels
+	format?: string; // Image format
+	prompt?: string; // Embedded prompt/comment metadata
 	thumbnail?: string; // Thumbnail path or URL
 	is_virtual?: boolean;
 	file_handle_info?: FileHandleInfo;
@@ -39,6 +41,12 @@ export interface VideoFile {
 	fps?: number; // Frames per second
 	thumbnail?: string; // Thumbnail path or URL
 	duration?: number; // Video duration in seconds
+	codec?: string; // Video codec (short name)
+	codecLongName?: string; // Video codec (long name)
+	bitrate?: number; // Video bitrate (bps)
+	containerFormat?: string; // Container format (short name)
+	containerFormatLong?: string; // Container format (long name)
+	prompt?: string; // Embedded prompt/comment metadata
 	is_virtual?: boolean;
 	file_handle_info?: FileHandleInfo;
 	blob_url?: string;

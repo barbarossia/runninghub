@@ -108,6 +108,53 @@ function getAspectRatio(width: number, height: number): string {
 	return closestRatio[2];
 }
 
+function formatDuration(seconds?: number): string {
+	if (!seconds && seconds !== 0) return "N/A";
+	const total = Math.max(0, seconds);
+	const minutes = Math.floor(total / 60);
+	const secs = Math.round(total % 60);
+	return `${minutes}:${secs.toString().padStart(2, "0")}`;
+}
+
+function formatBitrate(bitrate?: number): string {
+	if (!bitrate) return "N/A";
+	if (bitrate >= 1_000_000) {
+		return `${(bitrate / 1_000_000).toFixed(2)} Mbps`;
+	}
+	if (bitrate >= 1_000) {
+		return `${(bitrate / 1_000).toFixed(2)} Kbps`;
+	}
+	return `${bitrate} bps`;
+}
+
+function formatTimestamp(timestamp?: number): string {
+	if (!timestamp) return "N/A";
+	return new Date(timestamp).toLocaleString();
+}
+
+function formatPrompt(prompt?: string): string | null {
+	if (!prompt) return null;
+	try {
+		const parsed = JSON.parse(prompt);
+		if (typeof parsed === "object" && parsed !== null) {
+			if (
+				"prompt" in parsed &&
+				typeof (parsed as { prompt?: unknown }).prompt === "string"
+			) {
+				return JSON.stringify(
+					JSON.parse((parsed as { prompt: string }).prompt),
+					null,
+					2,
+				);
+			}
+			return JSON.stringify(parsed, null, 2);
+		}
+	} catch {
+		// fall through to raw string
+	}
+	return prompt;
+}
+
 export type MediaGalleryMode = "workspace" | "dataset";
 
 export interface MediaGalleryProps {
@@ -192,6 +239,43 @@ export function MediaGallery({
 	const [validatingFileIds, setValidatingFileIds] = useState<Set<string>>(
 		new Set(),
 	);
+	const [promptOverrides, setPromptOverrides] = useState<
+		Record<string, string | null>
+	>({});
+	const [isPromptLoading, setIsPromptLoading] = useState(false);
+	const formattedPrompt = previewFile
+		? formatPrompt(
+				promptOverrides[previewFile.path] ?? previewFile.prompt,
+			)
+		: null;
+
+	const handleLoadPrompt = useCallback(async (file: MediaFile) => {
+		setIsPromptLoading(true);
+		try {
+			const response = await fetch("/api/workspace/metadata", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ path: file.path }),
+			});
+			const data = await response.json();
+			if (!response.ok || !data?.success) {
+				throw new Error(data?.error || "Failed to load prompt metadata");
+			}
+			const prompt = data?.metadata?.prompt ?? null;
+			setPromptOverrides((prev) => ({
+				...prev,
+				[file.path]: prompt,
+			}));
+			if (!prompt) {
+				toast.info("No prompt metadata found");
+			}
+		} catch (error) {
+			console.error("Failed to load prompt metadata:", error);
+			toast.error("Failed to load prompt metadata");
+		} finally {
+			setIsPromptLoading(false);
+		}
+	}, []);
 
 	// Caption editing state
 	const [editedCaptions, setEditedCaptions] = useState<Record<string, string>>(
@@ -1515,7 +1599,7 @@ export function MediaGallery({
 							</div>
 
 							{/* Right: Details (1/3 width on large screens) */}
-							<div className="lg:col-span-1 space-y-4 bg-white p-4 rounded-lg">
+							<div className="lg:col-span-1 space-y-4 bg-white p-4 rounded-lg max-h-[70vh] overflow-y-auto">
 								{/* Basic Info */}
 								<div className="space-y-3">
 									<h3 className="font-semibold text-sm text-gray-700">
@@ -1523,6 +1607,27 @@ export function MediaGallery({
 									</h3>
 
 									<div className="space-y-2 text-sm">
+										<div>
+											<div className="flex items-center justify-between">
+												<span className="text-gray-600 text-xs">Prompt</span>
+												<Button
+													variant="ghost"
+													size="sm"
+													className="h-6 px-2 text-xs"
+													onClick={() => handleLoadPrompt(previewFile)}
+													disabled={isPromptLoading}
+												>
+													{isPromptLoading ? "Loading..." : "Load"}
+												</Button>
+											</div>
+											<p className="text-xs text-gray-400">
+												{promptOverrides[previewFile.path] ??
+												previewFile.prompt
+													? "Embedded prompt metadata available"
+													: "No prompt metadata detected"}
+											</p>
+										</div>
+
 										<div>
 											<span className="text-gray-600 text-xs">Type</span>
 											<p className="font-medium capitalize">
@@ -1601,6 +1706,26 @@ export function MediaGallery({
 											</div>
 										)}
 
+										{previewFile.type === "image" ? (
+											<div>
+												<span className="text-gray-600 text-xs">Format</span>
+												<p className="font-medium">
+													{previewFile.format
+														? previewFile.format.toUpperCase()
+														: previewFile.extension?.toUpperCase() || "N/A"}
+												</p>
+											</div>
+										) : null}
+
+										{previewFile.type === "video" ? (
+											<div>
+												<span className="text-gray-600 text-xs">Duration</span>
+												<p className="font-medium">
+													{formatDuration(previewFile.duration)}
+												</p>
+											</div>
+										) : null}
+
 										{previewFile.fps ? (
 											<div>
 												<span className="text-gray-600 text-xs">
@@ -1616,6 +1741,77 @@ export function MediaGallery({
 												<p className="font-medium text-gray-400">N/A</p>
 											</div>
 										) : null}
+
+										{previewFile.type === "video" ? (
+											<div>
+												<span className="text-gray-600 text-xs">Codec</span>
+												<p className="font-medium">
+													{previewFile.codecLongName ||
+														previewFile.codec ||
+														"N/A"}
+												</p>
+											</div>
+										) : null}
+
+										{previewFile.type === "video" ? (
+											<div>
+												<span className="text-gray-600 text-xs">Bitrate</span>
+												<p className="font-medium">
+													{formatBitrate(previewFile.bitrate)}
+												</p>
+											</div>
+										) : null}
+
+										{previewFile.type === "video" ? (
+											<div>
+												<span className="text-gray-600 text-xs">
+													Container
+												</span>
+												<p className="font-medium">
+													{previewFile.containerFormatLong ||
+														previewFile.containerFormat ||
+														"N/A"}
+												</p>
+											</div>
+										) : null}
+
+										{promptOverrides[previewFile.path] ??
+										previewFile.prompt ? (
+											<div>
+												<div className="flex items-center justify-between">
+													<span className="text-gray-600 text-xs">Prompt</span>
+													<Button
+														variant="ghost"
+														size="sm"
+														className="h-6 px-2 text-xs"
+														onClick={() => setShowMoreDetails(true)}
+													>
+														View
+													</Button>
+												</div>
+												<p className="text-xs text-gray-500">
+													Embedded prompt metadata available
+												</p>
+											</div>
+										) : (
+											<div>
+												<div className="flex items-center justify-between">
+													<span className="text-gray-600 text-xs">Prompt</span>
+													<Button
+														variant="ghost"
+														size="sm"
+														className="h-6 px-2 text-xs"
+														onClick={() => handleLoadPrompt(previewFile)}
+														disabled={isPromptLoading}
+													>
+														{isPromptLoading ? "Loading..." : "Load"}
+													</Button>
+												</div>
+												<p className="text-xs text-gray-400">
+													No prompt metadata detected
+												</p>
+											</div>
+										)}
 									</div>
 								</div>
 
@@ -1690,6 +1886,78 @@ export function MediaGallery({
 													<p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
 														{previewFile.type === "image" ? "image/" : "video/"}
 														{previewFile.extension?.replace(".", "")}
+													</p>
+												</div>
+
+												{promptOverrides[previewFile.path] ??
+												previewFile.prompt ? (
+													<div>
+														<div className="flex items-center justify-between">
+															<span className="text-gray-600 text-xs">
+																Prompt
+															</span>
+															<Button
+																variant="ghost"
+																size="sm"
+																className="h-6 px-2 text-xs"
+																onClick={() => {
+																	const content =
+																		formattedPrompt ||
+																		promptOverrides[previewFile.path] ||
+																		previewFile.prompt;
+																	navigator.clipboard.writeText(content);
+																	toast.success(
+																		"Prompt copied to clipboard",
+																	);
+																}}
+															>
+																<Copy className="h-3 w-3 mr-1" />
+																Copy
+															</Button>
+														</div>
+														<pre className="mt-1 max-h-60 overflow-auto rounded border bg-gray-50 p-2 text-[11px] leading-relaxed text-gray-700 whitespace-pre-wrap">
+															{formattedPrompt ||
+																promptOverrides[previewFile.path] ||
+																previewFile.prompt}
+														</pre>
+													</div>
+												) : (
+													<div>
+														<div className="flex items-center justify-between">
+															<span className="text-gray-600 text-xs">
+																Prompt
+															</span>
+															<Button
+																variant="ghost"
+																size="sm"
+																className="h-6 px-2 text-xs"
+																onClick={() => handleLoadPrompt(previewFile)}
+																disabled={isPromptLoading}
+															>
+																{isPromptLoading ? "Loading..." : "Load"}
+															</Button>
+														</div>
+														<p className="text-xs text-gray-400">
+															No prompt metadata detected
+														</p>
+													</div>
+												)}
+
+												<div>
+													<span className="text-gray-600 text-xs">
+														Created
+													</span>
+													<p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+														{formatTimestamp(previewFile.created_at)}
+													</p>
+												</div>
+
+												<div>
+													<span className="text-gray-600 text-xs">
+														Last Modified
+													</span>
+													<p className="font-medium bg-gray-50 p-2 rounded mt-1 border">
+														{formatTimestamp(previewFile.modified_at)}
 													</p>
 												</div>
 											</motion.div>

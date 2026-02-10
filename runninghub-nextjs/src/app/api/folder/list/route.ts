@@ -3,6 +3,8 @@ import fs from "fs/promises";
 import path from "path";
 import { getFileMetadata } from "@/lib/metadata";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Read caption from a txt file with the same basename
  * @param filePath - Path to the media file
@@ -157,6 +159,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 								extension,
 								width: metadata?.width,
 								height: metadata?.height,
+								format: metadata?.format,
+								prompt: metadata?.prompt,
 								created_at: createdAt,
 								modified_at: modifiedAt,
 								caption: captionData?.caption,
@@ -187,6 +191,12 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 								height: metadata?.height,
 								fps: metadata?.fps,
 								duration: metadata?.duration,
+								codec: metadata?.codec,
+								codecLongName: metadata?.codecLongName,
+								bitrate: metadata?.bitrate,
+								containerFormat: metadata?.containerFormat,
+								containerFormatLong: metadata?.containerFormatLong,
+								prompt: metadata?.prompt,
 								created_at: createdAt,
 								modified_at: modifiedAt,
 								caption: captionData?.caption,
@@ -224,12 +234,17 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 			throw error;
 		}
 
-		return NextResponse.json(contents);
+		return NextResponse.json(contents, {
+			headers: { "Cache-Control": "no-store" },
+		});
 	} catch (error) {
 		console.error("Error listing folder:", error);
 		return NextResponse.json(
 			{ error: "Failed to list folder contents" },
-			{ status: 500 },
+			{
+				status: 500,
+				headers: { "Cache-Control": "no-store" },
+			},
 		);
 	}
 }

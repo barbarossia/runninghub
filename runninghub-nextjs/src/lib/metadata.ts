@@ -3,6 +3,8 @@ import { spawn } from "child_process";
 export interface ImageMetadata {
 	width: number;
 	height: number;
+	format?: string;
+	prompt?: string;
 }
 
 export interface VideoMetadata {
@@ -10,6 +12,12 @@ export interface VideoMetadata {
 	height: number;
 	duration: number;
 	fps: number;
+	codec?: string;
+	codecLongName?: string;
+	bitrate?: number;
+	containerFormat?: string;
+	containerFormatLong?: string;
+	prompt?: string;
 }
 
 /**
@@ -26,9 +34,7 @@ async function getVideoMetadata(
 			"-select_streams",
 			"v:0",
 			"-show_entries",
-			"stream=width,height,r_frame_rate",
-			"-show_entries",
-			"format=duration",
+			"stream=width,height,r_frame_rate,codec_name,codec_long_name,bit_rate:format=duration,format_name,format_long_name,bit_rate:format_tags=comment",
 			"-of",
 			"json",
 			filePath,
@@ -63,6 +69,7 @@ async function getVideoMetadata(
 				const data = JSON.parse(stdout);
 				const stream = data.streams?.[0];
 				const format = data.format;
+				const prompt = data.format?.tags?.comment;
 
 				if (!stream || !format) {
 					resolve(null);
@@ -82,6 +89,17 @@ async function getVideoMetadata(
 					height: stream.height || 0,
 					duration: parseFloat(format.duration) || 0,
 					fps: fps || 0,
+					codec: stream.codec_name || undefined,
+					codecLongName: stream.codec_long_name || undefined,
+					bitrate:
+						parseInt(format.bit_rate || "", 10) ||
+						parseInt(stream.bit_rate || "", 10) ||
+						undefined,
+					containerFormat: format.format_name || undefined,
+					containerFormatLong: format.format_long_name || undefined,
+					prompt: typeof prompt === "string" && prompt.length > 0
+						? prompt
+						: undefined,
 				});
 			} catch {
 				resolve(null);
@@ -121,6 +139,7 @@ async function getImageMetadata(
 		return {
 			width: metadata.width || 0,
 			height: metadata.height || 0,
+			format: metadata.format || undefined,
 		};
 	} catch (error) {
 		// sharp not available, error reading image, or timeout
