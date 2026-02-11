@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { DuckDecodeButton } from "@/components/workspace/DuckDecodeButton";
 import { cn } from "@/lib/utils";
+import { getDisplayJobStatus } from "@/utils/job-status";
 import type { Job, JobStatus } from "@/types/workspace";
 
 export interface JobListProps {
@@ -71,6 +72,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 	const { selectedFolder: workspaceFolder } = useWorkspaceFolder();
 
 	const [reQueryingIds, setReQueryingIds] = useState<Set<string>>(new Set());
+	const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
 	const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(
 		new Set(),
 	);
@@ -130,6 +132,41 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		}
 	};
 
+	const handleRefreshFromDisk = async (
+		e: React.MouseEvent,
+		job: Job,
+	) => {
+		e.stopPropagation();
+		if (refreshingIds.has(job.id)) return;
+
+		setRefreshingIds((prev) => new Set(prev).add(job.id));
+		try {
+			const response = await fetch(`/api/workspace/jobs/${job.id}`);
+			if (!response.ok) {
+				throw new Error(`Refresh failed: ${response.status}`);
+			}
+			const data = await response.json();
+			if (!data.success || !data.job) {
+				throw new Error(data.error || "Failed to refresh job from disk");
+			}
+
+			updateJob(job.id, data.job);
+			toast.success("Job refreshed from disk");
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error
+					? error.message
+					: "Failed to refresh job from disk";
+			toast.error(errorMessage);
+		} finally {
+			setRefreshingIds((prev) => {
+				const next = new Set(prev);
+				next.delete(job.id);
+				return next;
+			});
+		}
+	};
+
 	// Get unique workflow names
 	const workflowNames = useMemo(() => {
 		const names = new Set(
@@ -138,16 +175,10 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		return Array.from(names);
 	}, [jobs]);
 
-	const getDisplayStatus = (job: Job): JobStatus => {
-		if (job.error) return "failed";
-		if (job.completedAt) return "completed";
-		return job.status;
-	};
-
 	// Filter jobs
 	const filteredJobs = useMemo(() => {
 		return jobs.filter((job) => {
-			const displayStatus = getDisplayStatus(job);
+			const displayStatus = getDisplayJobStatus(job);
 			if (statusFilter !== "all" && displayStatus !== statusFilter)
 				return false;
 			if (
@@ -589,7 +620,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 							const isSelected = selectedJobId === job.id;
 							const isChecked = selectedJobIds.has(job.id);
 							const previews = getPreviews(job);
-							const displayStatus = getDisplayStatus(job);
+											const displayStatus = getDisplayJobStatus(job);
 							return (
 								<motion.div
 									key={job.id}
@@ -804,6 +835,23 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 															className={cn(
 																"h-4 w-4",
 																reQueryingIds.has(job.id) && "animate-spin",
+															)}
+														/>
+													</Button>
+												)}
+												{!job.runninghubTaskId && (
+													<Button
+														variant="ghost"
+														size="icon"
+														className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+														onClick={(e) => handleRefreshFromDisk(e, job)}
+														disabled={refreshingIds.has(job.id)}
+														title="Refresh job from disk"
+													>
+														<RefreshCcw
+															className={cn(
+																"h-4 w-4",
+																refreshingIds.has(job.id) && "animate-spin",
 															)}
 														/>
 													</Button>

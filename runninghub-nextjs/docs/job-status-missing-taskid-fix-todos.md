@@ -1,0 +1,5 @@
+- [x] Audit UI components that display job status.
+- [x] Add shared helper to derive display status from Job metadata.
+- [x] Replace direct `job.status` usage with derived status in UI components.
+- [x] Update job-status sync response to map missing `runninghubTaskId` to display status.
+- [ ] Manual check: job with no `runninghubTaskId` never shows running (including Bot Center).

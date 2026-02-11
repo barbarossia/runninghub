@@ -6,8 +6,28 @@ import type {
 } from '@/types/bot';
 import type { Job } from '@/types/workspace';
 
-const getJobTimestamp = (job: Job): number => {
-	return job.completedAt || job.startedAt || job.queuedAt || job.createdAt;
+type JobStatusInput = {
+	id: string;
+	workflowId: string;
+	workflowName?: string;
+	status: string;
+	completedAt?: number;
+	startedAt?: number;
+	queuedAt?: number;
+	createdAt?: number;
+	timestamp?: number;
+	verified?: boolean;
+};
+
+const getJobTimestamp = (job: JobStatusInput): number => {
+	return (
+		job.timestamp ||
+		job.completedAt ||
+		job.startedAt ||
+		job.queuedAt ||
+		job.createdAt ||
+		0
+	);
 };
 
 const getOutputPath = (output: {
@@ -30,7 +50,7 @@ const isVideoPath = (filePath: string): boolean => {
 };
 
 export const runJobStatusBot = (
-	jobs: Job[],
+	jobs: JobStatusInput[],
 	config: JobStatusBotConfig,
 ): JobStatusSummary => {
 	const statusCounts: Record<string, number> = {};
@@ -74,6 +94,7 @@ export const runJobStatusBot = (
 				}))
 			: undefined,
 		recentJobs: recentJobSummaries,
+		unverifiedCount: recentJobs.filter((job) => job.verified === false).length,
 	};
 };
 

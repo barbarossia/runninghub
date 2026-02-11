@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
 	Bot,
 	Loader2,
@@ -24,11 +24,18 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import {
-	runAutoSaveDecodeBot,
-	runJobStatusBot,
-} from '@/utils/bots';
+import { runAutoSaveDecodeBot, runJobStatusBot } from '@/utils/bots';
 import type { AutoSaveDecodeBotConfig, JobStatusBotConfig } from '@/types/bot';
+type ResolvedJobStatus = {
+	id: string;
+	workflowId: string;
+	workflowName?: string;
+	status: string;
+	timestamp: number;
+	verified: boolean;
+	source: 'runninghub' | 'local';
+	reason?: string;
+};
 
 const formatTimestamp = (timestamp?: number): string => {
 	if (!timestamp) return '—';
@@ -49,6 +56,7 @@ const statusBadgeClasses: Record<string, string> = {
 };
 
 export function BotCenter() {
+	const containerRef = useRef<HTMLDivElement | null>(null);
 	const {
 		isOpen,
 		dockMode,
@@ -73,6 +81,26 @@ export function BotCenter() {
 		[bots, selectedBotId],
 	);
 
+	const syncJobStatuses = async (
+		config: JobStatusBotConfig,
+	): Promise<ResolvedJobStatus[]> => {
+		const response = await fetch('/api/workspace/jobs/sync-status', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				mode: 'trusted',
+				maxJobs: Math.max(1, config.recentLimit),
+			}),
+		});
+
+		const data = await response.json();
+		if (!response.ok || !data.success) {
+			throw new Error(data.error || 'Failed to sync job status');
+		}
+
+		return data.resolvedJobs as ResolvedJobStatus[];
+	};
+
 	const runBot = async (botId?: string) => {
 		const latestBots = useBotCenterStore.getState().bots;
 		const bot = latestBots.find((entry) => entry.id === botId);
@@ -84,12 +112,12 @@ export function BotCenter() {
 
 		setRunState(bot.id, { status: 'running', startedAt: Date.now() });
 		try {
-			await fetchJobs();
-			const latestJobs = useWorkspaceStore.getState().jobs;
-
 			if (bot.type === 'job-status') {
+				const resolvedJobs = await syncJobStatuses(
+					bot.config as JobStatusBotConfig,
+				);
 				const summary = runJobStatusBot(
-					latestJobs,
+					resolvedJobs,
 					bot.config as JobStatusBotConfig,
 				);
 				setJobStatusResult(bot.id, summary);
@@ -99,6 +127,8 @@ export function BotCenter() {
 				if (!workspaceFolder?.folder_path) {
 					throw new Error('Select a workspace folder first.');
 				}
+				await fetchJobs();
+				const latestJobs = useWorkspaceStore.getState().jobs;
 				const summary = await runAutoSaveDecodeBot({
 					jobs: latestJobs,
 					config: bot.config as AutoSaveDecodeBotConfig,
@@ -147,6 +177,13 @@ export function BotCenter() {
 		const statusEntries = Object.entries(summary.statusCounts);
 		return (
 			<div className='grid gap-3 text-xs text-gray-600 lg:grid-cols-[220px,1fr]'>
+				{summary.unverifiedCount ? (
+					<div className='rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 lg:col-span-2'>
+						{summary.unverifiedCount} job
+						{summary.unverifiedCount === 1 ? '' : 's'} could not be verified
+						from RunningHub and are marked as unknown.
+					</div>
+				) : null}
 				<div className='grid grid-cols-2 gap-2'>
 					{statusEntries.map(([status, count]) => (
 						<div
@@ -282,12 +319,34 @@ export function BotCenter() {
 		);
 	};
 
+	useEffect(() => {
+		if (!isOpen) return;
+
+		const handlePointerDown = (event: PointerEvent) => {
+			const target = event.target as HTMLElement | null;
+			if (!target) return;
+
+			const ignoredParent = target.closest(
+				'[data-bot-center-ignore-outside="true"]',
+			);
+			if (ignoredParent) return;
+
+			if (containerRef.current?.contains(target)) return;
+			setOpen(false);
+		};
+
+		document.addEventListener('pointerdown', handlePointerDown);
+		return () => {
+			document.removeEventListener('pointerdown', handlePointerDown);
+		};
+	}, [isOpen, setOpen]);
+
 	if (!isOpen) {
 		return null;
 	}
 
 	return (
-		<div className={containerClassName}>
+		<div className={containerClassName} ref={containerRef}>
 			<Card className='w-[720px] border border-blue-100 bg-white/95 shadow-lg backdrop-blur'>
 				<div className='flex items-center justify-between border-b border-blue-100 px-3 py-2'>
 					<div className='flex items-center gap-2 text-sm font-semibold text-gray-800'>
@@ -327,7 +386,7 @@ export function BotCenter() {
 						<SelectTrigger className='w-full'>
 							<SelectValue placeholder='Select a bot' />
 						</SelectTrigger>
-						<SelectContent>
+						<SelectContent data-bot-center-ignore-outside="true">
 							{bots.map((bot) => (
 								<SelectItem key={bot.id} value={bot.id}>
 									{bot.name}

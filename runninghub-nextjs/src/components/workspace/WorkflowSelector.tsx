@@ -300,11 +300,14 @@ export function WorkflowSelector({
 										// Determine input type based on operation
 										const opType =
 											lw.inputs?.[0]?.operation || "video-convert";
+										const isRenameOnly = opType === "rename-output";
 										const isVideoOp =
-											opType.startsWith("video-") || opType === "caption";
+											!isRenameOnly &&
+											(opType.startsWith("video-") || opType === "caption");
 										const isImageOp =
-											opType.startsWith("image-") ||
-											opType === "duck-decode";
+											!isRenameOnly &&
+											(opType.startsWith("image-") ||
+												opType === "duck-decode");
 
 										// Create synthetic input for compatibility checks
 										const syntheticInput = {
@@ -312,13 +315,14 @@ export function WorkflowSelector({
 											name: "Input File",
 											type: "file" as const,
 											required: true,
-											validation: {
-												mediaType: isVideoOp
-													? ("video" as const)
-													: isImageOp
-														? ("image" as const)
-														: undefined,
-											},
+											validation:
+												isVideoOp || isImageOp
+													? {
+															mediaType: isVideoOp
+																? ("video" as const)
+																: ("image" as const),
+														}
+													: undefined,
 										};
 
 										return {

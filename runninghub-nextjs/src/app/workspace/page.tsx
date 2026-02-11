@@ -14,7 +14,6 @@ import { useFolderSelection } from "@/hooks/useFolderSelection";
 import { useAutoLoadFolder } from "@/hooks/useAutoLoadFolder";
 import { useFileSystem } from "@/hooks";
 import { FolderSelectionLayout } from "@/components/folder/FolderSelectionLayout";
-import { SelectedFolderHeader } from "@/components/folder/SelectedFolderHeader";
 import { ConsoleViewer } from "@/components/ui/ConsoleViewer";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -258,12 +257,109 @@ export default function WorkspacePage() {
 	// Resize dialog state
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
 	const [resizeFile, setResizeFile] = useState<MediaFile | null>(null);
+	const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+	const [promptContent, setPromptContent] = useState<string | null>(null);
+	const [promptFileName, setPromptFileName] = useState<string | null>(null);
+	const [isPromptLoading, setIsPromptLoading] = useState(false);
+	const [isPromptFormatted, setIsPromptFormatted] = useState(true);
+	const [promptAvailability, setPromptAvailability] = useState<
+		Record<string, boolean>
+	>({});
+	const [promptCache, setPromptCache] = useState<Record<string, string>>({});
 
 	// Export config from store
 	const { deleteAfterExport } = useExportConfigStore();
 
 	// Get selected files from store
 	const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
+	const isSingleSelectedFile = selectedFiles.length === 1;
+	const selectedPromptAvailable = isSingleSelectedFile
+		? !!promptAvailability[selectedFiles[0].path]
+		: false;
+
+	const formatPrompt = useCallback((value: string | null) => {
+		if (!value) return null;
+		try {
+			const parsed = JSON.parse(value);
+			if (typeof parsed === "object" && parsed !== null) {
+				if (
+					"prompt" in parsed &&
+					typeof (parsed as { prompt?: unknown }).prompt === "string"
+				) {
+					return JSON.stringify(
+						JSON.parse((parsed as { prompt: string }).prompt),
+						null,
+						2,
+					);
+				}
+				return JSON.stringify(parsed, null, 2);
+			}
+		} catch {
+			return value;
+		}
+		return value;
+	}, []);
+
+	const fetchPromptMetadata = useCallback(
+		async (file: MediaFile, silent = true) => {
+			try {
+				const response = await fetch("/api/workspace/metadata", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ path: file.path }),
+				});
+				const data = await response.json();
+				if (!response.ok || !data?.success) {
+					throw new Error(data?.error || "Failed to read prompt metadata");
+				}
+				const prompt = data?.metadata?.prompt;
+				setPromptAvailability((prev) => ({
+					...prev,
+					[file.path]: !!prompt,
+				}));
+				if (typeof prompt === "string" && prompt.length > 0) {
+					setPromptCache((prev) => ({ ...prev, [file.path]: prompt }));
+				}
+				return prompt as string | null;
+			} catch (error) {
+				if (!silent) {
+					toast.error("Failed to read prompt metadata");
+				}
+				setPromptAvailability((prev) => ({
+					...prev,
+					[file.path]: false,
+				}));
+				return null;
+			}
+		},
+		[],
+	);
+
+	useEffect(() => {
+		if (selectedFiles.length !== 1) return;
+		const file = selectedFiles[0];
+		if (promptAvailability[file.path] !== undefined) return;
+		fetchPromptMetadata(file, true);
+	}, [selectedFiles, promptAvailability, fetchPromptMetadata]);
+
+	const handleViewPrompt = useCallback(async () => {
+		if (selectedFiles.length !== 1) return;
+		const file = selectedFiles[0];
+		setIsPromptLoading(true);
+		setPromptFileName(file.name);
+		const cached = promptCache[file.path];
+		let prompt = cached ?? null;
+		if (!prompt) {
+			prompt = await fetchPromptMetadata(file, false);
+		}
+		setIsPromptLoading(false);
+		if (!prompt) {
+			toast.info("No embedded prompt found");
+			return;
+		}
+		setPromptContent(prompt);
+		setPromptDialogOpen(true);
+	}, [selectedFiles, promptCache, fetchPromptMetadata]);
 
 	useEffect(() => {
 		if (!selectedComplexWorkflowId) {
@@ -318,6 +414,7 @@ export default function WorkspacePage() {
 			fps: file.fps,
 			duration: file.duration,
 			thumbnail: file.thumbnail,
+			blob_url: file.blobUrl,
 			created_at: file.created_at,
 			modified_at: file.modified_at,
 		}));
@@ -328,6 +425,7 @@ export default function WorkspacePage() {
 	// Store mediaSubscription in a ref to avoid state-dependent effect loops
 	const mediaSubscriptionRef = useRef<EventSource | null>(null);
 	const isMediaMountedRef = useRef(true);
+	const selectedFolderPathRef = useRef<string | null>(null);
 	const [isMediaLive, setIsMediaLive] = useState(false);
 	// Manual override for live media subscription
 	// true = forced on, false = forced off, null = auto (default)
@@ -341,6 +439,7 @@ export default function WorkspacePage() {
 			"[Workspace] Resetting manualLiveOverride due to folder change",
 			{ toast: false },
 		);
+		selectedFolderPathRef.current = selectedFolder?.folder_path ?? null;
 		setManualLiveOverride(null);
 	}, [selectedFolder]);
 
@@ -410,8 +509,58 @@ export default function WorkspacePage() {
 
 	// Helper to process and update media files
 	const processFolderContents = useCallback(
-		(result: any) => {
+		(
+			result: any,
+			expectedFolderPath?: string | null,
+			mode: "merge" | "replace" = "merge",
+		) => {
 			if (!result) return;
+			const normalizePath = (value: string) => value.replace(/\/+$/, "");
+			const currentPath = selectedFolderPathRef.current
+				? normalizePath(selectedFolderPathRef.current)
+				: null;
+			const requestPath = expectedFolderPath
+				? normalizePath(expectedFolderPath)
+				: null;
+			const responsePath = result.current_path
+				? normalizePath(result.current_path)
+				: null;
+
+			if (currentPath && requestPath && currentPath !== requestPath) {
+				console.warn(
+					"[processFolderContents] Ignoring stale folder contents (folder changed before response)",
+					{
+						currentPath,
+						requestPath,
+						responsePath,
+					},
+				);
+				return;
+			}
+
+			if (requestPath && responsePath && requestPath !== responsePath) {
+				console.warn(
+					"[processFolderContents] Ignoring mismatched folder contents (request/response mismatch)",
+					{
+						currentPath,
+						requestPath,
+						responsePath,
+					},
+				);
+				return;
+			}
+
+			if (currentPath && responsePath && currentPath !== responsePath) {
+				console.warn(
+					"[processFolderContents] Ignoring mismatched folder contents (response/current mismatch)",
+					{
+						currentPath,
+						requestPath,
+						responsePath,
+					},
+				);
+				return;
+			}
 
 			// DEBUG: Log raw API data
 			console.log(
@@ -429,6 +578,7 @@ export default function WorkspacePage() {
 			const imageFiles = (result.images || []).map((file: any) => {
 				// DEBUG: Log each file's dimensions
 				// console.log(`[processFolderContents] Processing ${file.name}: width=${file.width}, height=${file.height}`);
+				const cacheBuster = file.modified_at || file.created_at || Date.now();
 
 				return {
 					id: file.path,
@@ -439,9 +589,11 @@ export default function WorkspacePage() {
 					size: file.size || 0,
 					width: file.width,
 					height: file.height,
+					format: file.format,
+					prompt: file.prompt,
 					created_at: file.created_at,
 					modified_at: file.modified_at,
-					thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}`,
+					thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
 					selected: false,
 					// Initialize duck encoding fields
 					isDuckEncoded: undefined,
@@ -454,28 +606,38 @@ export default function WorkspacePage() {
 			});
 
 			// Convert videos to MediaFile format with serve URLs
-			const videoFiles = (result.videos || []).map((file: any) => ({
-				id: file.path,
-				name: file.name,
-				path: file.path,
-				type: "video" as const,
-				extension: "." + (file.name.split(".").pop() || "").toLowerCase(),
-				size: file.size || 0,
-				width: file.width,
-				height: file.height,
-				fps: file.fps,
-				duration: file.duration,
-				created_at: file.created_at,
-				modified_at: file.modified_at,
-				thumbnail: file.thumbnail
-					? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}`
-					: undefined,
-				blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}`,
+			const videoFiles = (result.videos || []).map((file: any) => {
+				const cacheBuster = file.modified_at || file.created_at || Date.now();
+
+				return {
+					id: file.path,
+					name: file.name,
+					path: file.path,
+					type: "video" as const,
+					extension: "." + (file.name.split(".").pop() || "").toLowerCase(),
+					size: file.size || 0,
+					width: file.width,
+					height: file.height,
+					fps: file.fps,
+					duration: file.duration,
+					codec: file.codec,
+					codecLongName: file.codecLongName,
+					bitrate: file.bitrate,
+					containerFormat: file.containerFormat,
+					containerFormatLong: file.containerFormatLong,
+					prompt: file.prompt,
+					created_at: file.created_at,
+					modified_at: file.modified_at,
+					thumbnail: file.thumbnail
+						? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}&v=${cacheBuster}`
+						: undefined,
+					blobUrl: `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
 				selected: false,
 				// Caption from associated txt file
 				caption: file.caption,
 				captionPath: file.captionPath,
-			}));
+				};
+			});
 
 			// Combine both types and deduplicate by ID (path)
 			const allFiles = [...imageFiles, ...videoFiles];
@@ -495,24 +657,46 @@ export default function WorkspacePage() {
 			}
 
 			const uniqueFiles = Array.from(uniqueMap.values());
-			mergeMediaFiles(uniqueFiles as MediaFile[]);
+			if (mode === "replace") {
+				const currentFiles = useWorkspaceStore.getState().mediaFiles;
+				const existingById = new Map(
+					currentFiles.map((file) => [file.id, file]),
+				);
+				const nextFiles = uniqueFiles.map((file) => {
+					const existing = existingById.get(file.id);
+					if (!existing) return file;
+					return {
+						...file,
+						selected: existing.selected,
+						isDuckEncoded: existing.isDuckEncoded ?? file.isDuckEncoded,
+						duckRequiresPassword:
+							existing.duckRequiresPassword ?? file.duckRequiresPassword,
+						duckValidationPending:
+							existing.duckValidationPending ?? file.duckValidationPending,
+					};
+				});
+				setMediaFiles(nextFiles as MediaFile[]);
+			} else {
+				mergeMediaFiles(uniqueFiles as MediaFile[]);
+			}
 
 			// NOTE: Disabled automatic validation on folder load for performance
 			// Images will be validated lazily when selected instead
 			// validateAllImagesForDuck(uniqueFiles as MediaFile[]);
 		},
-		[setMediaFiles, validateAllImagesForDuck],
+		[mergeMediaFiles, setMediaFiles, validateAllImagesForDuck],
 	);
 
 	const handleRefresh = useCallback(
 		async (silent = false) => {
 			if (selectedFolder) {
+				selectedFolderPathRef.current = selectedFolder.folder_path;
 				const result = await loadFolderContents(
 					selectedFolder.folder_path,
 					selectedFolder.session_id,
 					silent,
 				);
-				processFolderContents(result);
+				processFolderContents(result, selectedFolder.folder_path, "replace");
 			}
 		},
 		[selectedFolder, loadFolderContents, processFolderContents],
@@ -584,6 +768,23 @@ export default function WorkspacePage() {
 						return;
 					}
 
+					const incomingName = file.name;
+
+					if (incomingName) {
+						const currentFiles = useWorkspaceStore.getState().mediaFiles;
+						const conflicts = currentFiles.filter(
+							(existing) =>
+								existing.name === incomingName &&
+								existing.path !== file.path,
+						);
+
+						if (conflicts.length > 0) {
+							conflicts.forEach((existing) =>
+								removeMediaFileByPath(existing.path),
+							);
+						}
+					}
+
 					// Defensive check: skip if file already exists in store to prevent duplicates
 					const currentFiles = useWorkspaceStore.getState().mediaFiles;
 					if (currentFiles.some((f) => f.id === file.path)) {
@@ -594,6 +795,7 @@ export default function WorkspacePage() {
 						return;
 					}
 
+					const cacheBuster = file.modified_at || file.created_at || Date.now();
 					const mediaFile: MediaFile = {
 						id: file.path,
 						name: file.name,
@@ -605,17 +807,24 @@ export default function WorkspacePage() {
 						height: file.height,
 						fps: file.fps,
 						duration: file.duration,
+						codec: file.codec,
+						codecLongName: file.codecLongName,
+						bitrate: file.bitrate,
+						containerFormat: file.containerFormat,
+						containerFormatLong: file.containerFormatLong,
+						format: file.format,
+						prompt: file.prompt,
 						created_at: file.created_at,
 						modified_at: file.modified_at,
 						thumbnail:
 							payload.type === "image"
-								? `/api/images/serve?path=${encodeURIComponent(file.path)}`
+								? `/api/images/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`
 								: file.thumbnail
-									? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}`
+									? `/api/images/serve?path=${encodeURIComponent(file.thumbnail)}&v=${cacheBuster}`
 									: undefined,
 						blobUrl:
 							payload.type === "video"
-								? `/api/videos/serve?path=${encodeURIComponent(file.path)}`
+								? `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`
 								: undefined,
 						caption: file.caption,
 						captionPath: file.captionPath,
@@ -807,7 +1016,7 @@ export default function WorkspacePage() {
 			// Folder is automatically set as selected by the hook
 			// If contents were provided during validation, use them directly
 			if (contents) {
-				processFolderContents(contents);
+				processFolderContents(contents, folder?.folder_path, "replace");
 			}
 			// Otherwise, the useEffect below will load contents when selectedFolder changes
 		},
@@ -836,7 +1045,7 @@ export default function WorkspacePage() {
 				selectedFolder.folder_path,
 				selectedFolder.session_id,
 			).then((result) => {
-				processFolderContents(result);
+				processFolderContents(result, selectedFolder.folder_path, "replace");
 			});
 		} else {
 			console.log("[WorkspacePage] Selected folder cleared");
@@ -2459,6 +2668,18 @@ export default function WorkspacePage() {
 					showBackButton={!!selectedFolder}
 					onBackClick={handleBackToSelection}
 					colorVariant="purple"
+					folderSummary={
+						selectedFolder
+							? {
+									name: selectedFolder.folder_name,
+									path: selectedFolder.folder_path,
+									itemCount: mediaFiles.length,
+									itemType: "images",
+									onRefresh: () => handleRefresh(false),
+									isLoading: false,
+								}
+							: undefined
+					}
 				/>
 
 				{/* Error Display */}
@@ -2486,16 +2707,6 @@ export default function WorkspacePage() {
 				) : (
 					/* Selected Folder Display */
 					<div className="space-y-6">
-						<SelectedFolderHeader
-							folderName={selectedFolder.folder_name}
-							folderPath={selectedFolder.folder_path}
-							itemCount={mediaFiles.length}
-							itemType="images"
-							isVirtual={selectedFolder.is_virtual}
-							isLoading={false}
-							onRefresh={() => handleRefresh(false)}
-							colorVariant="purple"
-						/>
 						<div className="flex items-center gap-2 text-xs text-muted-foreground">
 							<button
 								onClick={() => {
@@ -2622,6 +2833,9 @@ export default function WorkspacePage() {
 										setFileToExportToDataset(null); // null means use selectedFiles
 										setShowSelectDatasetDialog(true);
 									}}
+									onPrompt={handleViewPrompt}
+									promptAvailable={selectedPromptAvailable}
+									promptLoading={isPromptLoading}
 									onDeselectAll={deselectAllMediaFiles}
 								/>
 
@@ -3152,6 +3366,64 @@ export default function WorkspacePage() {
 					isOpen={!!previewImage}
 					onClose={() => setPreviewImage(null)}
 				/>
+
+				{/* Prompt Metadata Dialog */}
+				<Dialog
+					open={promptDialogOpen}
+					onOpenChange={(open) => {
+						setPromptDialogOpen(open);
+						if (!open) {
+							setIsPromptFormatted(true);
+						}
+					}}
+				>
+					<DialogContent className="max-w-3xl w-full">
+						<DialogHeader>
+							<DialogTitle>
+								Prompt Metadata{promptFileName ? `: ${promptFileName}` : ""}
+							</DialogTitle>
+							<DialogDescription>
+								Embedded prompt/comment metadata from the file.
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-3">
+							<div className="flex items-center justify-between">
+								<span className="text-xs text-muted-foreground">
+									Prompt JSON
+								</span>
+								<div className="flex items-center gap-2">
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setIsPromptFormatted((prev) => !prev)}
+										disabled={!promptContent}
+									>
+										{isPromptFormatted ? "Show Raw" : "Pretty JSON"}
+									</Button>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											const content = isPromptFormatted
+												? formatPrompt(promptContent) || ""
+												: promptContent || "";
+											navigator.clipboard.writeText(content);
+											toast.success("Prompt copied to clipboard");
+										}}
+										disabled={!promptContent}
+									>
+										Copy
+									</Button>
+								</div>
+							</div>
+							<pre className="max-h-[60vh] overflow-auto rounded border bg-gray-50 p-3 text-[11px] leading-relaxed text-gray-700 whitespace-pre-wrap">
+								{isPromptFormatted
+									? formatPrompt(promptContent) || "No prompt metadata found."
+									: promptContent || "No prompt metadata found."}
+							</pre>
+						</div>
+					</DialogContent>
+				</Dialog>
 
 				{/* Progress Modal */}
 				{isConvertProgressModalOpen && (

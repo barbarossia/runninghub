@@ -36,6 +36,7 @@ export type JobStatusSummary = {
 		status: string;
 		timestamp?: number;
 	}>;
+	unverifiedCount?: number;
 };
 
 export type AutoSaveDecodeSummary = {

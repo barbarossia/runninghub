@@ -16,9 +16,9 @@ import {
 	Zap,
 	Maximize2,
 	FileText,
-	MessageSquare,
 	Database,
 	FilePlus,
+	MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,6 +83,9 @@ interface MediaSelectionToolbarProps {
 	onCaption?: (files: MediaFile[]) => Promise<void>; // Caption videos using workflow
 	onAddCaption?: (files: MediaFile[]) => Promise<void>; // Manually add caption (empty txt)
 	onExportToDataset?: () => void; // Export selected files to dataset
+	onPrompt?: () => void;
+	promptAvailable?: boolean;
+	promptLoading?: boolean;
 	onDeselectAll?: () => void;
 	disabled?: boolean;
 	className?: string;
@@ -108,6 +111,9 @@ export function MediaSelectionToolbar({
 	onCaption,
 	onAddCaption,
 	onExportToDataset,
+	onPrompt,
+	promptAvailable = false,
+	promptLoading = false,
 	onDeselectAll,
 	disabled = false,
 	className = "",
@@ -592,6 +598,33 @@ export function MediaSelectionToolbar({
 									</Button>
 								)}
 
+								{onPrompt && (
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={onPrompt}
+										disabled={
+											toolbarDisabled ||
+											!isSingleSelection ||
+											!promptAvailable ||
+											promptLoading
+										}
+										className="h-9 border-slate-200 bg-slate-50/50 hover:bg-slate-100 text-slate-700"
+										title={
+											promptAvailable
+												? "View embedded prompt"
+												: "No embedded prompt found"
+										}
+									>
+										{promptLoading ? (
+											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+										) : (
+											<MessageSquare className="h-4 w-4 mr-2" />
+										)}
+										Prompt
+									</Button>
+								)}
+
 								{/* Clip - only when videos are selected */}
 								{onClip && (
 									<Button
@@ -844,6 +877,33 @@ export function MediaSelectionToolbar({
 									>
 										<Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
 										<span className="text-xs">Preview</span>
+									</Button>
+								)}
+
+								{onPrompt && (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={onPrompt}
+										disabled={
+											toolbarDisabled ||
+											!isSingleSelection ||
+											!promptAvailable ||
+											promptLoading
+										}
+										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+										title={
+											promptAvailable
+												? "View embedded prompt"
+												: "No embedded prompt found"
+										}
+									>
+										{promptLoading ? (
+											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+										) : (
+											<MessageSquare className="h-3.5 w-3.5 mr-2 text-slate-400" />
+										)}
+										<span className="text-xs">Prompt</span>
 									</Button>
 								)}
 

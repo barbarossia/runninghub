@@ -7,6 +7,7 @@
 
 import { cn } from "@/lib/utils";
 import { CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
+import { getDisplayJobStatus } from "@/utils/job-status";
 import type { Job } from "@/types/workspace";
 
 export interface JobSeriesNavProps {
@@ -63,19 +64,24 @@ export function JobSeriesNav({
 		<div className={cn("flex items-center gap-2 flex-wrap", className)}>
 			<span className="text-sm text-gray-600 font-medium">Run:</span>
 			{jobs.map((job, index) => (
-				<button
-					key={job.id}
-					onClick={() => onSelectJob(job.id)}
-					className={cn(
-						"px-2 py-1 text-sm rounded transition-all font-medium flex items-center gap-1",
-						job.id === currentJobId
-							? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
-							: getStatusColor(job.status),
-					)}
-					title={`Run #${job.runNumber || index + 1} - ${job.status}`}
-				>
-					{getStatusIcon(job.status)}#{job.runNumber || index + 1}
-				</button>
+				(() => {
+					const displayStatus = getDisplayJobStatus(job);
+					return (
+						<button
+							key={job.id}
+							onClick={() => onSelectJob(job.id)}
+							className={cn(
+								"px-2 py-1 text-sm rounded transition-all font-medium flex items-center gap-1",
+								job.id === currentJobId
+									? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
+									: getStatusColor(displayStatus),
+							)}
+							title={`Run #${job.runNumber || index + 1} - ${displayStatus}`}
+						>
+							{getStatusIcon(displayStatus)}#{job.runNumber || index + 1}
+						</button>
+					);
+				})()
 			))}
 		</div>
 	);

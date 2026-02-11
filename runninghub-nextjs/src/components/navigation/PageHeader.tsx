@@ -6,9 +6,11 @@ import {
 	ArrowLeft,
 	Bot,
 	Calculator,
+	FolderOpen,
 	Home,
 	LucideIcon,
 	MessageSquare,
+	RefreshCw,
 } from "lucide-react";
 import { useBotCenterStore } from "@/store/bot-center-store";
 import { useMessageCenterStore } from "@/store/message-center-store";
@@ -39,6 +41,15 @@ interface PageHeaderProps {
 	colorVariant?: ColorVariant;
 	/** Additional className */
 	className?: string;
+	/** Optional folder summary block */
+	folderSummary?: {
+		name: string;
+		path: string;
+		itemCount: number;
+		itemType: "videos" | "images";
+		isLoading?: boolean;
+		onRefresh?: () => void;
+	};
 }
 
 const COLOR_STYLES = {
@@ -62,6 +73,7 @@ export function PageHeader({
 	onBackClick,
 	colorVariant = "blue",
 	className = "",
+	folderSummary,
 }: PageHeaderProps) {
 	const colors = COLOR_STYLES[colorVariant];
 	const { aspectToolCollapsed, setAspectToolCollapsed } =
@@ -104,6 +116,28 @@ export function PageHeader({
 						Back to Selection
 					</Button>
 				)}
+
+				{folderSummary && (
+					<div className="flex items-center gap-3 px-1">
+						<FolderOpen className="h-4 w-4 text-gray-500" />
+					<div
+						className="flex items-baseline gap-2 truncate max-w-[280px] sm:max-w-[420px]"
+						title={`${folderSummary.name} · ${folderSummary.path} · ${folderSummary.itemCount} ${folderSummary.itemType}`}
+					>
+						<span className="text-sm font-semibold text-gray-900 truncate">
+							{folderSummary.name}
+						</span>
+						<span className="text-xs text-gray-400">·</span>
+						<span className="text-xs text-gray-500 truncate">
+							{folderSummary.path}
+						</span>
+						<span className="text-xs text-gray-400">·</span>
+						<span className="text-xs text-gray-500">
+							{folderSummary.itemCount} {folderSummary.itemType}
+						</span>
+					</div>
+				</div>
+			)}
 
 				{/* Optional title and description */}
 				{title && (
