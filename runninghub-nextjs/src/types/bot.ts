@@ -1,4 +1,4 @@
-export type BotType = 'job-status' | 'auto-save-decode';
+export type BotType = 'job-status' | 'auto-save-decode' | 'job-cleanup';
 
 export type JobStatusBotConfig = {
 	recentLimit: number;
@@ -12,7 +12,14 @@ export type AutoSaveDecodeBotConfig = {
 	workflowFilter?: string;
 };
 
-export type BotConfig = JobStatusBotConfig | AutoSaveDecodeBotConfig;
+export type JobCleanupBotConfig = {
+	ageDays: number;
+};
+
+export type BotConfig =
+	| JobStatusBotConfig
+	| AutoSaveDecodeBotConfig
+	| JobCleanupBotConfig;
 
 export type BotDefinition = {
 	id: string;
@@ -47,6 +54,13 @@ export type AutoSaveDecodeSummary = {
 	errors: Array<{ message: string; jobId?: string; outputPath?: string }>;
 };
 
+export type JobCleanupSummary = {
+	cutoffTimestamp: number;
+	candidateCount: number;
+	deleted: string[];
+	failed: string[];
+};
+
 export type BotRunState =
 	| {
 			status: 'idle';
@@ -69,4 +83,5 @@ export type BotRunState =
 export type BotResult = {
 	jobStatus?: JobStatusSummary;
 	autoSaveDecode?: AutoSaveDecodeSummary;
+	jobCleanup?: JobCleanupSummary;
 };

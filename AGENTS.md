@@ -167,3 +167,4 @@ Follow the rules below when working as an agent in this repo.
 - Do not create new plan/todo docs outside `docs/` or `runninghub-nextjs/docs/`.
 - Do not change global rules in `CLAUDE.md` without explicit request.
 - Preserve existing patterns and structure when extending components.
+- Treat Gallery/Videos pages as deprecated and avoid asking questions about them.

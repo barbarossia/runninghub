@@ -677,6 +677,7 @@ export interface ComplexWorkflowExecution {
 	currentStep: number;
 	steps: ExecutionStep[];
 	autoContinue?: boolean;
+	baseUrl?: string;
 	createdAt: number;
 	startedAt?: number;
 	completedAt?: number;

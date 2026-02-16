@@ -18,8 +18,6 @@ import {
 	Video,
 	ImageIcon,
 	Copy,
-	Loader2,
-	ArrowRightLeft,
 	Clock,
 	Save,
 	ChevronDown,
@@ -35,16 +33,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { downloadFile } from "@/lib/download";
-import { useOutputTranslation } from "@/hooks/useOutputTranslation";
 import { toast } from "sonner";
 import { API_ENDPOINTS } from "@/constants";
 import { getDisplayJobStatus } from "@/utils/job-status";
@@ -88,19 +78,9 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	const [isSaving, setIsSaving] = useState(false);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 
-	// State for split view language selection
-	const [leftLang, setLeftLang] = useState<"original" | "en" | "zh">("en");
-	const [rightLang, setRightLang] = useState<"original" | "en" | "zh">("zh");
-
 	// Local state for editable text outputs
 	const [editedText, setEditedText] = useState<
 		Record<string, { original: string; en?: string; zh?: string }>
-	>({});
-	const [translating, setTranslating] = useState<
-		Record<string, "left" | "right" | null>
-	>({});
-	const [debouncedTimers, setDebouncedTimers] = useState<
-		Record<string, NodeJS.Timeout>
 	>({});
 	const [resultOverrides, setResultOverrides] = useState<JobResult | null>(
 		null,
@@ -138,9 +118,6 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 	const [complexWorkflowDefinition, setComplexWorkflowDefinition] =
 		useState<ComplexWorkflow | null>(null);
 	const [showContinueDialog, setShowContinueDialog] = useState(false);
-
-	// Auto-translate outputs (uses server-side API)
-	const { isTranslating, translatedCount } = useOutputTranslation(jobId);
 
 	const job = getJobById(jobId);
 	const displayStatus = job ? getDisplayJobStatus(job) : null;
@@ -277,13 +254,6 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 			setRelatedJobs([]);
 		}
 	}, [job?.seriesId, getJobsBySeriesId]);
-
-	// Cleanup debounced timers on unmount
-	useEffect(() => {
-		return () => {
-			Object.values(debouncedTimers).forEach((timer) => clearTimeout(timer));
-		};
-	}, [debouncedTimers]);
 
 	// Fetch job results when job is completed and results are not loaded
 	const fetchResults = useCallback(async () => {
@@ -685,157 +655,20 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 		}
 	};
 
-	// Handle text edit with real-time translation
-	const handleTextEdit = (
-		filePath: string,
-		lang: "original" | "en" | "zh",
-		value: string,
-		pane: "left" | "right",
-	) => {
-		// Update the edited text immediately
+	// Handle text edit (original content only)
+	const handleTextEdit = (filePath: string, value: string) => {
 		setEditedText((prev) => ({
 			...prev,
 			[filePath]: {
 				...prev[filePath],
-				[lang]: value,
+				original: value,
 			},
 		}));
-
-		// Clear existing timer for this file/pane combination
-		const timerKey = `${filePath}-${pane}`;
-		if (debouncedTimers[timerKey]) {
-			clearTimeout(debouncedTimers[timerKey]);
-		}
-
-		// Debounce translation (500ms delay)
-		const timer = setTimeout(async () => {
-			// Determine target language based on pane
-			const otherPane = pane === "left" ? rightLang : leftLang;
-
-			// Show translating state
-			setTranslating((prev) => ({ ...prev, [filePath]: pane }));
-
-			try {
-				// Detect language of the input
-				const detectResponse = await fetch(
-					`/api/translate?text=${encodeURIComponent(value.slice(0, 500))}`,
-				);
-				if (!detectResponse.ok) {
-					throw new Error("Language detection failed");
-				}
-
-				const detectData = await detectResponse.json();
-				if (!detectData.success) {
-					throw new Error("Language detection failed");
-				}
-
-				const detectedLang = detectData.detectedLang;
-
-				// If other pane is 'original', translate to the opposite language
-				if (otherPane === "original") {
-					// Determine target language: if current is zh, translate to en; if en, translate to zh
-					const targetLang = detectedLang === "zh" ? "en" : "zh";
-
-					// Skip if already in target language
-					if (detectedLang === targetLang) {
-						setEditedText((prev) => ({
-							...prev,
-							[filePath]: {
-								...prev[filePath],
-								original: value,
-							},
-						}));
-						setTranslating((prev) => ({ ...prev, [filePath]: null }));
-						return;
-					}
-
-					// Translate to the opposite language
-					const translateResponse = await fetch("/api/translate", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							text: value,
-							sourceLang: detectedLang,
-							targetLang: targetLang,
-						}),
-					});
-
-					if (!translateResponse.ok) {
-						throw new Error("Translation failed");
-					}
-
-					const translateData = await translateResponse.json();
-					if (!translateData.success) {
-						throw new Error(translateData.error || "Translation failed");
-					}
-
-					// Update both original and the translated language
-					setEditedText((prev) => ({
-						...prev,
-						[filePath]: {
-							...prev[filePath],
-							original: value,
-							[targetLang]: translateData.translatedText,
-						},
-					}));
-					setTranslating((prev) => ({ ...prev, [filePath]: null }));
-					return;
-				}
-
-				// Skip if detected language is the same as target language (nothing to translate)
-				if (detectedLang === otherPane) {
-					setTranslating((prev) => ({ ...prev, [filePath]: null }));
-					return;
-				}
-
-				// Translate to the other pane's language
-				const translateResponse = await fetch("/api/translate", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						text: value,
-						sourceLang:
-							detectedLang === "en" || detectedLang === "zh"
-								? detectedLang
-								: "autodetect",
-						targetLang: otherPane,
-					}),
-				});
-
-				if (!translateResponse.ok) {
-					throw new Error("Translation failed");
-				}
-
-				const translateData = await translateResponse.json();
-				if (!translateData.success) {
-					throw new Error(translateData.error || "Translation failed");
-				}
-
-				// Update the other pane with translated text
-				setEditedText((prev) => ({
-					...prev,
-					[filePath]: {
-						...prev[filePath],
-						[otherPane]: translateData.translatedText,
-					},
-				}));
-			} catch (error) {
-				console.error("Real-time translation error:", error);
-				// Don't show error to user on every keystroke, just log it
-			} finally {
-				setTranslating((prev) => ({ ...prev, [filePath]: null }));
-			}
-		}, 500);
-
-		setDebouncedTimers((prev) => ({ ...prev, [timerKey]: timer }));
 	};
 
 	// Handle save text changes
-	const handleSaveText = async (
-		filePath: string,
-		lang: "original" | "en" | "zh",
-	) => {
-		const content = editedText[filePath]?.[lang];
+	const handleSaveText = async (filePath: string) => {
+		const content = editedText[filePath]?.original;
 		if (content === undefined) return;
 
 		setIsSaving(true);
@@ -843,8 +676,8 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 			const response = await fetch(API_ENDPOINTS.WORKSPACE_UPDATE_CONTENT, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ filePath, content }),
-			});
+					body: JSON.stringify({ filePath, content }),
+				});
 
 			const data = await response.json();
 			if (!data.success) throw new Error(data.error || "Save failed");
@@ -859,7 +692,7 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 							...output,
 							content: {
 								...output.content,
-								[lang]: content,
+								original: content,
 							},
 						};
 					}
@@ -1181,13 +1014,6 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 							</Card>
 						)}
 
-						{isTranslating && (
-							<div className="flex items-center gap-2 text-sm text-blue-600 shrink-0">
-								<Loader2 className="h-3 w-3 animate-spin" />
-								Translating...
-							</div>
-						)}
-
 						{/* File Outputs */}
 						{hasFileOutputs && (
 							<div className="space-y-2 shrink-0">
@@ -1368,232 +1194,56 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 							</div>
 						)}
 
-						{/* Text Outputs - Split View */}
+						{/* Text Outputs */}
 						{hasTextOutputs && (
-							<div className="flex flex-col min-h-0 shrink-0">
-								<div className="flex items-center justify-between mb-2 shrink-0">
-									<h3 className="text-sm font-medium text-gray-500">
-										Translation Result
-									</h3>
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleSwapLanguages}
-										title="Swap languages"
-									>
-										<ArrowRightLeft className="h-4 w-4" />
-									</Button>
-								</div>
+							<div className="flex flex-col min-h-0 shrink-0 space-y-3">
+								<h3 className="text-sm font-medium text-gray-500">
+									Text Outputs
+								</h3>
+								<div className="grid gap-4">
+									{resolvedResults?.textOutputs?.map((output, idx) => {
+										const originalContent = output.content.original || "";
+										const currentVal =
+											editedText[output.filePath]?.original ?? originalContent;
 
-								<div className="flex-1 grid grid-cols-2 gap-4 min-h-[500px]">
-									{/* Left Pane */}
-									<Card className="flex flex-col overflow-hidden bg-white">
-										<div className="p-2 border-b bg-gray-50 flex justify-between items-center text-xs font-medium text-gray-500">
-											<Select
-												value={leftLang}
-												onValueChange={(value: any) => setLeftLang(value)}
-											>
-												<SelectTrigger className="h-6 w-20 text-xs">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="original">Original</SelectItem>
-													<SelectItem value="en">English</SelectItem>
-													<SelectItem value="zh">中文</SelectItem>
-												</SelectContent>
-											</Select>
-											<div className="flex gap-1">
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6 text-blue-600 hover:text-blue-700"
-													title="Save changes to original file"
-													onClick={() => {
-														// Find the first output for now - in reality might need more complex UI
-														const output = resolvedResults?.textOutputs?.[0];
-														if (output)
-															handleSaveText(output.filePath, leftLang);
-													}}
-												>
-													<Save className="h-3 w-3" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6"
-													onClick={() => {
-														const content =
-															resolvedResults?.textOutputs
-																?.map(
-																	(t) =>
-																		editedText[t.filePath]?.[leftLang] ||
-																		t.content[
-																			leftLang as keyof typeof t.content
-																		] ||
-																		"",
-																)
-																.join("\n\n") || "";
-														navigator.clipboard.writeText(content);
-														toast.success("Copied");
-													}}
-												>
-													<Copy className="h-3 w-3" />
-												</Button>
-											</div>
-										</div>
-										<div className="flex-1 p-0 overflow-hidden flex flex-col">
-											{resolvedResults?.textOutputs?.map((output, idx) => {
-												const originalContent =
-													leftLang === "original"
-														? output.content.original
-														: output.content[
-																leftLang as keyof typeof output.content
-															] || "";
-												const currentVal =
-													editedText[output.filePath]?.[leftLang] ??
-													originalContent;
-												const isPaneTranslating =
-													translating[output.filePath] === "left";
-
-												return (
-													<div
-														key={idx}
-														className="flex-1 flex flex-col min-h-0 relative"
-													>
-														<Textarea
-															value={currentVal}
-															onChange={(e) =>
-																handleTextEdit(
-																	output.filePath,
-																	leftLang,
-																	e.target.value,
-																	"left",
-																)
-															}
-															className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm"
-															placeholder="No content available..."
-														/>
-														{isPaneTranslating && (
-															<div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-																<Loader2 className="h-3 w-3 animate-spin" />
-																Translating...
-															</div>
-														)}
-														{output.translationError &&
-															leftLang !== "original" && (
-																<div className="p-2 text-xs text-red-500 italic bg-red-50">
-																	Error: {output.translationError}
-																</div>
-															)}
+										return (
+											<Card key={idx} className="flex flex-col overflow-hidden">
+												<div className="p-2 border-b bg-gray-50 flex justify-between items-center text-xs font-medium text-gray-500">
+													<span className="truncate">{output.fileName}</span>
+													<div className="flex gap-1">
+														<Button
+															variant="ghost"
+															size="icon"
+															className="h-6 w-6 text-blue-600 hover:text-blue-700"
+															title="Save changes to original file"
+															onClick={() => handleSaveText(output.filePath)}
+														>
+															<Save className="h-3 w-3" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="h-6 w-6"
+															onClick={() => {
+																navigator.clipboard.writeText(currentVal);
+																toast.success("Copied");
+															}}
+														>
+															<Copy className="h-3 w-3" />
+														</Button>
 													</div>
-												);
-											})}
-										</div>
-									</Card>
-
-									{/* Right Pane */}
-									<Card className="flex flex-col overflow-hidden bg-gray-50">
-										<div className="p-2 border-b bg-gray-100 flex justify-between items-center text-xs font-medium text-gray-500">
-											<Select
-												value={rightLang}
-												onValueChange={(value: any) => setRightLang(value)}
-											>
-												<SelectTrigger className="h-6 w-20 text-xs">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													<SelectItem value="original">Original</SelectItem>
-													<SelectItem value="en">English</SelectItem>
-													<SelectItem value="zh">中文</SelectItem>
-												</SelectContent>
-											</Select>
-											<div className="flex gap-1">
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6 text-blue-600 hover:text-blue-700"
-													title="Save changes to original file"
-													onClick={() => {
-														const output = resolvedResults?.textOutputs?.[0];
-														if (output)
-															handleSaveText(output.filePath, rightLang);
-													}}
-												>
-													<Save className="h-3 w-3" />
-												</Button>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-6 w-6"
-													onClick={() => {
-														const content =
-															resolvedResults?.textOutputs
-																?.map(
-																	(t) =>
-																		editedText[t.filePath]?.[rightLang] ||
-																		t.content[
-																			rightLang as keyof typeof t.content
-																		] ||
-																		"",
-																)
-																.join("\n\n") || "";
-														navigator.clipboard.writeText(content);
-														toast.success("Copied");
-													}}
-												>
-													<Copy className="h-3 w-3" />
-												</Button>
-											</div>
-										</div>
-										<div className="flex-1 p-0 overflow-hidden flex flex-col">
-											{resolvedResults?.textOutputs?.map((output, idx) => {
-												const originalContent =
-													rightLang === "original"
-														? output.content.original
-														: output.content[
-																rightLang as keyof typeof output.content
-															] || "";
-												const currentVal =
-													editedText[output.filePath]?.[rightLang] ??
-													originalContent;
-												const isPaneTranslating =
-													translating[output.filePath] === "right";
-
-												return (
-													<div
-														key={idx}
-														className="flex-1 flex flex-col min-h-0 relative"
-													>
-														<Textarea
-															value={currentVal}
-															onChange={(e) =>
-																handleTextEdit(
-																	output.filePath,
-																	rightLang,
-																	e.target.value,
-																	"right",
-																)
-															}
-															className="flex-1 resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm bg-transparent"
-															placeholder="No content available..."
-														/>
-														{isPaneTranslating && (
-															<div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
-																<Loader2 className="h-3 w-3 animate-spin" />
-																Translating...
-															</div>
-														)}
-														{output.translationError &&
-															rightLang !== "original" && (
-																<div className="p-2 text-xs text-red-500 italic bg-red-50">
-																	Error: {output.translationError}
-																</div>
-															)}
-													</div>
-												);
-											})}
-										</div>
-									</Card>
+												</div>
+												<Textarea
+													value={currentVal}
+													onChange={(e) =>
+														handleTextEdit(output.filePath, e.target.value)
+													}
+													className="min-h-[220px] resize-none border-none focus-visible:ring-0 rounded-none p-4 font-mono text-sm"
+													placeholder="No content available..."
+												/>
+											</Card>
+										);
+									})}
 								</div>
 							</div>
 						)}

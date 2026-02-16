@@ -27,11 +27,11 @@ import {
 	AlertCircle,
 	PlayCircle,
 	Download,
-	Zap,
 	Expand,
 	Database,
 	Save,
 	FilePlus,
+	MessageSquare,
 } from "lucide-react";
 import { VideoPreview } from "./VideoPreview";
 import { useWorkspaceStore } from "@/store/workspace-store";
@@ -166,10 +166,10 @@ export interface MediaGalleryProps {
 	onDecode?: (file: MediaFile, password?: string) => Promise<void>;
 	onPreview?: (file: MediaFile) => void;
 	onExport?: (files: MediaFile[]) => Promise<void>;
-	onConvertFps?: (files: MediaFile[]) => Promise<void>;
 	onExportToDataset?: (file: MediaFile) => void;
 	onResize?: (file: MediaFile) => void;
 	onAddCaption?: (files: MediaFile[]) => Promise<void>;
+	onPrompt?: (file: MediaFile) => void;
 	className?: string;
 }
 
@@ -182,10 +182,10 @@ export function MediaGallery({
 	onDecode,
 	onPreview,
 	onExport,
-	onConvertFps,
 	onExportToDataset,
 	onResize,
 	onAddCaption,
+	onPrompt,
 	className = "",
 }: MediaGalleryProps) {
 	const {
@@ -1166,6 +1166,17 @@ export function MediaGallery({
 															<Eye className="h-4 w-4 mr-2" />
 															Preview
 														</DropdownMenuItem>
+														{onPrompt && (
+															<DropdownMenuItem
+																onClick={(e) => {
+																	e.stopPropagation();
+																	onPrompt(file);
+																}}
+															>
+																<MessageSquare className="h-4 w-4 mr-2" />
+																Prompt
+															</DropdownMenuItem>
+														)}
 														{onDecode && file.isDuckEncoded && (
 															<DropdownMenuItem
 																onClick={(e) => {
@@ -1244,18 +1255,6 @@ export function MediaGallery({
 															>
 																<Database className="h-4 w-4 mr-2" />
 																Dataset
-															</DropdownMenuItem>
-														)}
-														{file.type === "video" && onConvertFps && (
-															<DropdownMenuItem
-																onClick={(e) => {
-																	e.stopPropagation();
-																	onConvertFps([file]);
-																}}
-																className="text-blue-600 focus:text-blue-700 focus:bg-blue-50"
-															>
-																<Zap className="h-4 w-4 mr-2" />
-																Convert FPS
 															</DropdownMenuItem>
 														)}
 														{/* Resize - only in dataset mode */}
