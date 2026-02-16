@@ -249,8 +249,8 @@ A modern web interface for processing and managing images with the RunningHub AI
 ### Features
 
 - **Modern File System Access API**: Secure, cross-platform folder selection directly in the browser
-- **Multiple View Modes**: Grid, list, and large grid layouts for image gallery
-- **Batch Image Processing**: Process multiple images with RunningHub AI workflows
+- **Multiple View Modes**: Grid, list, and large grid layouts for media gallery (images and videos)
+- **Batch Image & Video Processing**: Process multiple files with RunningHub AI workflows
 - **Real-time Progress Tracking**: Live progress updates for processing tasks
 - **Dark Mode Support**: Automatic system theme detection with manual override
 - **Keyboard Shortcuts**: Full keyboard navigation for power users

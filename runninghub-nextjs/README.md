@@ -5,8 +5,8 @@ A modern web interface for processing and managing images with the RunningHub AI
 ## Features
 
 - **Modern File System Access API**: Secure, cross-platform folder selection directly in the browser
-- **Multiple View Modes**: Grid, list, and large grid layouts for image gallery
-- **Batch Image Processing**: Process multiple images with RunningHub AI workflows
+- **Multiple View Modes**: Grid, list, and large grid layouts for media gallery (images and videos)
+- **Batch Image & Video Processing**: Process multiple files with RunningHub AI workflows
 - **Real-time Progress Tracking**: Live progress updates for processing tasks
 - **Dark Mode Support**: Automatic system theme detection with manual override
 - **Keyboard Shortcuts**: Full keyboard navigation for power users
@@ -31,12 +31,15 @@ runninghub-nextjs/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── api/               # API routes
-│   │   ├── gallery/           # Gallery page
+│   │   ├── workspace/         # Main workspace page (gallery + workflows)
+│   │   ├── job-history/       # Job history page
 │   │   ├── layout.tsx         # Root layout
-│   │   └── page.tsx           # Home page
+│   │   └── page.tsx           # Home page (redirects to workspace)
 │   ├── components/
 │   │   ├── folder/            # Folder selection components
 │   │   ├── images/            # Image gallery components
+│   │   ├── videos/            # Video processing components
+│   │   ├── workspace/         # Workspace components
 │   │   ├── progress/          # Progress tracking components
 │   │   ├── selection/         # Selection toolbar components
 │   │   ├── theme/             # Theme provider components

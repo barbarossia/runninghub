@@ -291,11 +291,7 @@ interface LogEntry {
 - Validation errors in forms
 
 **Key locations:**
-- `src/app/gallery/page.tsx`: Deletion success/error, folder selection errors.
-- `src/app/workspace/page.tsx`: Workflow save/delete, job start/completion, duck decoding status.
-- `src/app/videos/clip/page.tsx`: Clipping success/failure, renaming, deletion.
-- `src/app/videos/crop/page.tsx`: Crop configuration validation, success/failure.
-- `src/app/videos/page.tsx`: Conversion status, renaming, deletion.
+- `src/app/workspace/page.tsx`: All media management - deletion, folder selection, workflow save/delete, job start/completion, duck decoding status, video operations (FPS convert, crop, clip, split).
 
 ### API Routes (Next.js Backend)
 

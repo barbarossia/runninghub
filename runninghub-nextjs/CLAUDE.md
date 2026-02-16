@@ -54,7 +54,7 @@ git commit -m "feat: complete phases 1-3"
 ## Design System & Styling Standards
 
 ### Template Page Reference
-**RULE 2**: Use the **Gallery page** (`src/app/gallery/page.tsx`) as the template for all new pages.
+**RULE 2**: Use the **Workspace page** (`src/app/workspace/page.tsx`) as the template for all new pages.
 
 All new pages must follow the same:
 - **Layout structure**
@@ -65,7 +65,7 @@ All new pages must follow the same:
 
 ### Page Layout Template
 
-Based on `src/app/gallery/page.tsx`, every page should follow this structure:
+Based on `src/app/workspace/page.tsx`, every page should follow this structure:
 
 ```tsx
 'use client';
@@ -903,7 +903,7 @@ Before committing frontend changes, verify:
 ## Additional Resources
 
 ### Key File Locations
-- **Template page**: `src/app/gallery/page.tsx`
+- **Template page**: `src/app/workspace/page.tsx`
 - **Console component**: `src/components/ui/ConsoleViewer.tsx`
 - **Selection toolbar**: `src/components/selection/BaseSelectionToolbar.tsx`
 - **Folder components**: `src/components/folder/`

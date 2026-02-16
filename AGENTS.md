@@ -91,11 +91,11 @@ Follow the rules below when working as an agent in this repo.
 - CLI: use `print_info/print_success/print_warning/print_error` (colorama).
 
 ### UI/UX Standards (Frontend)
-- Use the Gallery page as layout template: `src/app/gallery/page.tsx`.
+- Use the Workspace page as layout template: `src/app/workspace/page.tsx`.
 - Always include `ConsoleViewer` on pages that need task feedback.
 - Do not add auto-refresh intervals; refresh only on add/remove operations.
 - Follow hydration best practices: no conditional early returns based on `mounted`.
-- Gallery layouts must follow `src/components/workspace/MediaGallery.tsx` patterns.
+- Gallery layouts must follow `src/components/workspace/MediaGallery.tsx` patterns (used in workspace).
 
 ### Styling and Design System
 - Tailwind-based. Keep class names consistent with existing components.
@@ -167,4 +167,4 @@ Follow the rules below when working as an agent in this repo.
 - Do not create new plan/todo docs outside `docs/` or `runninghub-nextjs/docs/`.
 - Do not change global rules in `CLAUDE.md` without explicit request.
 - Preserve existing patterns and structure when extending components.
-- Treat Gallery/Videos pages as deprecated and avoid asking questions about them.
+- Gallery/Videos pages have been migrated to Workspace - use workspace page as template.
