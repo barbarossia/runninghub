@@ -64,6 +64,12 @@ function migrateLegacyWorkflow(data: any): LocalWorkflow {
 
 	// Migration for legacy "steps" format
 	if (data.steps && Array.isArray(data.steps) && data.steps.length > 0) {
+		// eslint-disable-next-line no-console
+		console.warn(
+			"[Deprecation Warning] Loading a workflow with legacy 'steps' format. " +
+			"Please re-save this workflow to migrate to the new 'inputs' format. " +
+			"Legacy format support will be removed in a future version.",
+		);
 		const step = data.steps[0];
 		// Map old step structure to new input structure
 		const input = {
