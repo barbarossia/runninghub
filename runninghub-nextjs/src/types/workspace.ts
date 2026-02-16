@@ -4,7 +4,7 @@
  */
 
 // ============================================================================
-// LEGACY TYPES (Backward Compatibility)
+// FILE & CONFIG TYPES
 // ============================================================================
 
 export type Language = "en" | "zh" | "auto";
@@ -16,8 +16,9 @@ export type WorkspaceFileStatus =
 	| "error";
 
 /**
- * Workspace file metadata (legacy)
- * @deprecated Use MediaFile instead
+ * Workspace file metadata
+ * Used for directly uploaded files (different from mediaFiles which are loaded from folder)
+ * @note This type is still actively used for uploaded files feature
  */
 export interface WorkspaceFile {
 	id: string;
@@ -31,8 +32,9 @@ export interface WorkspaceFile {
 }
 
 /**
- * Text content with bilingual support (legacy)
- * @deprecated Use TextContent in JobResult instead
+ * Text content with bilingual support
+ * Used for text files in workspace
+ * @note This type is still actively used for text content feature
  */
 export interface WorkspaceTextContent {
 	original: string;
@@ -56,8 +58,9 @@ export interface TranslationResponse {
 }
 
 /**
- * Workspace configuration (legacy)
- * @deprecated Use Workflow[] and job management instead
+ * Workspace configuration
+ * Stores workspace path and workflow settings
+ * @note This type is still actively used for workspace configuration
  */
 export interface WorkspaceConfig {
 	path: string;

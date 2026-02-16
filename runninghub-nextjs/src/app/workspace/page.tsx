@@ -1387,7 +1387,7 @@ export default function WorkspacePage() {
 			// Auto-assign files to workflow
 			autoAssignSelectedFilesToWorkflow(workflowId);
 
-			// Clear selection in gallery so it's clean when user comes back
+			// Clear selection in media gallery so it's clean when user comes back
 			deselectAllMediaFiles();
 
 			// Switch to Run Workflow tab

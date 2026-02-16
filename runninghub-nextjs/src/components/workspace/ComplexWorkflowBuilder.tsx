@@ -280,6 +280,7 @@ export function ComplexWorkflowBuilder({
 			}
 
 			const legacyMatch = value.match(/^(\d+)-(.+)$/);
+			// Backward compatibility: old format "1-output" vs new format "1::output"
 			if (legacyMatch) {
 				return {
 					stepNumber: parseInt(legacyMatch[1], 10),

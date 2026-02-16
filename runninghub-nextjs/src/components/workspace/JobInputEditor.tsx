@@ -161,7 +161,7 @@ export function JobInputEditor({
 						<AlertTriangle className="h-4 w-4" />
 						<AlertDescription className="text-xs">
 							Some source files are no longer available. Re-assign files from
-							the gallery or the job may fail.
+							the media gallery or the job may fail.
 						</AlertDescription>
 					</Alert>
 				)}

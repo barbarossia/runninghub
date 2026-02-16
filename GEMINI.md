@@ -39,7 +39,7 @@ This document consolidates all project rules, standards, and workflows from the 
 
 ### Mandatory Rules
 *   **RULE 1 (Build Verification)**: Run `npm run build` before committing and after each implementation phase.
-*   **RULE 2 (Template)**: Use **Gallery page** (`src/app/gallery/page.tsx`) as the template for all new pages (Layout, Spacing, Typography).
+*   **RULE 2 (Template)**: Use **Workspace page** (`src/app/workspace/page.tsx`) as the template for all new pages (Layout, Spacing, Typography).
 *   **RULE 3 (Reusability)**: Always use common **Select Folder**, **Toolbar**, and **Console** components. Keep style and layout consistent.
 *   **RULE 4 (Folder Selection)**: All pages with folder selectors must automatically restore the last opened folder on page load (persist in localStorage), validating existence before restoring.
 *   **RULE 5 (Global Console)**: The **ConsoleViewer** component MUST be present on all pages requiring feedback or task tracking.

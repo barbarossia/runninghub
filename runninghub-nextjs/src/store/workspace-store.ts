@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import {
-	// Legacy types (backward compatibility)
+	// File & config types (still actively used)
 	WorkspaceFile,
 	WorkspaceTextContent,
 	WorkspaceConfig,
@@ -24,12 +24,12 @@ import { validateFileForParameter } from "@/utils/workspace-validation";
 
 interface WorkspaceState {
 	// ============================================================
-	// LEGACY STATE (Backward Compatibility)
+	// FILE & CONFIG STATE
 	// ============================================================
 	// Configuration
 	config: WorkspaceConfig;
 
-	// Uploaded files (legacy)
+	// Uploaded files (different from mediaFiles - files uploaded directly to workspace)
 	uploadedFiles: WorkspaceFile[];
 	selectedFiles: Set<string>;
 
