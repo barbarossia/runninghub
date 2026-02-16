@@ -2880,17 +2880,6 @@ export default function WorkspacePage() {
 									selectedCount={selectedVideoCount}
 									onClip={(selectedPaths) => handleClipVideos(selectedPaths)}
 									onRefresh={() => handleRefresh(true)}
-									onRename={handleRenameVideo}
-									onPreview={(selectedPaths) => {
-										if (selectedPaths.length > 0) {
-											const video = filteredVideos.find(
-												(v) => v.path === selectedPaths[0],
-											);
-											if (video) {
-												handlePreviewFile(video);
-											}
-										}
-									}}
 									disabled={false}
 								/>
 
@@ -2927,17 +2916,6 @@ export default function WorkspacePage() {
 								<VideoClipSelectionToolbar
 									selectedCount={selectedVideoCount}
 									onRefresh={() => handleRefresh(true)}
-									onRename={handleRenameVideo}
-									onPreview={(selectedPaths) => {
-										if (selectedPaths.length > 0) {
-											const video = filteredVideos.find(
-												(v) => v.path === selectedPaths[0],
-											);
-											if (video) {
-												handlePreviewFile(video);
-											}
-										}
-									}}
 									onClip={async (selectedPaths) => {
 										const selectedVideoFiles = filteredVideos.filter((v) =>
 											selectedPaths.includes(v.path),
