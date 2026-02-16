@@ -194,6 +194,57 @@ export default function ComplexWorkflowExecutePage() {
 		}
 	}, [setSelectedComplexWorkflowId, workflowId]);
 
+	useEffect(() => {
+		if (!workflowId) return;
+		let isActive = true;
+
+		const loadLatestExecution = async () => {
+			try {
+				const response = await fetch(
+					"/api/workspace/complex-workflow/execution/list",
+				);
+				const data = await response.json();
+				if (!response.ok || !data?.success || !Array.isArray(data.executions)) {
+					return;
+				}
+
+				const matches = data.executions.filter(
+					(execution: ComplexWorkflowExecution) =>
+						execution.complexWorkflowId === workflowId,
+				);
+				if (matches.length === 0) return;
+
+				matches.sort((a: ComplexWorkflowExecution, b: ComplexWorkflowExecution) =>
+					(a.createdAt || 0) > (b.createdAt || 0) ? -1 : 1,
+				);
+				const latest = matches[0];
+				if (!latest || !isActive) return;
+
+				setExecutionId(latest.id);
+				setExecutionData(latest);
+				setJobFiles([]);
+				setPrefilledTextInputs({});
+
+				if (
+					latest.status === "paused" &&
+					latest.currentStep < latest.steps.length
+				) {
+					setCurrentStepIndex(latest.currentStep);
+				} else {
+					setCurrentStepIndex(Math.max(0, latest.currentStep - 1));
+				}
+			} catch (error) {
+				console.error("Failed to load latest execution:", error);
+			}
+		};
+
+		loadLatestExecution();
+
+		return () => {
+			isActive = false;
+		};
+	}, [workflowId, setJobFiles]);
+
 	// Derived state for current step
 	const currentStep = useMemo(() => {
 		if (!complexWorkflow) return null;
@@ -234,7 +285,12 @@ export default function ComplexWorkflowExecutePage() {
 
 		const getStepOutputMap = (stepNumber: number) => {
 			if (outputMapCache.has(stepNumber)) return outputMapCache.get(stepNumber)!;
-			const map = buildOutputMap(stepOutputs[stepNumber]);
+			const executionStep = executionData?.steps.find(
+				(candidate) => candidate.stepNumber === stepNumber,
+			);
+			const map = buildOutputMap(
+				stepOutputs[stepNumber] || executionStep?.outputs,
+			);
 			outputMapCache.set(stepNumber, map);
 			return map;
 		};
@@ -261,7 +317,8 @@ export default function ComplexWorkflowExecutePage() {
 
 		for (const param of currentStep.parameters) {
 			const definition = paramDefinitions.get(param.parameterId);
-			const isFileParam = definition?.type === "file";
+			const isFileParam =
+				definition?.type === "file" || param.parameterId.endsWith("_file");
 
 			if (param.valueType === "static") {
 				if (!isFileParam && param.staticValue !== undefined) {
@@ -336,6 +393,40 @@ export default function ComplexWorkflowExecutePage() {
 						];
 					if (value !== undefined) {
 						mappedTextInputs[param.parameterId] = String(value);
+					}
+				}
+			}
+		}
+
+		if (mappedFileInputs.length === 0) {
+			const userInputFileParams = currentStep.parameters.filter((param) => {
+				const definition = paramDefinitions.get(param.parameterId);
+				return (
+					param.valueType === "user-input" &&
+					(definition?.type === "file" || param.parameterId.endsWith("_file"))
+				);
+			});
+			const previousStepNumber = currentStep.stepNumber - 1;
+			if (userInputFileParams.length > 0 && previousStepNumber > 0) {
+				const output = getStepAliasOutput(previousStepNumber);
+				if (output) {
+					const path = output.path || output.workspacePath;
+					if (path) {
+						const resolvedFileName = output.fileName || getBaseName(path);
+						const inferredType =
+							output.fileType === "image" || output.fileType === "video"
+								? output.fileType
+								: inferMediaTypeFromName(resolvedFileName) || "image";
+						userInputFileParams.forEach((param) => {
+							mappedFileInputs.push({
+								parameterId: param.parameterId,
+								filePath: path,
+								fileName: resolvedFileName || "output",
+								fileSize: output.fileSize || 0,
+								fileType: inferredType,
+								valid: true,
+							});
+						});
 					}
 				}
 			}
@@ -427,6 +518,7 @@ export default function ComplexWorkflowExecutePage() {
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						complexWorkflowId: complexWorkflow.id,
+						autoContinue: true,
 						initialParameters: {
 							fileInputs,
 							textInputs,
@@ -487,6 +579,8 @@ export default function ComplexWorkflowExecutePage() {
 			// Reset outputs for new step view
 			setFileInputs([]);
 			setTextInputs({});
+			setJobFiles([]);
+			setPrefilledTextInputs({});
 			// Clear console task when moving to next step
 			setActiveConsoleTaskId(null);
 		} else {

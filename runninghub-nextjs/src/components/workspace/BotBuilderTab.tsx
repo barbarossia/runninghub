@@ -6,7 +6,11 @@ import { toast } from 'sonner';
 import { useBotCenterStore } from '@/store/bot-center-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useWorkspaceFolder } from '@/store/folder-store';
-import { runAutoSaveDecodeBot, runJobStatusBot } from '@/utils/bots';
+import {
+	runAutoSaveDecodeBot,
+	runJobCleanupBot,
+	runJobStatusBot,
+} from '@/utils/bots';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +28,7 @@ import type {
 	AutoSaveDecodeBotConfig,
 	BotDefinition,
 	BotType,
+	JobCleanupBotConfig,
 	JobStatusBotConfig,
 } from '@/types/bot';
 
@@ -38,19 +43,31 @@ type ResolvedJobStatus = {
 	reason?: string;
 };
 
-const DEFAULT_BOT_IDS = new Set(['job-status-bot', 'auto-save-decode-bot']);
+const DEFAULT_BOT_IDS = new Set([
+	'job-status-bot',
+	'auto-save-decode-bot',
+	'job-cleanup-bot',
+]);
 
 const typeLabels: Record<BotType, string> = {
 	'job-status': 'Job Status',
 	'auto-save-decode': 'Auto Save + Decode',
+	'job-cleanup': 'Job Cleanup',
 };
 
-const defaultConfigForType = (type: BotType): JobStatusBotConfig | AutoSaveDecodeBotConfig => {
+const defaultConfigForType = (
+	type: BotType,
+): JobStatusBotConfig | AutoSaveDecodeBotConfig | JobCleanupBotConfig => {
 	if (type === 'auto-save-decode') {
 		return {
 			recentLimit: 10,
 			onlyUnsaved: true,
 			decodeEnabled: true,
+		};
+	}
+	if (type === 'job-cleanup') {
+		return {
+			ageDays: 7,
 		};
 	}
 	return {
@@ -73,6 +90,7 @@ export function BotBuilderTab() {
 		setRunState,
 		setJobStatusResult,
 		setAutoSaveDecodeResult,
+		setJobCleanupResult,
 	} = useBotCenterStore();
 	const jobs = useWorkspaceStore((state) => state.jobs);
 	const workflows = useWorkspaceStore((state) => state.workflows);
@@ -228,6 +246,20 @@ export function BotBuilderTab() {
 				);
 			}
 
+			if (bot.type === 'job-cleanup') {
+				await fetchJobs();
+				const latestJobs = useWorkspaceStore.getState().jobs;
+				const summary = await runJobCleanupBot({
+					jobs: latestJobs,
+					config: bot.config as JobCleanupBotConfig,
+				});
+				setJobCleanupResult(bot.id, summary);
+				await fetchJobs();
+				toast.success(
+					`${bot.name} deleted ${summary.deleted.length} job(s)`,
+				);
+			}
+
 			setRunState(bot.id, { status: 'completed', lastRunAt: Date.now() });
 		} catch (error) {
 			const message =
@@ -317,14 +349,15 @@ export function BotBuilderTab() {
 					<div className='space-y-1'>
 						<label className='text-[11px] text-gray-500'>Type</label>
 						<Select value={newBotType} onValueChange={(value) => setNewBotType(value as BotType)}>
-							<SelectTrigger>
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='job-status'>Job Status</SelectItem>
-								<SelectItem value='auto-save-decode'>Auto Save + Decode</SelectItem>
-							</SelectContent>
-						</Select>
+						<SelectTrigger>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value='job-status'>Job Status</SelectItem>
+							<SelectItem value='auto-save-decode'>Auto Save + Decode</SelectItem>
+							<SelectItem value='job-cleanup'>Job Cleanup</SelectItem>
+						</SelectContent>
+					</Select>
 					</div>
 					<div className='space-y-1'>
 						<label className='text-[11px] text-gray-500'>Description</label>
@@ -536,6 +569,32 @@ export function BotBuilderTab() {
 												updateDraftConfig(bot.id, { decodeEnabled: value })
 											}
 										/>
+									</div>
+								</div>
+							)}
+
+							{bot.type === 'job-cleanup' && (
+								<div className='mt-4 grid gap-3 lg:grid-cols-2'>
+									<div className='space-y-1'>
+										<label className='text-[11px] text-gray-500'>
+											Delete jobs older than (days)
+										</label>
+										<Input
+											type='number'
+											min={1}
+											value={(draft.config as JobCleanupBotConfig).ageDays}
+											onChange={(event) =>
+												updateDraftConfig(bot.id, {
+													ageDays: Math.max(
+														1,
+														Number(event.target.value) || 1,
+													),
+												})
+											}
+										/>
+									</div>
+									<div className='flex items-center rounded-md border border-gray-200 px-3 py-2 text-xs text-gray-600'>
+										Deletes job history and output folders on disk.
 									</div>
 								</div>
 							)}

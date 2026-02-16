@@ -260,11 +260,7 @@ export default function WorkspacePage() {
 	const [promptDialogOpen, setPromptDialogOpen] = useState(false);
 	const [promptContent, setPromptContent] = useState<string | null>(null);
 	const [promptFileName, setPromptFileName] = useState<string | null>(null);
-	const [isPromptLoading, setIsPromptLoading] = useState(false);
 	const [isPromptFormatted, setIsPromptFormatted] = useState(true);
-	const [promptAvailability, setPromptAvailability] = useState<
-		Record<string, boolean>
-	>({});
 	const [promptCache, setPromptCache] = useState<Record<string, string>>({});
 
 	// Export config from store
@@ -272,10 +268,6 @@ export default function WorkspacePage() {
 
 	// Get selected files from store
 	const selectedFiles = useMemo(() => getSelectedMediaFiles(), [mediaFiles]);
-	const isSingleSelectedFile = selectedFiles.length === 1;
-	const selectedPromptAvailable = isSingleSelectedFile
-		? !!promptAvailability[selectedFiles[0].path]
-		: false;
 
 	const formatPrompt = useCallback((value: string | null) => {
 		if (!value) return null;
@@ -313,10 +305,6 @@ export default function WorkspacePage() {
 					throw new Error(data?.error || "Failed to read prompt metadata");
 				}
 				const prompt = data?.metadata?.prompt;
-				setPromptAvailability((prev) => ({
-					...prev,
-					[file.path]: !!prompt,
-				}));
 				if (typeof prompt === "string" && prompt.length > 0) {
 					setPromptCache((prev) => ({ ...prev, [file.path]: prompt }));
 				}
@@ -325,41 +313,29 @@ export default function WorkspacePage() {
 				if (!silent) {
 					toast.error("Failed to read prompt metadata");
 				}
-				setPromptAvailability((prev) => ({
-					...prev,
-					[file.path]: false,
-				}));
 				return null;
 			}
 		},
 		[],
 	);
 
-	useEffect(() => {
-		if (selectedFiles.length !== 1) return;
-		const file = selectedFiles[0];
-		if (promptAvailability[file.path] !== undefined) return;
-		fetchPromptMetadata(file, true);
-	}, [selectedFiles, promptAvailability, fetchPromptMetadata]);
-
-	const handleViewPrompt = useCallback(async () => {
-		if (selectedFiles.length !== 1) return;
-		const file = selectedFiles[0];
-		setIsPromptLoading(true);
-		setPromptFileName(file.name);
-		const cached = promptCache[file.path];
-		let prompt = cached ?? null;
-		if (!prompt) {
-			prompt = await fetchPromptMetadata(file, false);
-		}
-		setIsPromptLoading(false);
-		if (!prompt) {
-			toast.info("No embedded prompt found");
-			return;
-		}
-		setPromptContent(prompt);
-		setPromptDialogOpen(true);
-	}, [selectedFiles, promptCache, fetchPromptMetadata]);
+	const handleViewPromptForFile = useCallback(
+		async (file: MediaFile) => {
+			setPromptFileName(file.name);
+			const cached = promptCache[file.path];
+			let prompt = cached ?? null;
+			if (!prompt) {
+				prompt = await fetchPromptMetadata(file, false);
+			}
+			if (!prompt) {
+				toast.info("No embedded prompt found");
+				return;
+			}
+			setPromptContent(prompt);
+			setPromptDialogOpen(true);
+		},
+		[promptCache, fetchPromptMetadata],
+	);
 
 	useEffect(() => {
 		if (!selectedComplexWorkflowId) {
@@ -2752,7 +2728,7 @@ export default function WorkspacePage() {
 									className="flex items-center gap-2 min-w-fit px-4"
 								>
 									<FolderOpen className="h-4 w-4" />
-									Media Gallery
+									Gallery
 								</TabsTrigger>
 								<TabsTrigger
 									value="clip"
@@ -2780,14 +2756,14 @@ export default function WorkspacePage() {
 									className="flex items-center gap-2 min-w-fit px-4"
 								>
 									<Play className="h-4 w-4" />
-									Run Workflow
+									Workflow
 								</TabsTrigger>
 								<TabsTrigger
 									value="run-complex-workflow"
 									className="flex items-center gap-2 min-w-fit px-4"
 								>
 									<Zap className="h-4 w-4" />
-									Run Complex Workflow
+									Complex Workflow
 								</TabsTrigger>
 								<TabsTrigger
 									value="workflows"
@@ -2820,22 +2796,17 @@ export default function WorkspacePage() {
 								{/* Media Selection Toolbar */}
 								<MediaSelectionToolbar
 									selectedFiles={selectedFiles}
-									onRename={handleRenameFile}
 									onDelete={handleDeleteFile}
 									onDecode={handleDecodeFile}
 									onRunWorkflow={handleQuickRunWorkflow}
 									onBatchProcess={handleBatchProcess}
 									batchWorkflowId={selectedComplexWorkflowId}
 									batchWorkflowName={selectedComplexWorkflowName}
-									onPreview={handlePreviewFile}
 									onExport={handleExport}
 									onExportToDataset={() => {
 										setFileToExportToDataset(null); // null means use selectedFiles
 										setShowSelectDatasetDialog(true);
 									}}
-									onPrompt={handleViewPrompt}
-									promptAvailable={selectedPromptAvailable}
-									promptLoading={isPromptLoading}
 									onDeselectAll={deselectAllMediaFiles}
 								/>
 
@@ -2882,12 +2853,12 @@ export default function WorkspacePage() {
 											setPreviewImage(file);
 										}
 									}}
-									onConvertFps={handleConvertFps}
 									onExportToDataset={handleExportFileToDataset}
 									onResize={(file) => {
 										setResizeFile(file);
 										setShowResizeDialog(true);
 									}}
+									onPrompt={handleViewPromptForFile}
 								/>
 							</TabsContent>
 
@@ -3129,12 +3100,10 @@ export default function WorkspacePage() {
 												selectedFiles={datasetMediaFiles.filter(
 													(f) => f.selected,
 												)}
-												onRename={handleDatasetRename}
 												onDelete={handleDatasetDelete}
 												onResize={handleDatasetResize}
 												onCaption={handleDatasetCaption}
 												onAddCaption={handleManualAddCaption}
-												onPreview={handlePreviewFile}
 												onDeselectAll={() => deselectAllDatasetFiles()}
 												skipResizeDialog={false}
 												showCaptionButton={true}

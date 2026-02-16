@@ -24,8 +24,16 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { runAutoSaveDecodeBot, runJobStatusBot } from '@/utils/bots';
-import type { AutoSaveDecodeBotConfig, JobStatusBotConfig } from '@/types/bot';
+import {
+	runAutoSaveDecodeBot,
+	runJobCleanupBot,
+	runJobStatusBot,
+} from '@/utils/bots';
+import type {
+	AutoSaveDecodeBotConfig,
+	JobCleanupBotConfig,
+	JobStatusBotConfig,
+} from '@/types/bot';
 type ResolvedJobStatus = {
 	id: string;
 	workflowId: string;
@@ -70,16 +78,30 @@ export function BotCenter() {
 		setSelectedBotId,
 		setJobStatusResult,
 		setAutoSaveDecodeResult,
+		setJobCleanupResult,
 		setRunState,
 	} = useBotCenterStore();
 	const fetchJobs = useWorkspaceStore((state) => state.fetchJobs);
 	const updateJob = useWorkspaceStore((state) => state.updateJob);
 	const { selectedFolder: workspaceFolder } = useWorkspaceFolder();
 
-	const selectedBot = useMemo(
-		() => bots.find((bot) => bot.id === selectedBotId) || bots[0],
-		[bots, selectedBotId],
+	const enabledBots = useMemo(
+		() => bots.filter((bot) => bot.enabled),
+		[bots],
 	);
+	const selectedBot = useMemo(
+		() =>
+			enabledBots.find((bot) => bot.id === selectedBotId) || enabledBots[0],
+		[enabledBots, selectedBotId],
+	);
+
+	useEffect(() => {
+		if (!enabledBots.length) return;
+		if (selectedBotId && enabledBots.some((bot) => bot.id === selectedBotId)) {
+			return;
+		}
+		setSelectedBotId(enabledBots[0].id);
+	}, [enabledBots, selectedBotId, setSelectedBotId]);
 
 	const syncJobStatuses = async (
 		config: JobStatusBotConfig,
@@ -136,6 +158,17 @@ export function BotCenter() {
 					updateJob,
 				});
 				setAutoSaveDecodeResult(bot.id, summary);
+			}
+
+			if (bot.type === 'job-cleanup') {
+				await fetchJobs();
+				const latestJobs = useWorkspaceStore.getState().jobs;
+				const summary = await runJobCleanupBot({
+					jobs: latestJobs,
+					config: bot.config as JobCleanupBotConfig,
+				});
+				setJobCleanupResult(bot.id, summary);
+				await fetchJobs();
 			}
 
 			setRunState(bot.id, { status: 'completed', lastRunAt: Date.now() });
@@ -319,6 +352,62 @@ export function BotCenter() {
 		);
 	};
 
+	const renderCleanupResult = () => {
+		const summary = botResult?.jobCleanup;
+		if (!summary) {
+			return (
+				<div className='text-xs text-gray-500'>
+					Select the bot to run cleanup.
+				</div>
+			);
+		}
+
+		const cutoffLabel = formatTimestamp(summary.cutoffTimestamp);
+		return (
+			<div className='space-y-3 text-xs text-gray-600'>
+				<div className='rounded-md border border-gray-200 bg-white px-2 py-2'>
+					<div className='text-[11px] text-gray-500'>Cutoff</div>
+					<div className='text-sm font-semibold text-gray-800'>{cutoffLabel}</div>
+				</div>
+				<div className='grid grid-cols-2 gap-2'>
+					<div className='rounded-md border border-gray-200 bg-white px-2 py-1'>
+						<div className='text-[11px] text-gray-500'>Candidates</div>
+						<div className='text-sm font-semibold text-gray-800'>
+							{summary.candidateCount}
+						</div>
+					</div>
+					<div className='rounded-md border border-gray-200 bg-white px-2 py-1'>
+						<div className='text-[11px] text-gray-500'>Deleted</div>
+						<div className='text-sm font-semibold text-gray-800'>
+							{summary.deleted.length}
+						</div>
+					</div>
+					<div className='rounded-md border border-gray-200 bg-white px-2 py-1'>
+						<div className='text-[11px] text-gray-500'>Failed</div>
+						<div className='text-sm font-semibold text-gray-800'>
+							{summary.failed.length}
+						</div>
+					</div>
+				</div>
+				{summary.failed.length > 0 && (
+					<div className='space-y-1'>
+						<div className='text-xs font-semibold text-red-600'>
+							Failed job IDs
+						</div>
+						{summary.failed.map((jobId) => (
+							<div
+								key={jobId}
+								className='rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-600'
+							>
+								{jobId}
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		);
+	};
+
 	useEffect(() => {
 		if (!isOpen) return;
 
@@ -387,13 +476,18 @@ export function BotCenter() {
 							<SelectValue placeholder='Select a bot' />
 						</SelectTrigger>
 						<SelectContent data-bot-center-ignore-outside="true">
-							{bots.map((bot) => (
+							{enabledBots.map((bot) => (
 								<SelectItem key={bot.id} value={bot.id}>
 									{bot.name}
 								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
+					{!enabledBots.length && (
+						<div className='rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700'>
+							No enabled bots. Enable a bot in the Bot Builder tab.
+						</div>
+					)}
 
 					<div className='flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2 py-2'>
 						<div className='min-w-0'>
@@ -420,7 +514,7 @@ export function BotCenter() {
 							size='icon'
 							className='h-8 w-8'
 							onClick={() => runBot(selectedBot?.id)}
-							disabled={runState?.status === 'running'}
+							disabled={!selectedBot || runState?.status === 'running'}
 							title='Run bot'
 						>
 							{runState?.status === 'running' ? (
@@ -433,6 +527,7 @@ export function BotCenter() {
 
 					{selectedBot?.type === 'job-status' && renderJobStatusResult()}
 					{selectedBot?.type === 'auto-save-decode' && renderAutoSaveResult()}
+					{selectedBot?.type === 'job-cleanup' && renderCleanupResult()}
 
 				</div>
 			</Card>

@@ -11,8 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Languages, Save, Image as ImageIcon } from "lucide-react";
-import { useTranslation } from "@/hooks/useTranslation";
+import { Loader2, Save, Image as ImageIcon } from "lucide-react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { API_ENDPOINTS } from "@/constants";
 import { toast } from "sonner";
@@ -23,7 +22,6 @@ interface WorkspaceTextEditorProps {
 }
 
 export function WorkspaceTextEditor({ fileId }: WorkspaceTextEditorProps) {
-	const { translate, isLoading: isTranslating } = useTranslation();
 	const { uploadedFiles, getTextContent, updateTextContent } =
 		useWorkspaceStore();
 
@@ -49,37 +47,6 @@ export function WorkspaceTextEditor({ fileId }: WorkspaceTextEditorProps) {
 		setCurrentText(value);
 		setHasUnsavedChanges(true);
 		updateTextContent(fileId, value, currentLanguage);
-	};
-
-	const handleTranslate = async () => {
-		if (!currentText.trim()) {
-			toast.error("No text to translate");
-			return;
-		}
-
-		const targetLanguage = currentLanguage === "en" ? "zh" : "en";
-
-		const result = await translate(
-			currentText,
-			currentLanguage,
-			targetLanguage,
-		);
-
-		if (result.success && result.translatedText) {
-			// Update the target language content
-			updateTextContent(fileId, result.translatedText, targetLanguage);
-
-			// Switch to the translated tab
-			setCurrentLanguage(targetLanguage);
-			setCurrentText(result.translatedText);
-			setHasUnsavedChanges(true);
-
-			toast.success(
-				`Translated to ${targetLanguage === "en" ? "English" : "Chinese"}`,
-			);
-		} else {
-			toast.error(result.error || "Translation failed");
-		}
 	};
 
 	const handleSave = async () => {
@@ -186,25 +153,6 @@ export function WorkspaceTextEditor({ fileId }: WorkspaceTextEditorProps) {
 
 					{/* Action Buttons */}
 					<div className="flex gap-2 mt-4">
-						<Button
-							onClick={handleTranslate}
-							disabled={
-								isTranslating ||
-								!currentText.trim() ||
-								file.status === "processing"
-							}
-							variant="outline"
-							size="sm"
-							className="flex-1"
-						>
-							{isTranslating ? (
-								<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-							) : (
-								<Languages className="h-4 w-4 mr-2" />
-							)}
-							{currentLanguage === "en" ? "To 中文" : "To English"}
-						</Button>
-
 						<Button
 							onClick={handleSave}
 							disabled={

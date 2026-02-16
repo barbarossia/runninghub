@@ -6,6 +6,7 @@ import type {
 	BotResult,
 	BotRunState,
 	BotType,
+	JobCleanupSummary,
 	JobStatusSummary,
 } from '@/types/bot';
 
@@ -36,6 +37,7 @@ interface BotCenterState {
 		botId: string,
 		result: AutoSaveDecodeSummary,
 	) => void;
+	setJobCleanupResult: (botId: string, result: JobCleanupSummary) => void;
 	setRunState: (botId: string, state: BotRunState) => void;
 }
 
@@ -61,6 +63,16 @@ const defaultBots: BotDefinition[] = [
 			recentLimit: 10,
 			onlyUnsaved: true,
 			decodeEnabled: true,
+		},
+	},
+	{
+		id: 'job-cleanup-bot',
+		name: 'Job Cleanup Bot',
+		description: 'Delete job history and outputs older than a set age.',
+		type: 'job-cleanup',
+		enabled: true,
+		config: {
+			ageDays: 7,
 		},
 	},
 ];
@@ -129,6 +141,13 @@ export const useBotCenterStore = create<BotCenterState>()(
 						[botId]: { ...state.results[botId], autoSaveDecode: result },
 					},
 				})),
+			setJobCleanupResult: (botId, result) =>
+				set((state) => ({
+					results: {
+						...state.results,
+						[botId]: { ...state.results[botId], jobCleanup: result },
+					},
+				})),
 			setRunState: (botId, state) =>
 				set((prev) => ({
 					runStates: { ...prev.runStates, [botId]: state },
@@ -164,6 +183,7 @@ export const useBotCenterStore = create<BotCenterState>()(
 					bots: [
 						ensureBot(bots, 'job-status'),
 						ensureBot(bots, 'auto-save-decode'),
+						ensureBot(bots, 'job-cleanup'),
 						...customBots,
 					],
 				};

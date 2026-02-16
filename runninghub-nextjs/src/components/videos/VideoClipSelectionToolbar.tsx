@@ -19,6 +19,11 @@ import { API_ENDPOINTS } from "@/constants";
 import { RenameVideoDialog } from "./RenameVideoDialog";
 import { VideoFile } from "@/types";
 import { BaseSelectionToolbar } from "@/components/selection/BaseSelectionToolbar";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface VideoClipSelectionToolbarProps {
 	selectedCount: number;
@@ -192,6 +197,11 @@ export function VideoClipSelectionToolbar({
 	}, [onDeselectAll, store]);
 
 	const toolbarDisabled = disabled || isProcessing;
+	const selectedCountLabel =
+		selectedCount === 1 ? "1 selected" : `${selectedCount} selected`;
+
+	const actionLabel = (labelText: string) =>
+		`${labelText} • ${selectedCountLabel}`;
 
 	return (
 		<>
@@ -205,104 +215,126 @@ export function VideoClipSelectionToolbar({
 			>
 				{(mode) => {
 					if (mode === "expanded") {
-						return (
-							<span className="text-sm text-muted-foreground hidden sm:inline-block">
-								{label}
-							</span>
-						);
+						return null;
 					}
 
 					if (mode === "expanded-actions") {
 						return (
 							<>
 								{selectedCount === 1 && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => setIsRenameDialogOpen(true)}
-										disabled={toolbarDisabled}
-										className="h-9 px-3 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
-										title="Rename video"
-									>
-										<Pencil className="h-4 w-4 mr-2" />
-										Rename
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="outline"
+												size="icon"
+												onClick={() => setIsRenameDialogOpen(true)}
+												disabled={toolbarDisabled}
+												className="h-9 w-11 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
+												aria-label="Rename"
+											>
+												<Pencil className="h-4 w-4" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("Rename")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onPreview && selectedCount > 0 && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handlePreview}
-										disabled={toolbarDisabled}
-										className="h-9 px-3 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
-										title="Preview video"
-									>
-										<Eye className="h-4 w-4 mr-2" />
-										Preview
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="outline"
+												size="icon"
+												onClick={handlePreview}
+												disabled={toolbarDisabled}
+												className="h-9 w-11 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
+												aria-label="Preview"
+											>
+												<Eye className="h-4 w-4" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("Preview")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onConvertFps && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handleConvertFps}
-										disabled={toolbarDisabled || selectedCount === 0}
-										className="h-9 px-3 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
-										title="Convert video FPS"
-									>
-										{isProcessing ? (
-											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-										) : (
-											<Zap className="h-4 w-4 mr-2" />
-										)}
-										Convert
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="outline"
+												size="icon"
+												onClick={handleConvertFps}
+												disabled={toolbarDisabled || selectedCount === 0}
+												className="h-9 w-11 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+												aria-label="FPS"
+											>
+												{isProcessing ? (
+													<Loader2 className="h-4 w-4 animate-spin" />
+												) : (
+													<Zap className="h-4 w-4" />
+												)}
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("FPS")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onDelete && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handleDelete}
-										disabled={toolbarDisabled || selectedCount === 0}
-										className="h-9 px-3 border-red-100 bg-red-50/50 hover:bg-red-100 text-red-700"
-										title="Delete videos"
-									>
-										<Trash2 className="h-4 w-4 mr-2" />
-										Delete
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="outline"
+												size="icon"
+												onClick={handleDelete}
+												disabled={toolbarDisabled || selectedCount === 0}
+												className="h-9 w-11 border-red-100 bg-red-50/50 hover:bg-red-100 text-red-700"
+												aria-label="Delete"
+											>
+												<Trash2 className="h-4 w-4" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("Delete")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onClip && (
-									<Button
-										variant="default"
-										size="sm"
-										onClick={handleClip}
-										disabled={toolbarDisabled || selectedCount === 0}
-										className="h-9 px-6 bg-green-600 hover:bg-green-700 shadow-md"
-									>
-										{isProcessing ? (
-											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-										) : (
-											<Scissors className="h-4 w-4 mr-2" />
-										)}
-										{isProcessing ? "Processing..." : clipButtonText}
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="default"
+												size="icon"
+												onClick={handleClip}
+												disabled={toolbarDisabled || selectedCount === 0}
+												className="h-9 w-11 bg-green-600 hover:bg-green-700 shadow-md"
+												aria-label="Clip"
+											>
+												{isProcessing ? (
+													<Loader2 className="h-4 w-4 animate-spin" />
+												) : (
+													<Scissors className="h-4 w-4" />
+												)}
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel(clipButtonText)}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onRefresh && (
-									<Button
-										variant="outline"
-										size="icon"
-										className="h-9 w-9 border-gray-200 hover:bg-gray-100"
-										onClick={handleRefresh}
-										disabled={disabled}
-										title="Refresh folder"
-									>
-										<RefreshCw className="h-4 w-4 text-gray-600" />
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="outline"
+												size="icon"
+												className="h-9 w-11 border-gray-200 hover:bg-gray-100"
+												onClick={handleRefresh}
+												disabled={disabled}
+												aria-label="Refresh"
+											>
+												<RefreshCw className="h-4 w-4 text-gray-600" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Refresh</TooltipContent>
+									</Tooltip>
 								)}
 							</>
 						);
@@ -312,80 +344,101 @@ export function VideoClipSelectionToolbar({
 						return (
 							<>
 								{selectedCount === 1 && (
-									<Button
-										variant="ghost"
-										size="icon"
-										onClick={() => setIsRenameDialogOpen(true)}
-										disabled={toolbarDisabled}
-										className="h-8 w-8 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full"
-										title="Rename"
-									>
-										<Pencil className="h-3.5 w-3.5" />
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="ghost"
+												size="icon"
+												onClick={() => setIsRenameDialogOpen(true)}
+												disabled={toolbarDisabled}
+												className="h-8 w-10 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full"
+												aria-label="Rename"
+											>
+												<Pencil className="h-3.5 w-3.5" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("Rename")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onPreview && selectedCount > 0 && (
-									<Button
-										variant="ghost"
-										size="icon"
-										onClick={handlePreview}
-										disabled={toolbarDisabled}
-										className="h-8 w-8 text-gray-400 hover:text-green-400 hover:bg-gray-800 rounded-full"
-										title="Preview video"
-									>
-										<Eye className="h-3.5 w-3.5" />
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="ghost"
+												size="icon"
+												onClick={handlePreview}
+												disabled={toolbarDisabled}
+												className="h-8 w-10 text-gray-400 hover:text-green-400 hover:bg-gray-800 rounded-full"
+												aria-label="Preview"
+											>
+												<Eye className="h-3.5 w-3.5" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("Preview")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onConvertFps && (
-									<Button
-										variant="default"
-										size="sm"
-										onClick={handleConvertFps}
-										disabled={toolbarDisabled || selectedCount === 0}
-										className="h-8 bg-blue-600 hover:bg-blue-500 text-white rounded-full px-3 shadow-lg shadow-blue-900/20"
-										title="Convert video FPS"
-									>
-										{isProcessing ? (
-											<Loader2 className="h-3.5 w-3.5 animate-spin" />
-										) : (
-											<Zap className="h-3.5 w-3.5 mr-1 fill-current" />
-										)}
-										<span className="text-xs font-bold">Convert</span>
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="default"
+												size="icon"
+												onClick={handleConvertFps}
+												disabled={toolbarDisabled || selectedCount === 0}
+												className="h-8 w-10 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg shadow-blue-900/20"
+												aria-label="FPS"
+											>
+												{isProcessing ? (
+													<Loader2 className="h-3.5 w-3.5 animate-spin" />
+												) : (
+													<Zap className="h-3.5 w-3.5 fill-current" />
+												)}
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("FPS")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onDelete && (
-									<Button
-										variant="default"
-										size="sm"
-										onClick={handleDelete}
-										disabled={toolbarDisabled || selectedCount === 0}
-										className="h-8 bg-red-600 hover:bg-red-500 text-white rounded-full px-3 shadow-lg shadow-red-900/20"
-										title="Delete videos"
-									>
-										<Trash2 className="h-3.5 w-3.5 mr-1 fill-current" />
-										<span className="text-xs font-bold">Delete</span>
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="default"
+												size="icon"
+												onClick={handleDelete}
+												disabled={toolbarDisabled || selectedCount === 0}
+												className="h-8 w-10 bg-red-600 hover:bg-red-500 text-white rounded-full shadow-lg shadow-red-900/20"
+												aria-label="Delete"
+											>
+												<Trash2 className="h-3.5 w-3.5 fill-current" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel("Delete")}</TooltipContent>
+									</Tooltip>
 								)}
 
 								{onClip && (
-									<Button
-										variant="default"
-										size="sm"
-										onClick={handleClip}
-										disabled={toolbarDisabled || selectedCount === 0}
-										className="h-8 bg-green-600 hover:bg-green-500 text-white rounded-full px-3 shadow-lg shadow-green-900/20"
-									>
-										{isProcessing ? (
-											<Loader2 className="h-3.5 w-3.5 animate-spin" />
-										) : (
-											<Scissors className="h-3.5 w-3.5 mr-1 fill-current" />
-										)}
-										<span className="text-xs font-bold">
-											{isProcessing ? "..." : clipButtonText}
-										</span>
-									</Button>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="default"
+												size="icon"
+												onClick={handleClip}
+												disabled={toolbarDisabled || selectedCount === 0}
+												className="h-8 w-10 bg-green-600 hover:bg-green-500 text-white rounded-full shadow-lg shadow-green-900/20"
+												aria-label="Clip"
+											>
+												{isProcessing ? (
+													<Loader2 className="h-3.5 w-3.5 animate-spin" />
+												) : (
+													<Scissors className="h-3.5 w-3.5 fill-current" />
+												)}
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>{actionLabel(clipButtonText)}</TooltipContent>
+									</Tooltip>
 								)}
 							</>
 						);

@@ -148,12 +148,14 @@ export async function POST(request: NextRequest) {
 			deleteSourceFiles || (isLocalVideoConvert && String(deleteOriginal) === "true");
 
 		// Create execution state
+		const baseUrl = request.nextUrl?.origin;
 		const execution: Omit<ComplexWorkflowExecution, "id" | "createdAt"> = {
 			complexWorkflowId: body.complexWorkflowId,
 			name: complexWorkflow.name,
 			status: "pending",
 			currentStep: 1,
-			autoContinue: body.autoContinue ?? false,
+			autoContinue: body.autoContinue ?? true,
+			baseUrl,
 			steps: complexWorkflow.steps.map((step, idx) => ({
 				stepNumber: step.stepNumber,
 				workflowId: step.workflowId,

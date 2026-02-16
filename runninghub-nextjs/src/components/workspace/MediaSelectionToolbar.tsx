@@ -4,10 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useResizeConfigStore } from "@/store/resize-config-store";
 import { motion } from "framer-motion";
 import {
-	Pencil,
 	Trash2,
 	Loader2,
-	X,
 	Play,
 	Eye,
 	AlertCircle,
@@ -15,7 +13,6 @@ import {
 	Download,
 	Zap,
 	Maximize2,
-	FileText,
 	Database,
 	FilePlus,
 	MessageSquare,
@@ -46,6 +43,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,11 +59,15 @@ import { BaseSelectionToolbar } from "@/components/selection/BaseSelectionToolba
 import { QuickRunWorkflowDialog } from "@/components/workspace/QuickRunWorkflowDialog";
 import { ComplexWorkflowRunDialog } from "@/components/workspace/ComplexWorkflowRunDialog";
 import { useWorkspaceStore } from "@/store/workspace-store";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { ComplexWorkflow, MediaFile, Workflow } from "@/types/workspace";
 
 interface MediaSelectionToolbarProps {
 	selectedFiles: MediaFile[];
-	onRename?: (file: MediaFile, newName: string) => Promise<void>;
 	onDelete?: (files: MediaFile[]) => Promise<void>;
 	onDecode?: (
 		file: MediaFile,
@@ -72,7 +79,6 @@ interface MediaSelectionToolbarProps {
 	batchWorkflowId?: string | null;
 	batchWorkflowName?: string | null;
 	onClip?: (files: MediaFile[]) => Promise<void>;
-	onPreview?: (file: MediaFile) => void;
 	onExport?: (files: MediaFile[]) => Promise<void>;
 	onConvertFps?: (files: MediaFile[]) => Promise<void>;
 	onResize?: (
@@ -83,9 +89,6 @@ interface MediaSelectionToolbarProps {
 	onCaption?: (files: MediaFile[]) => Promise<void>; // Caption videos using workflow
 	onAddCaption?: (files: MediaFile[]) => Promise<void>; // Manually add caption (empty txt)
 	onExportToDataset?: () => void; // Export selected files to dataset
-	onPrompt?: () => void;
-	promptAvailable?: boolean;
-	promptLoading?: boolean;
 	onDeselectAll?: () => void;
 	disabled?: boolean;
 	className?: string;
@@ -94,9 +97,25 @@ interface MediaSelectionToolbarProps {
 	showCaptionButton?: boolean; // Only show caption button in dataset tab
 }
 
+function ToolbarTooltip({
+	content,
+	children,
+}: {
+	content: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<span className="inline-flex">{children}</span>
+			</TooltipTrigger>
+			<TooltipContent>{content}</TooltipContent>
+		</Tooltip>
+	);
+}
+
 export function MediaSelectionToolbar({
 	selectedFiles,
-	onRename,
 	onDelete,
 	onDecode,
 	onRunWorkflow,
@@ -104,16 +123,12 @@ export function MediaSelectionToolbar({
 	batchWorkflowId = null,
 	batchWorkflowName = null,
 	onClip,
-	onPreview,
 	onExport,
 	onConvertFps,
 	onResize,
 	onCaption,
 	onAddCaption,
 	onExportToDataset,
-	onPrompt,
-	promptAvailable = false,
-	promptLoading = false,
 	onDeselectAll,
 	disabled = false,
 	className = "",
@@ -122,7 +137,6 @@ export function MediaSelectionToolbar({
 	showCaptionButton = false,
 }: MediaSelectionToolbarProps) {
 	const selectedCount = selectedFiles.length;
-	const isSingleSelection = selectedCount === 1;
 
 	// Count duck-encoded images in selection
 	const duckEncodedCount = useMemo(() => {
@@ -149,17 +163,14 @@ export function MediaSelectionToolbar({
 	const hasDuckEncodedImages = duckEncodedCount > 0;
 
 	const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-	const [showRenameDialog, setShowRenameDialog] = useState(false);
 	const [showDecodeDialog, setShowDecodeDialog] = useState(false);
 	const [showQuickRunDialog, setShowQuickRunDialog] = useState(false);
 	const [showComplexWorkflowDialog, setShowComplexWorkflowDialog] =
 		useState(false);
 	const [showBatchConfirmDialog, setShowBatchConfirmDialog] = useState(false);
 	const [showResizeDialog, setShowResizeDialog] = useState(false);
-	const [newFileName, setNewFileName] = useState("");
 	const [decodePassword, setDecodePassword] = useState("");
 	const [longestEdge, setLongestEdge] = useState("768");
-	const [isRenaming, setIsRenaming] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isDecoding, setIsDecoding] = useState(false);
 	const [isClipping, setIsClipping] = useState(false);
@@ -231,25 +242,6 @@ export function MediaSelectionToolbar({
 		};
 	}, [showBatchConfirmDialog]);
 
-	// Handle rename
-	const handleRename = useCallback(async () => {
-		if (!onRename || !isSingleSelection) return;
-
-		setIsRenaming(true);
-		try {
-			await onRename(selectedFiles[0], newFileName);
-			setShowRenameDialog(false);
-			setNewFileName("");
-			onDeselectAll?.(); // Clear selection after action
-		} catch (error) {
-			toast.error(
-				error instanceof Error ? error.message : "Failed to rename file",
-			);
-		} finally {
-			setIsRenaming(false);
-		}
-	}, [onRename, isSingleSelection, selectedFiles, newFileName, onDeselectAll]);
-
 	const handleBatchProcess = useCallback(async () => {
 		if (!onBatchProcess) return;
 		setIsBatchProcessing(true);
@@ -260,14 +252,6 @@ export function MediaSelectionToolbar({
 			setIsBatchProcessing(false);
 		}
 	}, [onBatchProcess, onDeselectAll]);
-
-	// Open rename dialog
-	const openRenameDialog = useCallback(() => {
-		if (isSingleSelection) {
-			setNewFileName(selectedFiles[0].name);
-			setShowRenameDialog(true);
-		}
-	}, [isSingleSelection, selectedFiles]);
 
 	// Handle delete
 	const handleDelete = useCallback(async () => {
@@ -365,19 +349,6 @@ export function MediaSelectionToolbar({
 			setIsClipping(false);
 		}
 	}, [onClip, selectedFiles, onDeselectAll]);
-
-	// Handle preview
-	const handlePreview = useCallback(() => {
-		if (!onPreview) return;
-
-		// Preview the first selected file (image or video)
-		if (selectedFiles.length === 0) {
-			toast.error("No files selected");
-			return;
-		}
-
-		onPreview(selectedFiles[0]);
-	}, [onPreview, selectedFiles]);
 
 	// Handle export
 	const handleExportClick = useCallback(() => {
@@ -487,7 +458,6 @@ export function MediaSelectionToolbar({
 	const toolbarDisabled =
 		disabled ||
 		selectedCount === 0 ||
-		isRenaming ||
 		isDeleting ||
 		isDecoding ||
 		isClipping ||
@@ -505,6 +475,9 @@ export function MediaSelectionToolbar({
 		},
 	);
 
+	const selectedCountLabel =
+		selectedCount === 1 ? "1 selected" : `${selectedCount} selected`;
+
 	return (
 		<>
 			<BaseSelectionToolbar
@@ -518,15 +491,7 @@ export function MediaSelectionToolbar({
 			>
 				{(mode) => {
 					if (mode === "expanded") {
-						return (
-							<>
-								<span className="text-sm text-muted-foreground hidden sm:inline-block">
-									{selectedCount === 1
-										? "1 file selected - use the buttons below to actions"
-										: `${selectedCount} files selected - choose an action`}
-								</span>
-							</>
-						);
+						return null;
 					}
 
 					if (mode === "expanded-actions") {
@@ -534,556 +499,213 @@ export function MediaSelectionToolbar({
 							<>
 								{/* Run Workflow */}
 								{onRunWorkflow && (
-									<Button
-										variant="default"
-										size="sm"
-										onClick={() => setShowQuickRunDialog(true)}
-										disabled={toolbarDisabled}
-										className="h-9 bg-blue-600 hover:bg-blue-700"
-									>
-										<Play className="h-4 w-4 mr-2" />
-										Run Workflow
-									</Button>
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+									<ToolbarTooltip content={`Run • ${selectedCountLabel}`}>
+												<Button
+													variant="default"
+													size="icon"
+													disabled={toolbarDisabled}
+												className="h-11 w-20 bg-blue-600 hover:bg-blue-700"
+													aria-label="Run workflow"
+												>
+													<Play className="h-4 w-4" />
+												</Button>
+											</ToolbarTooltip>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="start" className="w-56">
+											<DropdownMenuItem
+												onClick={() => setShowQuickRunDialog(true)}
+												disabled={toolbarDisabled}
+											>
+												<Play className="h-4 w-4 mr-2 text-blue-600" />
+												Quick Run
+											</DropdownMenuItem>
+											<DropdownMenuItem
+												onClick={() => setShowComplexWorkflowDialog(true)}
+												disabled={toolbarDisabled}
+											>
+												<Zap className="h-4 w-4 mr-2 text-indigo-600" />
+												Complex
+											</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
 								)}
-
-
-								{/* Run Complex Workflow */}
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => setShowComplexWorkflowDialog(true)}
-									disabled={toolbarDisabled}
-									className="h-9 border-2 border-indigo-500 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold"
-									title="Run complex workflow on selected files"
-								>
-									<Zap className="h-4 w-4 mr-2 fill-indigo-700" />
-									Run Complex Workflow
-								</Button>
 
 								{/* Batch Process */}
 								{onBatchProcess && (
-									<Button
-										variant="default"
-										size="sm"
-										onClick={() => setShowBatchConfirmDialog(true)}
-										disabled={toolbarDisabled || isBatchProcessing}
-										className="h-9 bg-emerald-600 hover:bg-emerald-700"
-										title="Run selected complex workflow on each file"
-									>
-										{isBatchProcessing ? (
-											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-										) : (
-											<Zap className="h-4 w-4 mr-2" />
-										)}
-										{isBatchProcessing ? "Starting..." : "Batch Process"}
-									</Button>
-								)}
-
-								{/* Preview - when image or video files are selected */}
-								{onPreview && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handlePreview}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) => f.type === "image" || f.type === "video",
-											)
-										}
-										className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700"
-									>
-										<Eye className="h-4 w-4 mr-2" />
-										Preview
-									</Button>
-								)}
-
-								{onPrompt && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={onPrompt}
-										disabled={
-											toolbarDisabled ||
-											!isSingleSelection ||
-											!promptAvailable ||
-											promptLoading
-										}
-										className="h-9 border-slate-200 bg-slate-50/50 hover:bg-slate-100 text-slate-700"
-										title={
-											promptAvailable
-												? "View embedded prompt"
-												: "No embedded prompt found"
-										}
-									>
-										{promptLoading ? (
-											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-										) : (
-											<MessageSquare className="h-4 w-4 mr-2" />
-										)}
-										Prompt
-									</Button>
+								<ToolbarTooltip content={`Batch • ${selectedCountLabel}`}>
+										<Button
+											variant="default"
+											size="icon"
+											onClick={() => setShowBatchConfirmDialog(true)}
+											disabled={toolbarDisabled || isBatchProcessing}
+										className="h-11 w-20 bg-emerald-600 hover:bg-emerald-700"
+											aria-label="Batch"
+										>
+											{isBatchProcessing ? (
+												<Loader2 className="h-4 w-4 animate-spin" />
+											) : (
+												<Zap className="h-4 w-4" />
+											)}
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{/* Clip - only when videos are selected */}
 								{onClip && (
-									<Button
-										variant="default"
-										size="sm"
-										onClick={handleClip}
-										disabled={
-											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
-										}
-										className="h-9 bg-purple-600 hover:bg-purple-700"
-									>
-										{isClipping ? (
-											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-										) : (
-											<Scissors className="h-4 w-4 mr-2" />
-										)}
-										{isClipping ? "Processing..." : "Clip Videos"}
-									</Button>
+									<ToolbarTooltip content={`Clip • ${selectedCountLabel}`}>
+										<Button
+											variant="default"
+											size="icon"
+											onClick={handleClip}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some((f) => f.type === "video")
+											}
+											className="h-11 w-20 bg-purple-600 hover:bg-purple-700"
+											aria-label="Clip videos"
+										>
+											{isClipping ? (
+												<Loader2 className="h-4 w-4 animate-spin" />
+											) : (
+												<Scissors className="h-4 w-4" />
+											)}
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{/* Add Caption (Manual) - only if selection has no caption */}
 								{showCaptionButton && onAddCaption && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => {
-											const filesWithoutCaption = selectedFiles.filter(
-												(f) => !f.captionPath,
-											);
-											onAddCaption(filesWithoutCaption);
-											onDeselectAll?.();
-										}}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) =>
-													!f.captionPath &&
-													(f.type === "video" || f.type === "image"),
-											)
-										}
-										className="h-9 border-yellow-100 bg-yellow-50/50 hover:bg-yellow-100 text-yellow-700"
-										title="Add caption text file"
-									>
-										<FilePlus className="h-4 w-4 mr-2" />
-										Add Caption
-									</Button>
+									<ToolbarTooltip content={`Add caption • ${selectedCountLabel}`}>
+										<Button
+											variant="outline"
+											size="icon"
+											onClick={() => {
+												const filesWithoutCaption = selectedFiles.filter(
+													(f) => !f.captionPath,
+												);
+												onAddCaption(filesWithoutCaption);
+												onDeselectAll?.();
+											}}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some(
+													(f) =>
+														!f.captionPath &&
+														(f.type === "video" || f.type === "image"),
+												)
+											}
+											className="h-11 w-20 border-yellow-100 bg-yellow-50/50 hover:bg-yellow-100 text-yellow-700"
+											aria-label="Add caption"
+										>
+											<FilePlus className="h-4 w-4" />
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{/* Caption - only for videos/images in dataset tab */}
 								{showCaptionButton && onCaption && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handleCaption}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) => f.type === "video" || f.type === "image",
-											)
-										}
-										className="h-9 border-teal-100 bg-teal-50/50 hover:bg-teal-100 text-teal-700"
-										title="Generate AI captions for media"
-									>
-										{isCaptioning ? (
-											<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-										) : (
-											<MessageSquare className="h-4 w-4 mr-2" />
-										)}
-										{isCaptioning
-											? `Captioning ${captionProgress.current}/${captionProgress.total}...`
-											: `Caption ${selectedCount > 1 ? selectedCount : ""}`}
-									</Button>
+									<ToolbarTooltip content={`Caption • ${selectedCountLabel}`}>
+										<Button
+											variant="outline"
+											size="icon"
+											onClick={handleCaption}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some(
+													(f) => f.type === "video" || f.type === "image",
+												)
+											}
+											className="h-11 w-20 border-teal-100 bg-teal-50/50 hover:bg-teal-100 text-teal-700"
+											aria-label="Caption media"
+										>
+											{isCaptioning ? (
+												<Loader2 className="h-4 w-4 animate-spin" />
+											) : (
+												<MessageSquare className="h-4 w-4" />
+											)}
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{/* Export - for images and videos */}
 								{onExport && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handleExportClick}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) => f.type === "image" || f.type === "video",
-											)
-										}
-										className="h-9 border-orange-100 bg-orange-50/50 hover:bg-orange-100 text-orange-700"
-										title="Export to folder"
-									>
-										<Download className="h-4 w-4 mr-2" />
-										Export
-									</Button>
+									<ToolbarTooltip content={`Export • ${selectedCountLabel}`}>
+										<Button
+											variant="outline"
+											size="icon"
+											onClick={handleExportClick}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some(
+													(f) => f.type === "image" || f.type === "video",
+												)
+											}
+											className="h-11 w-20 border-orange-100 bg-orange-50/50 hover:bg-orange-100 text-orange-700"
+											aria-label="Export"
+										>
+											<Download className="h-4 w-4" />
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{/* FPS Convert - for videos */}
 								{onConvertFps && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={handleConvertFpsClick}
-										disabled={
-											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
-										}
-										className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
-										title="Convert video FPS"
-									>
-										<Zap className="h-4 w-4 mr-2" />
-										FPS Convert
-									</Button>
+									<ToolbarTooltip content={`FPS • ${selectedCountLabel}`}>
+										<Button
+											variant="outline"
+											size="icon"
+											onClick={handleConvertFpsClick}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some((f) => f.type === "video")
+											}
+											className="h-11 w-20 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+											aria-label="Convert FPS"
+										>
+											<Zap className="h-4 w-4" />
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{/* Resize - for images and videos */}
 								{onResize && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={openResizeDialog}
-										disabled={toolbarDisabled}
-										className="h-9 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-100 text-indigo-700"
-										title="Resize by longest edge"
-									>
-										<Maximize2 className="h-4 w-4 mr-2" />
-										Resize
-									</Button>
+									<ToolbarTooltip content={`Resize • ${selectedCountLabel}`}>
+										<Button
+											variant="outline"
+											size="icon"
+											onClick={openResizeDialog}
+											disabled={toolbarDisabled}
+											className="h-11 w-20 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-100 text-indigo-700"
+											aria-label="Resize"
+										>
+											<Maximize2 className="h-4 w-4" />
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{onExportToDataset && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={onExportToDataset}
-										disabled={toolbarDisabled}
-										className="h-9 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
-										title="Export to dataset"
-									>
-										<Database className="h-4 w-4 mr-2" />
-										Dataset
-									</Button>
-								)}
-
-								{/* Rename - only for single selection */}
-								{onRename && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={openRenameDialog}
-										disabled={toolbarDisabled || !isSingleSelection}
-										className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
-									>
-										<Pencil className="h-4 w-4 mr-2" />
-										Rename
-									</Button>
+									<ToolbarTooltip content={`Dataset • ${selectedCountLabel}`}>
+										<Button
+											variant="outline"
+											size="icon"
+											onClick={onExportToDataset}
+											disabled={toolbarDisabled}
+											className="h-11 w-20 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
+											aria-label="Export to dataset"
+										>
+											<Database className="h-4 w-4" />
+										</Button>
+									</ToolbarTooltip>
 								)}
 
 								{/* Decode - for single or multiple duck-encoded images */}
 								{onDecode && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => {
-											// Check if any duck-encoded file requires password
-											const requiresPassword = selectedFiles
-												.filter((f) => f.type === "image" && f.isDuckEncoded)
-												.some((f) => f.duckRequiresPassword);
-
-											if (requiresPassword) {
-												setDecodePassword("");
-												setShowDecodeDialog(true);
-											} else {
-												handleDecode();
-											}
-										}}
-										disabled={toolbarDisabled || !hasDuckEncodedImages}
-										className="h-9 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700 shadow-md shadow-green-200/50"
-									>
-										<Eye className="h-4 w-4 mr-2" />
-										{duckEncodedCount === 1
-											? "🦆 Decode"
-											: `🦆 Decode ${duckEncodedCount}`}
-									</Button>
-								)}
-
-								{/* Delete - for single or multiple */}
-								{onDelete && (
-									<Button
-										variant="outline"
-										size="icon"
-										className="h-9 w-9 border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700"
-										onClick={() => setShowDeleteDialog(true)}
-										disabled={toolbarDisabled}
-										title={
-											selectedCount === 1
-												? "Delete selected file"
-												: `Delete ${selectedCount} files`
-										}
-									>
-										<Trash2 className="h-4 w-4" />
-									</Button>
-								)}
-							</>
-						);
-					}
-
-					if (mode === "floating") {
-						return (
-							<>
-								{/* Run Workflow */}
-								{onRunWorkflow && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => setShowQuickRunDialog(true)}
-										disabled={toolbarDisabled}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Run Workflow"
-									>
-										<Play className="h-3.5 w-3.5 mr-2 text-blue-400" />
-										<span className="text-xs">Run Workflow</span>
-									</Button>
-								)}
-
-
-								{/* Run Complex Workflow - floating mode */}
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => setShowComplexWorkflowDialog(true)}
-									disabled={toolbarDisabled}
-									className="h-8 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/30 rounded-full px-3"
-									title="Run Complex Workflow"
-								>
-									<Zap className="h-3.5 w-3.5 mr-2 fill-indigo-400" />
-									<span className="text-xs font-bold">Complex</span>
-								</Button>
-
-								{/* Preview - floating mode */}
-								{onPreview && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handlePreview}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) => f.type === "image" || f.type === "video",
-											)
-										}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Preview File"
-									>
-										<Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
-										<span className="text-xs">Preview</span>
-									</Button>
-								)}
-
-								{onPrompt && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={onPrompt}
-										disabled={
-											toolbarDisabled ||
-											!isSingleSelection ||
-											!promptAvailable ||
-											promptLoading
-										}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title={
-											promptAvailable
-												? "View embedded prompt"
-												: "No embedded prompt found"
-										}
-									>
-										{promptLoading ? (
-											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-										) : (
-											<MessageSquare className="h-3.5 w-3.5 mr-2 text-slate-400" />
-										)}
-										<span className="text-xs">Prompt</span>
-									</Button>
-								)}
-
-								{/* Clip - floating mode */}
-								{onClip && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleClip}
-										disabled={
-											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
-										}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Clip Videos"
-									>
-										{isClipping ? (
-											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-										) : (
-											<Scissors className="h-3.5 w-3.5 mr-2 text-purple-400" />
-										)}
-										<span className="text-xs">
-											{isClipping ? "..." : "Clip"}
-										</span>
-									</Button>
-								)}
-
-								{/* Add Caption (Manual) - floating mode */}
-								{showCaptionButton && onAddCaption && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => {
-											const filesWithoutCaption = selectedFiles.filter(
-												(f) => !f.captionPath,
-											);
-											onAddCaption(filesWithoutCaption);
-											onDeselectAll?.();
-										}}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) =>
-													!f.captionPath &&
-													(f.type === "video" || f.type === "image"),
-											)
-										}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Add caption text file"
-									>
-										<FilePlus className="h-3.5 w-3.5 mr-2 text-yellow-400" />
-										<span className="text-xs">Add Caption</span>
-									</Button>
-								)}
-
-								{/* Caption - floating mode */}
-								{showCaptionButton && onCaption && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleCaption}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) => f.type === "video" || f.type === "image",
-											)
-										}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Generate AI captions"
-									>
-										{isCaptioning ? (
-											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-										) : (
-											<MessageSquare className="h-3.5 w-3.5 mr-2 text-teal-400" />
-										)}
-										<span className="text-xs">
-											{isCaptioning
-												? `${captionProgress.current}/${captionProgress.total}`
-												: "Caption"}
-										</span>
-									</Button>
-								)}
-
-								{/* Export - floating mode */}
-								{onExport && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleExportClick}
-										disabled={
-											toolbarDisabled ||
-											!selectedFiles.some(
-												(f) => f.type === "image" || f.type === "video",
-											)
-										}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Export to folder"
-									>
-										<Download className="h-3.5 w-3.5 mr-2 text-orange-400" />
-										<span className="text-xs">Export</span>
-									</Button>
-								)}
-
-								{/* Batch Process - floating mode */}
-								{onBatchProcess && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => setShowBatchConfirmDialog(true)}
-										disabled={toolbarDisabled || isBatchProcessing}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Run selected complex workflow on each file"
-									>
-										{isBatchProcessing ? (
-											<Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-										) : (
-											<Zap className="h-3.5 w-3.5 mr-2 text-emerald-400" />
-										)}
-										<span className="text-xs">
-											{isBatchProcessing ? "Starting..." : "Batch"}
-										</span>
-									</Button>
-								)}
-
-								{/* FPS Convert - floating mode */}
-								{onConvertFps && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={handleConvertFpsClick}
-										disabled={
-											toolbarDisabled || !selectedFiles.some((f) => f.type === "video")
-										}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Convert video FPS"
-									>
-										<Zap className="h-3.5 w-3.5 mr-2 text-blue-400" />
-										<span className="text-xs">FPS</span>
-									</Button>
-								)}
-
-								{/* Rename - only for single selection */}
-								{onRename && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={openRenameDialog}
-										disabled={toolbarDisabled || !isSingleSelection}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Rename"
-									>
-										<Pencil className="h-3.5 w-3.5 mr-2 text-green-400" />
-										<span className="text-xs">Rename</span>
-									</Button>
-								)}
-
-								{onExportToDataset && (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={onExportToDataset}
-										disabled={toolbarDisabled}
-										className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
-										title="Export to dataset"
-									>
-										<Database className="h-3.5 w-3.5 mr-2 text-purple-400" />
-										<span className="text-xs">Dataset</span>
-									</Button>
-								)}
-
-								{/* Decode - for single or multiple duck-encoded images in floating mode */}
-								{onDecode && (
-									<motion.div
-										initial={{ scale: 0.8, opacity: 0 }}
-										animate={{ scale: 1, opacity: 1 }}
-										exit={{ scale: 0.8, opacity: 0 }}
-										transition={{ type: "spring", stiffness: 300, damping: 20 }}
-									>
+									<ToolbarTooltip content={`Decode • ${selectedCountLabel}`}>
 										<Button
-											variant="ghost"
-											size="sm"
+											variant="outline"
+											size="icon"
 											onClick={() => {
 												// Check if any duck-encoded file requires password
 												const requiresPassword = selectedFiles
@@ -1098,65 +720,298 @@ export function MediaSelectionToolbar({
 												}
 											}}
 											disabled={toolbarDisabled || !hasDuckEncodedImages}
-											className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3 relative overflow-hidden"
-											title={
-												duckEncodedCount === 1
-													? "Decode Duck Image"
-													: `Decode ${duckEncodedCount} Duck Images`
-											}
+											className="h-11 w-20 border-green-100 bg-green-50/50 hover:bg-green-100 text-green-700 shadow-md shadow-green-200/50"
+											aria-label="Decode duck images"
 										>
-											<motion.span
-												className="absolute inset-0 bg-gradient-to-r from-green-400/30 to-green-600/30"
-												animate={{
-													x: ["-100%", "100%"],
+											<Eye className="h-4 w-4" />
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{/* Delete - for single or multiple */}
+								{onDelete && (
+									<ToolbarTooltip content={`Delete • ${selectedCountLabel}`}>
+										<Button
+											variant="outline"
+											size="icon"
+											className="h-11 w-20 border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700"
+											onClick={() => setShowDeleteDialog(true)}
+											disabled={toolbarDisabled}
+											aria-label="Delete"
+										>
+											<Trash2 className="h-4 w-4" />
+										</Button>
+									</ToolbarTooltip>
+								)}
+							</>
+						);
+					}
+
+					if (mode === "floating") {
+						return (
+							<>
+								{/* Run Workflow */}
+								{onRunWorkflow && (
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+									<ToolbarTooltip content={`Run • ${selectedCountLabel}`}>
+												<Button
+													variant="ghost"
+													size="icon"
+													disabled={toolbarDisabled}
+													className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+													aria-label="Run workflow"
+												>
+													<Play className="h-3.5 w-3.5 text-blue-400" />
+												</Button>
+											</ToolbarTooltip>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="start" className="w-48">
+											<DropdownMenuItem
+												onClick={() => setShowQuickRunDialog(true)}
+												disabled={toolbarDisabled}
+											>
+												<Play className="h-4 w-4 mr-2 text-blue-600" />
+												Quick Run
+											</DropdownMenuItem>
+											<DropdownMenuItem
+												onClick={() => setShowComplexWorkflowDialog(true)}
+												disabled={toolbarDisabled}
+											>
+												<Zap className="h-4 w-4 mr-2 text-indigo-600" />
+												Complex
+											</DropdownMenuItem>
+										</DropdownMenuContent>
+									</DropdownMenu>
+								)}
+
+								{/* Clip - floating mode */}
+								{onClip && (
+									<ToolbarTooltip content={`Clip • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={handleClip}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some((f) => f.type === "video")
+											}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Clip videos"
+										>
+											{isClipping ? (
+												<Loader2 className="h-3.5 w-3.5 animate-spin" />
+											) : (
+												<Scissors className="h-3.5 w-3.5 text-purple-400" />
+											)}
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{/* Add Caption (Manual) - floating mode */}
+								{showCaptionButton && onAddCaption && (
+									<ToolbarTooltip content={`Add caption • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => {
+												const filesWithoutCaption = selectedFiles.filter(
+													(f) => !f.captionPath,
+												);
+												onAddCaption(filesWithoutCaption);
+												onDeselectAll?.();
+											}}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some(
+													(f) =>
+														!f.captionPath &&
+														(f.type === "video" || f.type === "image"),
+												)
+											}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Add caption"
+										>
+											<FilePlus className="h-3.5 w-3.5 text-yellow-400" />
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{/* Caption - floating mode */}
+								{showCaptionButton && onCaption && (
+									<ToolbarTooltip content={`Caption • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={handleCaption}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some(
+													(f) => f.type === "video" || f.type === "image",
+												)
+											}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Caption media"
+										>
+											{isCaptioning ? (
+												<Loader2 className="h-3.5 w-3.5 animate-spin" />
+											) : (
+												<MessageSquare className="h-3.5 w-3.5 text-teal-400" />
+											)}
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{/* Export - floating mode */}
+								{onExport && (
+									<ToolbarTooltip content={`Export • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={handleExportClick}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some(
+													(f) => f.type === "image" || f.type === "video",
+												)
+											}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Export"
+										>
+											<Download className="h-3.5 w-3.5 text-orange-400" />
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{/* Batch Process - floating mode */}
+								{onBatchProcess && (
+									<ToolbarTooltip content={`Batch • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => setShowBatchConfirmDialog(true)}
+											disabled={toolbarDisabled || isBatchProcessing}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Batch"
+										>
+											{isBatchProcessing ? (
+												<Loader2 className="h-3.5 w-3.5 animate-spin" />
+											) : (
+												<Zap className="h-3.5 w-3.5 text-emerald-400" />
+											)}
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{/* FPS Convert - floating mode */}
+								{onConvertFps && (
+									<ToolbarTooltip content={`FPS • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={handleConvertFpsClick}
+											disabled={
+												toolbarDisabled ||
+												!selectedFiles.some((f) => f.type === "video")
+											}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Convert FPS"
+										>
+											<Zap className="h-3.5 w-3.5 text-blue-400" />
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{onExportToDataset && (
+									<ToolbarTooltip content={`Dataset • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={onExportToDataset}
+											disabled={toolbarDisabled}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Export to dataset"
+										>
+											<Database className="h-3.5 w-3.5 text-purple-400" />
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{/* Decode - for single or multiple duck-encoded images in floating mode */}
+								{onDecode && (
+									<motion.div
+										initial={{ scale: 0.8, opacity: 0 }}
+										animate={{ scale: 1, opacity: 1 }}
+										exit={{ scale: 0.8, opacity: 0 }}
+										transition={{ type: "spring", stiffness: 300, damping: 20 }}
+									>
+										<ToolbarTooltip content={`Decode • ${selectedCountLabel}`}>
+											<Button
+												variant="ghost"
+												size="icon"
+												onClick={() => {
+													// Check if any duck-encoded file requires password
+													const requiresPassword = selectedFiles
+														.filter((f) => f.type === "image" && f.isDuckEncoded)
+														.some((f) => f.duckRequiresPassword);
+
+													if (requiresPassword) {
+														setDecodePassword("");
+														setShowDecodeDialog(true);
+													} else {
+														handleDecode();
+													}
 												}}
-												transition={{
-													duration: 2,
-													repeat: Infinity,
-													repeatDelay: 1,
-													ease: "linear",
-												}}
-											/>
-											<span className="relative flex items-center">
-												<motion.div
+												disabled={toolbarDisabled || !hasDuckEncodedImages}
+												className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full relative overflow-hidden"
+												aria-label="Decode duck images"
+											>
+												<motion.span
+													className="absolute inset-0 bg-gradient-to-r from-green-400/30 to-green-600/30"
 													animate={{
-														scale: [1, 1.2, 1],
-														rotate: [0, 10, -10, 0],
+														x: ["-100%", "100%"],
 													}}
 													transition={{
-														duration: 1.5,
+														duration: 2,
 														repeat: Infinity,
-														repeatDelay: 2,
+														repeatDelay: 1,
+														ease: "linear",
 													}}
-													className="flex items-center"
-												>
-													<Eye className="h-3.5 w-3.5 mr-2 text-green-400" />
-													<span className="text-xs">
-														{duckEncodedCount === 1
-															? "🦆 Decode"
-															: `🦆 ${duckEncodedCount}`}
-													</span>
-												</motion.div>
-											</span>
-										</Button>
+												/>
+												<span className="relative flex items-center">
+													<motion.div
+														animate={{
+															scale: [1, 1.2, 1],
+															rotate: [0, 10, -10, 0],
+														}}
+														transition={{
+															duration: 1.5,
+															repeat: Infinity,
+															repeatDelay: 2,
+														}}
+														className="flex items-center"
+													>
+														<Eye className="h-3.5 w-3.5 text-green-400" />
+													</motion.div>
+												</span>
+											</Button>
+										</ToolbarTooltip>
 									</motion.div>
 								)}
 
 								{onDelete && (
-									<Button
-										variant="ghost"
-										size="icon"
-										onClick={() => setShowDeleteDialog(true)}
-										disabled={toolbarDisabled}
-										className="h-8 w-8 text-gray-400 hover:text-red-400 hover:bg-red-950/30 rounded-full"
-										title={
-											selectedCount === 1
-												? "Delete"
-												: `Delete ${selectedCount} files`
-										}
-									>
-										<Trash2 className="h-3.5 w-3.5" />
-									</Button>
+									<ToolbarTooltip content={`Delete • ${selectedCountLabel}`}>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => setShowDeleteDialog(true)}
+											disabled={toolbarDisabled}
+											className="h-10 w-18 text-gray-400 hover:text-red-400 hover:bg-red-950/30 rounded-full"
+											aria-label="Delete"
+										>
+											<Trash2 className="h-3.5 w-3.5" />
+										</Button>
+									</ToolbarTooltip>
 								)}
 							</>
 						);
@@ -1165,57 +1020,6 @@ export function MediaSelectionToolbar({
 					return null;
 				}}
 			</BaseSelectionToolbar>
-
-			{/* Rename Dialog */}
-			{onRename && isSingleSelection && (
-				<Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
-					<DialogContent>
-						<DialogHeader>
-							<DialogTitle>Rename File</DialogTitle>
-							<DialogDescription>
-								Enter a new name for the file. The file extension will be
-								preserved.
-							</DialogDescription>
-						</DialogHeader>
-						<div className="py-4">
-							<Input
-								value={newFileName}
-								onChange={(e) => setNewFileName(e.target.value)}
-								placeholder={selectedFiles[0]?.name}
-								onKeyDown={(e) => e.key === "Enter" && handleRename()}
-								autoFocus
-							/>
-						</div>
-						<div className="flex justify-end gap-2">
-							<Button
-								variant="outline"
-								onClick={() => setShowRenameDialog(false)}
-								disabled={isRenaming}
-							>
-								Cancel
-							</Button>
-							<Button
-								onClick={handleRename}
-								disabled={
-									isRenaming ||
-									!newFileName.trim() ||
-									newFileName === selectedFiles[0]?.name
-								}
-								className="bg-blue-600 hover:bg-blue-700"
-							>
-								{isRenaming ? (
-									<>
-										<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-										Renaming...
-									</>
-								) : (
-									"Rename"
-								)}
-							</Button>
-						</div>
-					</DialogContent>
-				</Dialog>
-			)}
 
 			{/* Delete Confirmation Dialog */}
 			{onDelete && (
@@ -1465,7 +1269,7 @@ export function MediaSelectionToolbar({
 				>
 					<DialogContent className="max-w-md">
 						<DialogHeader>
-							<DialogTitle>Confirm Batch Process</DialogTitle>
+							<DialogTitle>Confirm Batch</DialogTitle>
 							<DialogDescription>
 								Run the selected complex workflow on {selectedCount} file
 								{selectedCount !== 1 ? "s" : ""}?

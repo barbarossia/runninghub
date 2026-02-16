@@ -194,7 +194,7 @@ export function SelectionToolbar({
 											<Button
 												variant="outline"
 												size="sm"
-												className="h-9 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
+												className="h-11 px-6 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
 											>
 												<Settings className="h-4 w-4 mr-2" />
 												<span className="max-w-[150px] truncate">
@@ -237,7 +237,7 @@ export function SelectionToolbar({
 									size="sm"
 									onClick={handleProcess}
 									disabled={toolbarDisabled}
-									className="h-9 px-6 bg-blue-600 hover:bg-blue-700 shadow-md"
+									className="h-11 px-10 bg-blue-600 hover:bg-blue-700 shadow-md"
 								>
 									<Play className="h-4 w-4 mr-2 fill-current" />
 									{isProcessing ? "Processing..." : "Start Processing"}
@@ -250,7 +250,7 @@ export function SelectionToolbar({
 										size="sm"
 										onClick={handleExport}
 										disabled={toolbarDisabled}
-										className="h-9 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
+										className="h-11 px-7 border-purple-100 bg-purple-50/50 hover:bg-purple-100 text-purple-700"
 										title="Export to folder"
 									>
 										{isExporting ? (
@@ -269,7 +269,7 @@ export function SelectionToolbar({
 										size="sm"
 										onClick={() => setShowDecodeDialog(true)}
 										disabled={toolbarDisabled}
-										className="h-9 border-green-200 bg-green-50/50 hover:bg-green-100 text-green-700"
+										className="h-11 px-7 border-green-200 bg-green-50/50 hover:bg-green-100 text-green-700"
 										title={`Decode ${selectedDuckEncodedImages.length} duck-encoded image${selectedDuckEncodedImages.length !== 1 ? "s" : ""}`}
 									>
 										<Eye className="h-4 w-4 mr-2" />
@@ -287,7 +287,7 @@ export function SelectionToolbar({
 											toolbarDisabled || selectedImagePaths.length === 0
 										}
 										className={cn(
-											"h-9 border-2 border-indigo-500 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold",
+											"h-11 px-7 border-2 border-indigo-500 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold",
 											selectedImagePaths.length === 0 &&
 												"opacity-40 cursor-not-allowed",
 										)}
@@ -301,7 +301,7 @@ export function SelectionToolbar({
 								<Button
 									variant="outline"
 									size="icon"
-									className="h-9 w-9 border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700"
+									className="h-11 w-11 border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700"
 									onClick={() => setShowDeleteDialog(true)}
 									disabled={toolbarDisabled}
 									title="Delete selected"
@@ -321,7 +321,7 @@ export function SelectionToolbar({
 											<Button
 												variant="ghost"
 												size="sm"
-												className="h-8 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-3"
+												className="h-10 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full px-5"
 											>
 												<Settings className="h-3.5 w-3.5 mr-2 text-blue-400" />
 												<span className="text-xs max-w-[100px] truncate">
@@ -369,7 +369,7 @@ export function SelectionToolbar({
 										size="sm"
 										onClick={handleProcess}
 										disabled={toolbarDisabled}
-										className="h-8 bg-blue-600 hover:bg-blue-500 text-white rounded-full px-4 shadow-lg shadow-blue-900/20"
+										className="h-10 bg-blue-600 hover:bg-blue-500 text-white rounded-full px-6 shadow-lg shadow-blue-900/20"
 									>
 										{isProcessing ? (
 											<Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -388,7 +388,7 @@ export function SelectionToolbar({
 										size="icon"
 										onClick={handleExport}
 										disabled={toolbarDisabled}
-										className="h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-950/30 rounded-full"
+										className="h-10 w-10 text-purple-400 hover:text-purple-300 hover:bg-purple-950/30 rounded-full"
 										title="Export to folder"
 									>
 										{isExporting ? (
@@ -405,7 +405,7 @@ export function SelectionToolbar({
 										size="icon"
 										onClick={() => setShowDeleteDialog(true)}
 										disabled={toolbarDisabled}
-										className="h-8 w-8 text-gray-400 hover:text-red-400 hover:bg-red-950/30 rounded-full"
+										className="h-10 w-10 text-gray-400 hover:text-red-400 hover:bg-red-950/30 rounded-full"
 										title="Delete selected"
 									>
 										<Trash2 className="h-3.5 w-3.5" />
@@ -419,7 +419,7 @@ export function SelectionToolbar({
 										size="icon"
 										onClick={() => setShowDecodeDialog(true)}
 										disabled={toolbarDisabled}
-										className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-950/30 rounded-full"
+										className="h-10 w-10 text-green-400 hover:text-green-300 hover:bg-green-950/30 rounded-full"
 										title={`Decode ${selectedDuckEncodedImages.length} duck-encoded image${selectedDuckEncodedImages.length !== 1 ? "s" : ""}`}
 									>
 										<Eye className="h-3.5 w-3.5" />
@@ -436,7 +436,7 @@ export function SelectionToolbar({
 											toolbarDisabled || selectedImagePaths.length === 0
 										}
 										className={cn(
-											"h-8 w-8 rounded-full",
+											"h-10 w-10 rounded-full",
 											selectedImagePaths.length > 0
 												? "text-purple-400 hover:text-purple-300 hover:bg-purple-950/30"
 												: "text-gray-500 cursor-not-allowed",

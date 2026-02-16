@@ -52,7 +52,7 @@ export function BaseSelectionToolbar({
 							className,
 						)}
 					>
-						<div className="flex flex-wrap items-center justify-between gap-4">
+						<div className="flex flex-wrap items-center justify-start gap-4">
 							<div className="flex items-center gap-3 min-w-0">
 								<Badge
 									variant="default"
@@ -77,7 +77,7 @@ export function BaseSelectionToolbar({
 										<Button
 											variant="outline"
 											size="sm"
-											className="h-9 px-4 border-gray-300 hover:bg-gray-100 text-gray-700"
+											className="h-11 px-6 border-gray-300 hover:bg-gray-100 text-gray-700"
 											onClick={onDeselectAll}
 											title="Cancel selection"
 										>
@@ -88,7 +88,7 @@ export function BaseSelectionToolbar({
 									<Button
 										variant="outline"
 										size="icon"
-										className="h-9 w-9 border-gray-200 hover:bg-gray-100"
+										className="h-11 w-11 border-gray-200 hover:bg-gray-100"
 										onClick={() => setMode("floating")}
 										title="Minimize to floating bar"
 									>
@@ -98,7 +98,7 @@ export function BaseSelectionToolbar({
 									<Button
 										variant="ghost"
 										size="icon"
-										className="h-9 w-9 text-gray-400 hover:text-gray-900"
+										className="h-11 w-11 text-gray-400 hover:text-gray-900"
 										onClick={onDeselectAll}
 										title="Clear selection"
 									>
@@ -137,7 +137,7 @@ export function BaseSelectionToolbar({
 								variant="ghost"
 								size="sm"
 								onClick={onDeselectAll}
-								className="h-8 px-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+								className="h-10 px-5 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
 								title="Cancel selection"
 							>
 								<span className="text-xs">Cancel</span>
@@ -148,7 +148,7 @@ export function BaseSelectionToolbar({
 							variant="ghost"
 							size="icon"
 							onClick={() => setMode("expanded")}
-							className="h-8 w-8 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full"
+							className="h-10 w-10 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full"
 							title="Expand to card"
 						>
 							<Maximize2 className="h-3.5 w-3.5" />
@@ -158,7 +158,7 @@ export function BaseSelectionToolbar({
 							variant="ghost"
 							size="icon"
 							onClick={onDeselectAll}
-							className="h-8 w-8 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full"
+							className="h-10 w-10 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full"
 							title="Clear selection"
 						>
 							<X className="h-3.5 w-3.5" />

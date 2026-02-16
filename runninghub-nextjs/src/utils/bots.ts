@@ -1,6 +1,8 @@
 import type {
 	AutoSaveDecodeBotConfig,
 	AutoSaveDecodeSummary,
+	JobCleanupBotConfig,
+	JobCleanupSummary,
 	JobStatusBotConfig,
 	JobStatusSummary,
 } from '@/types/bot';
@@ -239,4 +241,47 @@ export const runAutoSaveDecodeBot = async ({
 	}
 
 	return summary;
+};
+
+export const runJobCleanupBot = async ({
+	jobs,
+	config,
+}: {
+	jobs: Job[];
+	config: JobCleanupBotConfig;
+}): Promise<JobCleanupSummary> => {
+	const ageDays = Math.max(1, Math.floor(config.ageDays || 1));
+	const cutoffTimestamp = Date.now() - ageDays * 24 * 60 * 60 * 1000;
+
+	const candidates = jobs.filter((job) => {
+		const timestamp = getJobTimestamp(job);
+		return timestamp > 0 && timestamp <= cutoffTimestamp;
+	});
+
+	if (candidates.length === 0) {
+		return {
+			cutoffTimestamp,
+			candidateCount: 0,
+			deleted: [],
+			failed: [],
+		};
+	}
+
+	const response = await fetch('/api/workspace/jobs/batch-delete', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ jobIds: candidates.map((job) => job.id) }),
+	});
+
+	const data = await response.json();
+	if (!response.ok || !data.success) {
+		throw new Error(data.error || 'Failed to delete jobs');
+	}
+
+	return {
+		cutoffTimestamp,
+		candidateCount: candidates.length,
+		deleted: data.deleted || [],
+		failed: data.failed || [],
+	};
 };

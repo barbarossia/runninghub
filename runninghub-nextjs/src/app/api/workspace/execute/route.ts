@@ -504,6 +504,205 @@ function parseRunningHubTaskId(stdout: string): string | null {
 	return null;
 }
 
+type OutputProcessResult = {
+	required: boolean;
+	saved: boolean;
+	reason?: string;
+	outputsCount?: number;
+};
+
+type OutputFilesResult = {
+	outputs: any[];
+	textOutputs: any[];
+};
+
+async function downloadOutputsToWorkspace(
+	taskId: string,
+	jobId: string,
+	outputFiles: any[],
+): Promise<OutputFilesResult> {
+	const fs = await import("fs/promises");
+	const path = await import("path");
+
+	// Workspace job directory: ~/Downloads/workspace/{jobId}/result/
+	const workspaceJobDir = path.join(
+		process.env.HOME || "~",
+		"Downloads",
+		"workspace",
+		jobId,
+	);
+
+	const workspaceOutputsDir = path.join(workspaceJobDir, "result");
+
+	// Create workspace job directory and result subdirectory
+	await fs.mkdir(workspaceOutputsDir, { recursive: true });
+
+	const processedOutputs: any[] = [];
+	const textOutputs: any[] = [];
+
+	for (const output of outputFiles) {
+		const fileUrl = output.fileUrl;
+
+		if (!fileUrl) {
+			await writeLog("Output missing fileUrl, skipping", "warning", taskId);
+			continue;
+		}
+
+		try {
+			// Extract filename from URL
+			const urlParts = fileUrl.split("/");
+			const fileName = urlParts[urlParts.length - 1];
+			const workspacePath = path.join(workspaceOutputsDir, fileName);
+
+			// Download file from remote URL
+			await writeLog(`Downloading ${fileName}...`, "info", taskId);
+			const response = await fetch(fileUrl);
+
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+
+			const buffer = await response.arrayBuffer();
+			const uint8Array = new Uint8Array(buffer);
+
+			// Write to workspace outputs directory
+			await fs.writeFile(workspacePath, uint8Array);
+
+			// Determine file type based on extension
+			const ext = path.extname(fileName).toLowerCase();
+			let determinedFileType: "image" | "text" | "video" | "file" = "file";
+
+			if (
+				[".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg"].includes(ext)
+			) {
+				determinedFileType = "image";
+			} else if ([".mp4", ".mov", ".avi", ".webm"].includes(ext)) {
+				determinedFileType = "video";
+			} else if (
+				[".txt", ".md", ".json", ".log", ".xml", ".csv"].includes(ext)
+			) {
+				determinedFileType = "text";
+			}
+
+			if (determinedFileType === "text") {
+				// Read text file content
+				const content = await fs.readFile(workspacePath, "utf-8");
+
+				textOutputs.push({
+					fileName,
+					filePath: workspacePath,
+					content: {
+						original: content,
+						en: undefined,
+						zh: undefined,
+					},
+					autoTranslated: false,
+					translationError: undefined,
+				});
+			}
+
+			processedOutputs.push({
+				type: determinedFileType === "text" ? "text" : "file",
+				path: workspacePath,
+				fileName: fileName,
+				fileType: determinedFileType,
+				workspacePath: path.join(jobId, "result", fileName),
+			});
+
+			await writeLog(
+				`Downloaded ${fileName} to workspace outputs`,
+				"success",
+				taskId,
+			);
+		} catch (downloadError) {
+			const errorMsg =
+				downloadError instanceof Error
+					? downloadError.message
+					: "Unknown error";
+			await writeLog(
+				`Failed to download ${fileUrl}: ${errorMsg}`,
+				"error",
+				taskId,
+			);
+		}
+	}
+
+	return { outputs: processedOutputs, textOutputs };
+}
+
+async function saveOutputsToJob(
+	jobId: string,
+	outputs: any[],
+	textOutputs: any[],
+) {
+	await updateJobFile(jobId, {
+		results: {
+			outputs,
+			textOutputs,
+		},
+	});
+}
+
+async function fetchRunningHubOutputs(
+	taskId: string,
+	runninghubTaskId: string,
+	apiKey: string,
+	apiHost: string,
+): Promise<any[] | null> {
+	try {
+		const response = await fetch(`https://${apiHost}/task/openapi/outputs`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				apiKey,
+				taskId: runninghubTaskId,
+			}),
+		});
+
+		if (!response.ok) {
+			throw new Error(
+				`RunningHub API error: ${response.status} ${response.statusText}`,
+			);
+		}
+
+		const data = await response.json();
+
+		if (data.code !== 0) {
+			throw new Error(data.msg || "RunningHub output query failed");
+		}
+
+		if (!Array.isArray(data.data) || data.data.length === 0) {
+			return [];
+		}
+
+		return data.data;
+	} catch (error) {
+		const message =
+			error instanceof Error ? error.message : "RunningHub output query failed";
+		await writeLog(`Output re-query failed: ${message}`, "warning", taskId);
+		return null;
+	}
+}
+
+async function getRunningHubTaskIdFromJob(jobId: string): Promise<string | null> {
+	try {
+		const fs = await import("fs/promises");
+		const path = await import("path");
+		const jobFile = path.join(
+			process.env.HOME || "~",
+			"Downloads",
+			"workspace",
+			jobId,
+			"job.json",
+		);
+		const content = await fs.readFile(jobFile, "utf-8");
+		const job = JSON.parse(content) as { runninghubTaskId?: string };
+		return job.runninghubTaskId || null;
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Process job outputs after CLI completion
  */
@@ -513,12 +712,9 @@ async function processJobOutputs(
 	jobId: string,
 	env: NodeJS.ProcessEnv,
 	cliStdout: string,
-) {
+): Promise<OutputProcessResult> {
 	try {
 		await writeLog("Processing job outputs...", "info", taskId);
-
-		const fs = await import("fs/promises");
-		const path = await import("path");
 
 		// Get workflow output configuration from store
 		const workflow = await getWorkflowById(workflowId);
@@ -526,7 +722,7 @@ async function processJobOutputs(
 
 		if (!outputConfig || outputConfig.type === "none") {
 			await writeLog("No outputs configured for this workflow", "info", taskId);
-			return;
+			return { required: false, saved: true, reason: "no_output_config" };
 		}
 
 		// Parse CLI JSON response to extract file URLs
@@ -635,21 +831,8 @@ async function processJobOutputs(
 			cliResponse.data.length === 0
 		) {
 			await writeLog("No output files in CLI response", "warning", taskId);
-			return;
+			return { required: true, saved: false, reason: "cli_no_outputs" };
 		}
-
-		// Workspace job directory: ~/Downloads/workspace/{jobId}/result/
-		const workspaceJobDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-		);
-
-		const workspaceOutputsDir = path.join(workspaceJobDir, "result");
-
-		// Create workspace job directory and result subdirectory
-		await fs.mkdir(workspaceOutputsDir, { recursive: true });
 
 		// Download each output file from remote URL
 		const outputFiles = cliResponse.data;
@@ -659,115 +842,34 @@ async function processJobOutputs(
 			taskId,
 		);
 
-		const processedOutputs: any[] = [];
-		const textOutputs: any[] = [];
-
-		for (const output of outputFiles) {
-			const fileUrl = output.fileUrl;
-			const fileType = output.fileType;
-
-			if (!fileUrl) {
-				await writeLog("Output missing fileUrl, skipping", "warning", taskId);
-				continue;
-			}
-
-			try {
-				// Extract filename from URL
-				const urlParts = fileUrl.split("/");
-				const fileName = urlParts[urlParts.length - 1];
-				const workspacePath = path.join(workspaceOutputsDir, fileName);
-
-				// Download file from remote URL
-				await writeLog(`Downloading ${fileName}...`, "info", taskId);
-				const response = await fetch(fileUrl);
-
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
-
-				const buffer = await response.arrayBuffer();
-				const uint8Array = new Uint8Array(buffer);
-
-				// Write to workspace outputs directory
-				await fs.writeFile(workspacePath, uint8Array);
-
-				// Determine file type based on extension
-				const ext = path.extname(fileName).toLowerCase();
-				let determinedFileType: "image" | "text" | "video" | "file" = "file";
-
-				if (
-					[".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg"].includes(
-						ext,
-					)
-				) {
-					determinedFileType = "image";
-				} else if ([".mp4", ".mov", ".avi", ".webm"].includes(ext)) {
-					determinedFileType = "video";
-				} else if (
-					[".txt", ".md", ".json", ".log", ".xml", ".csv"].includes(ext)
-				) {
-					determinedFileType = "text";
-				}
-
-				if (determinedFileType === "text") {
-					// Read text file content
-					const content = await fs.readFile(workspacePath, "utf-8");
-
-					textOutputs.push({
-						fileName,
-						filePath: workspacePath,
-						content: {
-							original: content,
-							en: undefined,
-							zh: undefined,
-						},
-						autoTranslated: false,
-						translationError: undefined,
-					});
-				}
-
-				processedOutputs.push({
-					type: determinedFileType === "text" ? "text" : "file",
-					path: workspacePath,
-					fileName: fileName,
-					fileType: determinedFileType,
-					workspacePath: path.join(jobId, "result", fileName),
-				});
-
-				await writeLog(
-					`Downloaded ${fileName} to workspace outputs`,
-					"success",
-					taskId,
-				);
-			} catch (downloadError) {
-				const errorMsg =
-					downloadError instanceof Error
-						? downloadError.message
-						: "Unknown error";
-				await writeLog(
-					`Failed to download ${fileUrl}: ${errorMsg}`,
-					"error",
-					taskId,
-				);
-			}
-		}
+		const { outputs, textOutputs } = await downloadOutputsToWorkspace(
+			taskId,
+			jobId,
+			outputFiles,
+		);
 
 		// Update job.json with results
-		await updateJobFile(jobId, {
-			results: {
-				outputs: processedOutputs,
-				textOutputs: textOutputs,
-			},
-		});
+		await saveOutputsToJob(jobId, outputs, textOutputs);
 
 		// Note: Text translation will be done client-side
 		// Server just prepares the files for download/viewing
 
 		await writeLog("Output processing complete", "success", taskId);
+
+		if (outputs.length === 0) {
+			return { required: true, saved: false, reason: "download_failed" };
+		}
+
+		return {
+			required: true,
+			saved: true,
+			outputsCount: outputs.length,
+		};
 	} catch (error) {
 		const errorMessage =
 			error instanceof Error ? error.message : "Output processing failed";
 		await writeLog(`Output processing error: ${errorMessage}`, "error", taskId);
+		return { required: true, saved: false, reason: "processing_error" };
 	}
 }
 
@@ -1269,6 +1371,7 @@ type ComplexExecutionUpdate = {
 	autoContinue: boolean;
 	stepNumber: number;
 	isLastStep: boolean;
+	baseUrl?: string;
 };
 
 async function updateComplexExecutionForJob(
@@ -1314,6 +1417,10 @@ async function updateComplexExecutionForJob(
 		const stepNumber = execution.steps[stepIndex].stepNumber;
 		const isLastStep = stepIndex === execution.steps.length - 1;
 		const autoContinue = Boolean(execution.autoContinue);
+		const baseUrl =
+			typeof execution.baseUrl === "string" && execution.baseUrl.length > 0
+				? execution.baseUrl
+				: undefined;
 
 		const updatedStep = {
 			...execution.steps[stepIndex],
@@ -1342,7 +1449,7 @@ async function updateComplexExecutionForJob(
 
 		await fs.writeFile(executionFile, JSON.stringify(nextExecution, null, 2));
 
-		return { autoContinue, stepNumber, isLastStep };
+		return { autoContinue, stepNumber, isLastStep, baseUrl };
 	} catch (error) {
 		console.error("Failed to update complex execution for job:", error);
 		return null;
@@ -1611,8 +1718,12 @@ async function processWorkflowInBackground(
 
 				if (updateResult?.autoContinue && !updateResult.isLastStep) {
 					try {
+						const continueBaseUrl =
+							updateResult.baseUrl ||
+							process.env.NEXT_PUBLIC_APP_URL ||
+							"http://localhost:3000";
 						await fetch(
-							`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workspace/complex-workflow/continue`,
+							`${continueBaseUrl}/api/workspace/complex-workflow/continue`,
 							{
 								method: "POST",
 								headers: { "Content-Type": "application/json" },
@@ -2097,11 +2208,6 @@ async function processWorkflowInBackground(
 					completedCount: fileInputs.length + Object.keys(textInputs).length,
 				});
 
-				await updateJobFile(jobId, {
-					status: "completed",
-					completedAt: Date.now(),
-				});
-
 				if (executionType === "local") {
 					await processLocalJobOutputs(
 						taskId,
@@ -2120,8 +2226,107 @@ async function processWorkflowInBackground(
 						});
 					}
 				} else {
-					await processJobOutputs(taskId, workflowId, jobId, env, stdout);
+					const outputResult = await processJobOutputs(
+						taskId,
+						workflowId,
+						jobId,
+						env,
+						stdout,
+					);
+
+					if (outputResult.required && !outputResult.saved) {
+						await writeLog(
+							"Required outputs missing; re-querying RunningHub outputs",
+							"warning",
+							taskId,
+						);
+
+						const apiKey = process.env.NEXT_PUBLIC_RUNNINGHUB_API_KEY;
+						const apiHost =
+							process.env.NEXT_PUBLIC_RUNNINGHUB_API_HOST ||
+							"www.runninghub.cn";
+
+						const runninghubTaskId =
+							parseRunningHubTaskId(stdout) ||
+							(await getRunningHubTaskIdFromJob(jobId));
+
+						if (!apiKey || !runninghubTaskId) {
+							const errorMessage = !apiKey
+								? "RUNNINGHUB_API_KEY not configured"
+								: "RunningHub task ID missing for output re-query";
+							await writeLog(errorMessage, "error", taskId);
+							await updateTask(taskId, { status: "failed", error: errorMessage });
+							await updateJobFile(jobId, {
+								status: "failed",
+								error: errorMessage,
+								completedAt: Date.now(),
+							});
+							if (seriesId && seriesId.startsWith("exec_")) {
+								await updateComplexExecutionForJob(seriesId, jobId, "failed");
+							}
+							await releaseSlot();
+							await drainQueue();
+							return;
+						}
+
+						const outputFiles = await fetchRunningHubOutputs(
+							taskId,
+							runninghubTaskId,
+							apiKey,
+							apiHost,
+						);
+
+						if (outputFiles && outputFiles.length > 0) {
+							const { outputs, textOutputs } =
+								await downloadOutputsToWorkspace(taskId, jobId, outputFiles);
+							await saveOutputsToJob(jobId, outputs, textOutputs);
+							if (outputs.length === 0) {
+								const errorMessage =
+									"Required outputs missing after re-query download";
+								await writeLog(errorMessage, "error", taskId);
+								await updateTask(taskId, {
+									status: "failed",
+									error: errorMessage,
+								});
+								await updateJobFile(jobId, {
+									status: "failed",
+									error: errorMessage,
+									completedAt: Date.now(),
+								});
+								if (seriesId && seriesId.startsWith("exec_")) {
+									await updateComplexExecutionForJob(
+										seriesId,
+										jobId,
+										"failed",
+									);
+								}
+								await releaseSlot();
+								await drainQueue();
+								return;
+							}
+						} else {
+							const errorMessage = "Required outputs missing after re-query";
+							await writeLog(errorMessage, "error", taskId);
+							await updateTask(taskId, { status: "failed", error: errorMessage });
+							await updateJobFile(jobId, {
+								status: "failed",
+								error: errorMessage,
+								completedAt: Date.now(),
+							});
+							if (seriesId && seriesId.startsWith("exec_")) {
+								await updateComplexExecutionForJob(seriesId, jobId, "failed");
+							}
+							await releaseSlot();
+							await drainQueue();
+							return;
+						}
+					}
 				}
+
+				await updateJobFile(jobId, {
+					status: "completed",
+					completedAt: Date.now(),
+				});
 
 				if (seriesId && seriesId.startsWith("exec_")) {
 					const updateResult = await updateComplexExecutionForJob(
@@ -2132,8 +2337,12 @@ async function processWorkflowInBackground(
 
 					if (updateResult?.autoContinue && !updateResult.isLastStep) {
 						try {
+							const continueBaseUrl =
+								updateResult.baseUrl ||
+								process.env.NEXT_PUBLIC_APP_URL ||
+								"http://localhost:3000";
 							await fetch(
-								`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/workspace/complex-workflow/continue`,
+								`${continueBaseUrl}/api/workspace/complex-workflow/continue`,
 								{
 									method: "POST",
 									headers: { "Content-Type": "application/json" },
