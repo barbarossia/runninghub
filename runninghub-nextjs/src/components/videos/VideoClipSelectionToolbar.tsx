@@ -221,7 +221,7 @@ export function VideoClipSelectionToolbar({
 					if (mode === "expanded-actions") {
 						return (
 							<>
-								{selectedCount === 1 && (
+								{onRename && selectedCount === 1 && (
 									<Tooltip>
 										<TooltipTrigger asChild>
 											<Button
@@ -343,7 +343,7 @@ export function VideoClipSelectionToolbar({
 					if (mode === "floating") {
 						return (
 							<>
-								{selectedCount === 1 && (
+								{onRename && selectedCount === 1 && (
 									<Tooltip>
 										<TooltipTrigger asChild>
 											<Button
