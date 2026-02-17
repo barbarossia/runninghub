@@ -851,17 +851,6 @@ export default function WorkspacePage() {
 							"[Workspace] Removed file via subscription:",
 							payload.path,
 						);
-
-						// Force a store refresh to ensure UI reflects current file system state
-						// This helps prevent stale UI state where files appear to still exist
-						// but were already removed by a race condition or earlier operation
-						setTimeout(() => {
-							console.log(
-								"[Workspace] Force refreshing store after removal to ensure UI sync",
-							);
-							// Refresh the workspace contents to sync with file system
-							handleRefresh();
-						}, 100);
 					} else {
 						// File already removed (e.g., by dataset export), skip to avoid warnings
 						console.log(
@@ -988,12 +977,14 @@ export default function WorkspacePage() {
 
 	// Stabilize the onFolderLoaded callback
 	const handleFolderLoaded = useCallback(
-		(folder: any, contents: any) => {
+		(folder: any, _contents: any) => {
 			// Folder is automatically set as selected by the hook
 			// If contents were provided during validation, use them directly
+			/*
 			if (contents) {
 				processFolderContents(contents, folder?.folder_path, "replace");
 			}
+			*/
 			// Otherwise, the useEffect below will load contents when selectedFolder changes
 		},
 		[processFolderContents],
