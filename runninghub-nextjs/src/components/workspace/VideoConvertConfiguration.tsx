@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Video, Zap, Settings, Sliders, Maximize2 } from "lucide-react";
+import {
+	Video,
+	Zap,
+	Settings,
+	Sliders,
+	Maximize2,
+	Timer,
+	Scissors,
+	ChevronDown,
+	ChevronRight,
+} from "lucide-react";
 import {
 	useVideoConvertStore,
 	FpsOption,
@@ -10,6 +20,8 @@ import {
 	ResizePreset,
 	ResizeMode,
 	QUALITY_CRF,
+	SpeedPreset,
+	TrimFramesPreset,
 } from "@/store/video-convert-store";
 import { ConfigurationCard } from "@/components/ui/ConfigurationCard";
 import { Input } from "@/components/ui/input";
@@ -76,6 +88,67 @@ const LONGEST_SIDE_PRESETS: { value: string; label: string }[] = [
 	{ value: "1920", label: "1920px" },
 ];
 
+const SPEED_OPTIONS: { value: SpeedPreset; label: string; description: string }[] = [
+	{ value: "0.25", label: "0.25x", description: "Very Slow" },
+	{ value: "0.5", label: "0.5x", description: "Slow" },
+	{ value: "0.75", label: "0.75x", description: "Slightly Slow" },
+	{ value: "1", label: "1x", description: "Normal" },
+	{ value: "1.25", label: "1.25x", description: "Slightly Fast" },
+	{ value: "1.5", label: "1.5x", description: "Fast" },
+	{ value: "2", label: "2x", description: "Very Fast" },
+	{ value: "custom", label: "Custom", description: "Custom speed" },
+];
+
+const TRIM_FRAMES_OPTIONS: { value: TrimFramesPreset; label: string }[] = [
+	{ value: "0", label: "0" },
+	{ value: "1", label: "1" },
+	{ value: "5", label: "5" },
+	{ value: "10", label: "10" },
+	{ value: "15", label: "15" },
+	{ value: "30", label: "30" },
+	{ value: "custom", label: "Custom" },
+];
+
+function AccordionSection({
+	title,
+	icon,
+	isExpanded,
+	onToggle,
+	summary,
+	children,
+}: {
+	title: string;
+	icon: React.ReactNode;
+	isExpanded: boolean;
+	onToggle: () => void;
+	summary: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<div className="border border-gray-200 rounded-lg overflow-hidden">
+			<button
+				type="button"
+				onClick={onToggle}
+				className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+			>
+				<div className="flex items-center gap-2">
+					{icon}
+					<span className="text-sm font-medium text-gray-700">{title}</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<span className="text-xs text-gray-500">{summary}</span>
+					{isExpanded ? (
+						<ChevronDown className="h-4 w-4 text-gray-500" />
+					) : (
+						<ChevronRight className="h-4 w-4 text-gray-500" />
+					)}
+				</div>
+			</button>
+			{isExpanded && <div className="p-3 bg-white">{children}</div>}
+		</div>
+	);
+}
+
 export function VideoConvertConfiguration({
 	onConfigChange,
 	disabled = false,
@@ -96,7 +169,17 @@ export function VideoConvertConfiguration({
 		setResizeWidth,
 		setResizeHeight,
 		setResizeLongestSide,
+		setSpeedEnabled,
+		setSpeedValue,
+		setCustomSpeed,
+		setTrimEnabled,
+		setTrimStartFrames,
+		setTrimStartFramesCustom,
+		setTrimEndFrames,
+		setTrimEndFramesCustom,
 	} = useVideoConvertStore();
+
+	const [expandedSection, setExpandedSection] = useState<string | null>("fps");
 
 	// Local state for output suffix
 	const [localOutputSuffix, setLocalOutputSuffix] = useState<string>(
@@ -127,6 +210,24 @@ export function VideoConvertConfiguration({
 			: convertConfig.resizeMode === "shortest-side"
 				? `Shortest ${convertConfig.resizeLongestSide || "auto"}px`
 				: `${convertConfig.resizeWidth || "auto"}×${convertConfig.resizeHeight || "auto"}`
+		: "Off";
+
+	const displaySpeed =
+		convertConfig.speedValue === "custom"
+			? `${convertConfig.customSpeed}x`
+			: convertConfig.speedValue === "1"
+				? "Normal (1x)"
+				: `${convertConfig.speedValue}x`;
+	const speedSummary = convertConfig.speedEnabled ? displaySpeed : "Off";
+
+	const trimStartFrames = convertConfig.trimStartFrames === "custom"
+		? convertConfig.trimStartFramesCustom
+		: parseInt(convertConfig.trimStartFrames);
+	const trimEndFrames = convertConfig.trimEndFrames === "custom"
+		? convertConfig.trimEndFramesCustom
+		: parseInt(convertConfig.trimEndFrames);
+	const trimSummary = convertConfig.trimEnabled
+		? `${trimStartFrames || 0} start, ${trimEndFrames || 0} end`
 		: "Off";
 
 	// Handle output suffix change
@@ -161,6 +262,25 @@ export function VideoConvertConfiguration({
 		}
 	};
 
+	const handleCustomSpeedChange = (value: string) => {
+		const speed = parseFloat(value) || 1;
+		setCustomSpeed(Math.max(0.1, Math.min(10, speed)));
+	};
+
+	const handleCustomTrimStartChange = (value: string) => {
+		const frames = parseInt(value) || 0;
+		setTrimStartFramesCustom(Math.max(0, frames));
+	};
+
+	const handleCustomTrimEndChange = (value: string) => {
+		const frames = parseInt(value) || 0;
+		setTrimEndFramesCustom(Math.max(0, frames));
+	};
+
+	const toggleSection = (section: string) => {
+		setExpandedSection(expandedSection === section ? null : section);
+	};
+
 	return (
 		<ConfigurationCard
 			title="Convert Configuration"
@@ -172,332 +292,432 @@ export function VideoConvertConfiguration({
 			className={className}
 			subtitle={
 				<>
-					Target: {displayFps} FPS • Quality: CRF {displayCrf} • Preset:{" "}
-					{convertConfig.encodingPreset} • Resize: {resizeSummary}
+					Target: {displayFps} FPS • Speed: {speedSummary} • Trim: {trimSummary} • Quality: CRF {displayCrf} • Resize: {resizeSummary}
 				</>
 			}
 		>
-			<div className="space-y-5">
-				{/* FPS Presets */}
-				<div className="space-y-3">
-					<div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-						<Video className="h-4 w-4" />
-						Target Frame Rate
-					</div>
-
-					<div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-						{FPS_OPTIONS.map((option) => (
-							<button
-								key={option.value}
-								type="button"
-								onClick={() => setTargetFps(option.value)}
-								disabled={disabled}
-								className={cn(
-									"px-3 py-3 text-sm font-medium rounded-xl border-2 transition-all",
-									convertConfig.targetFps === option.value
-										? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-										: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
-								)}
-							>
-								{option.label}
-							</button>
-						))}
-					</div>
-
-					{/* Custom FPS Input */}
-					{convertConfig.targetFps === "custom" && (
-						<div className="mt-3">
-							<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
-								Custom FPS Value (1-120)
-							</label>
-							<Input
-								type="number"
-								min="1"
-								max="120"
-								value={convertConfig.customFps}
-								onChange={(e) => setCustomFps(parseInt(e.target.value) || 24)}
-								disabled={disabled}
-								className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
-							/>
-						</div>
-					)}
-				</div>
-
-				{/* Quality Presets */}
-				<div className="space-y-3 pt-3 border-t border-gray-200">
-					<div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-						<Sliders className="h-4 w-4" />
-						Quality (CRF)
-					</div>
-
-					<div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-						{QUALITY_OPTIONS.map((option) => (
-							<button
-								key={option.value}
-								type="button"
-								onClick={() => setQuality(option.value)}
-								disabled={disabled}
-								className={cn(
-									"flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all",
-									convertConfig.quality === option.value
-										? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-										: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
-								)}
-							>
-								<span className="text-sm font-medium">{option.label}</span>
-								<span
-									className={cn(
-										"text-xs",
-										convertConfig.quality === option.value
-											? "text-blue-100"
-											: "text-gray-500",
-									)}
-								>
-									{option.description}
-								</span>
-							</button>
-						))}
-					</div>
-
-					{/* Custom CRF Input */}
-					{convertConfig.quality === "custom" && (
-						<div className="mt-3">
-							<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
-								Custom CRF Value (0-51, lower = better quality)
-							</label>
-							<Input
-								type="number"
-								min="0"
-								max="51"
-								value={convertConfig.customCrf}
-								onChange={(e) => handleCustomCrfChange(e.target.value)}
-								disabled={disabled}
-								className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
-							/>
-						</div>
-					)}
-				</div>
-
-				{/* Encoding Preset */}
-				<div className="space-y-3 pt-3 border-t border-gray-200">
-					<div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-						<Settings className="h-4 w-4" />
-						Encoding Speed
-					</div>
-
-					<div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-						{ENCODING_PRESET_OPTIONS.map((option) => (
-							<button
-								key={option.value}
-								type="button"
-								onClick={() => setEncodingPreset(option.value)}
-								disabled={disabled}
-								className={cn(
-									"flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all",
-									convertConfig.encodingPreset === option.value
-										? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-										: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
-								)}
-							>
-								<span className="text-sm font-medium">{option.label}</span>
-								<span
-									className={cn(
-										"text-xs mt-0.5",
-										convertConfig.encodingPreset === option.value
-											? "text-blue-100"
-											: "text-gray-500",
-									)}
-								>
-									{option.description}
-								</span>
-							</button>
-						))}
-					</div>
-				</div>
-
-				{/* Resize */}
-				<div className="space-y-3 pt-3 border-t border-gray-200">
-					<div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-						<Maximize2 className="h-4 w-4" />
-						Resize
-					</div>
-
-					<label className="flex items-center gap-3 cursor-pointer group">
-						<input
-							type="checkbox"
-							checked={convertConfig.resizeEnabled}
-							onChange={(e) => handleResizeToggle(e.target.checked)}
-							disabled={disabled}
-							className="w-4 h-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500 focus:ring-offset-2 transition-all cursor-pointer"
-						/>
-						<div className="flex flex-col">
-							<span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors font-medium">
-								Resize video (preserve aspect ratio)
-							</span>
-							<span className="text-xs text-gray-500">
-								Scale to fit within the target size; no crop
-							</span>
-						</div>
-					</label>
-
-					{convertConfig.resizeEnabled && (
-						<div className="space-y-3">
-							<div className="flex flex-wrap gap-2">
+			<div className="space-y-2">
+				{/* FPS Section */}
+				<AccordionSection
+					title="Frame Rate"
+					icon={<Video className="h-4 w-4" />}
+					isExpanded={expandedSection === "fps"}
+					onToggle={() => toggleSection("fps")}
+					summary={`${displayFps} FPS`}
+				>
+					<div className="space-y-3 pt-2">
+						<div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+							{FPS_OPTIONS.map((option) => (
 								<button
+									key={option.value}
 									type="button"
-									onClick={() => handleResizeModeChange("fit")}
+									onClick={() => setTargetFps(option.value)}
 									disabled={disabled}
 									className={cn(
-										"px-3 py-2 text-xs font-medium rounded-full border transition-all",
-										convertConfig.resizeMode === "fit"
-											? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
+										"px-3 py-2 text-sm font-medium rounded-lg border-2 transition-all",
+										convertConfig.targetFps === option.value
+											? "border-blue-500 bg-blue-500 text-white"
 											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
 									)}
 								>
-									Fit Within Target
+									{option.label}
 								</button>
-								<button
-									type="button"
-									onClick={() => handleResizeModeChange("longest-side")}
+							))}
+						</div>
+						{convertConfig.targetFps === "custom" && (
+							<div>
+								<Input
+									type="number"
+									min="1"
+									max="120"
+									value={convertConfig.customFps}
+									onChange={(e) => setCustomFps(parseInt(e.target.value) || 24)}
 									disabled={disabled}
-									className={cn(
-										"px-3 py-2 text-xs font-medium rounded-full border transition-all",
-										convertConfig.resizeMode === "longest-side"
-											? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
-									)}
-								>
-									Longest Side
-								</button>
-								<button
-									type="button"
-									onClick={() => handleResizeModeChange("shortest-side")}
-									disabled={disabled}
-									className={cn(
-										"px-3 py-2 text-xs font-medium rounded-full border transition-all",
-										convertConfig.resizeMode === "shortest-side"
-											? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
-									)}
-								>
-									Shortest Side
-								</button>
+									placeholder="Custom FPS"
+									className="border-gray-300 bg-white"
+								/>
 							</div>
+						)}
+					</div>
+				</AccordionSection>
 
-							{convertConfig.resizeMode === "longest-side" ||
-							convertConfig.resizeMode === "shortest-side" ? (
-								<div className="space-y-3">
+				{/* Speed Section */}
+				<AccordionSection
+					title="Video Speed"
+					icon={<Timer className="h-4 w-4" />}
+					isExpanded={expandedSection === "speed"}
+					onToggle={() => toggleSection("speed")}
+					summary={speedSummary}
+				>
+					<div className="space-y-3 pt-2">
+						<label className="flex items-center gap-3 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={convertConfig.speedEnabled}
+								onChange={(e) => setSpeedEnabled(e.target.checked)}
+								disabled={disabled}
+								className="w-4 h-4 rounded border-gray-300 text-blue-600"
+							/>
+							<span className="text-sm text-gray-700">Enable speed change</span>
+						</label>
+						{convertConfig.speedEnabled && (
+							<>
+								<div className="grid grid-cols-4 gap-2">
+									{SPEED_OPTIONS.map((option) => (
+										<button
+											key={option.value}
+											type="button"
+											onClick={() => setSpeedValue(option.value)}
+											disabled={disabled}
+											className={cn(
+												"px-2 py-2 text-xs font-medium rounded-lg border-2 transition-all",
+												convertConfig.speedValue === option.value
+													? "border-blue-500 bg-blue-500 text-white"
+													: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+											)}
+										>
+											{option.label}
+										</button>
+									))}
+								</div>
+								{convertConfig.speedValue === "custom" && (
+									<Input
+										type="number"
+										min="0.1"
+										max="10"
+										step="0.1"
+										value={convertConfig.customSpeed}
+										onChange={(e) => handleCustomSpeedChange(e.target.value)}
+										disabled={disabled}
+										placeholder="Speed (0.1-10x)"
+										className="border-gray-300 bg-white"
+									/>
+								)}
+							</>
+						)}
+					</div>
+				</AccordionSection>
+
+				{/* Trim Section */}
+				<AccordionSection
+					title="Trim"
+					icon={<Scissors className="h-4 w-4" />}
+					isExpanded={expandedSection === "trim"}
+					onToggle={() => toggleSection("trim")}
+					summary={trimSummary}
+				>
+					<div className="space-y-3 pt-2">
+						<label className="flex items-center gap-3 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={convertConfig.trimEnabled}
+								onChange={(e) => setTrimEnabled(e.target.checked)}
+								disabled={disabled}
+								className="w-4 h-4 rounded border-gray-300 text-blue-600"
+							/>
+							<span className="text-sm text-gray-700">Enable trim</span>
+						</label>
+						{convertConfig.trimEnabled && (
+							<div className="space-y-4">
+								<div>
+									<p className="text-xs font-medium text-gray-600 mb-2">Trim from beginning (frames)</p>
 									<div className="flex flex-wrap gap-2">
-										{LONGEST_SIDE_PRESETS.map((option) => (
+										{TRIM_FRAMES_OPTIONS.map((option) => (
 											<button
-												key={option.value}
+												key={`start-${option.value}`}
 												type="button"
-												onClick={() =>
-													setResizeLongestSide(option.value)
-												}
+												onClick={() => setTrimStartFrames(option.value)}
 												disabled={disabled}
 												className={cn(
-													"px-3 py-2 text-xs font-medium rounded-full border transition-all",
-													convertConfig.resizeLongestSide === option.value
-														? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-														: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
+													"px-3 py-1.5 text-xs font-medium rounded-lg border transition-all",
+													convertConfig.trimStartFrames === option.value
+														? "border-blue-500 bg-blue-500 text-white"
+														: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
 												)}
 											>
 												{option.label}
 											</button>
 										))}
 									</div>
-									<div className="max-w-[220px]">
-										<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
-											{convertConfig.resizeMode === "shortest-side"
-												? "Shortest Side (px)"
-												: "Longest Side (px)"}
-										</label>
+									{convertConfig.trimStartFrames === "custom" && (
+										<Input
+											type="number"
+											min="0"
+											value={convertConfig.trimStartFramesCustom}
+											onChange={(e) => handleCustomTrimStartChange(e.target.value)}
+											disabled={disabled}
+											placeholder="Custom frames"
+											className="mt-2 border-gray-300 bg-white"
+										/>
+									)}
+								</div>
+								<div>
+									<p className="text-xs font-medium text-gray-600 mb-2">Trim from end (frames)</p>
+									<div className="flex flex-wrap gap-2">
+										{TRIM_FRAMES_OPTIONS.map((option) => (
+											<button
+												key={`end-${option.value}`}
+												type="button"
+												onClick={() => setTrimEndFrames(option.value)}
+												disabled={disabled}
+												className={cn(
+													"px-3 py-1.5 text-xs font-medium rounded-lg border transition-all",
+													convertConfig.trimEndFrames === option.value
+														? "border-blue-500 bg-blue-500 text-white"
+														: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+												)}
+											>
+												{option.label}
+											</button>
+										))}
+									</div>
+									{convertConfig.trimEndFrames === "custom" && (
+										<Input
+											type="number"
+											min="0"
+											value={convertConfig.trimEndFramesCustom}
+											onChange={(e) => handleCustomTrimEndChange(e.target.value)}
+											disabled={disabled}
+											placeholder="Custom frames"
+											className="mt-2 border-gray-300 bg-white"
+										/>
+									)}
+								</div>
+							</div>
+						)}
+					</div>
+				</AccordionSection>
+
+				{/* Quality Section */}
+				<AccordionSection
+					title="Quality"
+					icon={<Sliders className="h-4 w-4" />}
+					isExpanded={expandedSection === "quality"}
+					onToggle={() => toggleSection("quality")}
+					summary={`CRF ${displayCrf}`}
+				>
+					<div className="space-y-3 pt-2">
+						<div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+							{QUALITY_OPTIONS.map((option) => (
+								<button
+									key={option.value}
+									type="button"
+									onClick={() => setQuality(option.value)}
+									disabled={disabled}
+									className={cn(
+										"flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all",
+										convertConfig.quality === option.value
+											? "border-blue-500 bg-blue-500 text-white"
+											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+									)}
+								>
+									<span className="text-sm font-medium">{option.label}</span>
+									<span className={cn(
+										"text-[10px]",
+										convertConfig.quality === option.value ? "text-blue-100" : "text-gray-500"
+									)}>{option.description}</span>
+								</button>
+							))}
+						</div>
+						{convertConfig.quality === "custom" && (
+							<Input
+								type="number"
+								min="0"
+								max="51"
+								value={convertConfig.customCrf}
+								onChange={(e) => {
+									const crf = parseInt(e.target.value) || 20;
+									setCustomCrf(Math.max(0, Math.min(51, crf)));
+								}}
+								disabled={disabled}
+								placeholder="CRF (0-51)"
+								className="border-gray-300 bg-white"
+							/>
+						)}
+					</div>
+				</AccordionSection>
+
+				{/* Encoding Preset Section */}
+				<AccordionSection
+					title="Encoding Speed"
+					icon={<Settings className="h-4 w-4" />}
+					isExpanded={expandedSection === "encoding"}
+					onToggle={() => toggleSection("encoding")}
+					summary={convertConfig.encodingPreset}
+				>
+					<div className="space-y-3 pt-2">
+						<div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+							{ENCODING_PRESET_OPTIONS.map((option) => (
+								<button
+									key={option.value}
+									type="button"
+									onClick={() => setEncodingPreset(option.value)}
+									disabled={disabled}
+									className={cn(
+										"flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all",
+										convertConfig.encodingPreset === option.value
+											? "border-blue-500 bg-blue-500 text-white"
+											: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+									)}
+								>
+									<span className="text-xs font-medium">{option.label}</span>
+									<span className={cn(
+										"text-[10px]",
+										convertConfig.encodingPreset === option.value ? "text-blue-100" : "text-gray-500"
+									)}>{option.description}</span>
+								</button>
+							))}
+						</div>
+					</div>
+				</AccordionSection>
+
+				{/* Resize Section */}
+				<AccordionSection
+					title="Resize"
+					icon={<Maximize2 className="h-4 w-4" />}
+					isExpanded={expandedSection === "resize"}
+					onToggle={() => toggleSection("resize")}
+					summary={resizeSummary}
+				>
+					<div className="space-y-3 pt-2">
+						<label className="flex items-center gap-3 cursor-pointer">
+							<input
+								type="checkbox"
+								checked={convertConfig.resizeEnabled}
+								onChange={(e) => {
+									setResizeEnabled(e.target.checked);
+									if (e.target.checked && !convertConfig.resizeWidth && !convertConfig.resizeHeight) {
+										setResizePreset("720x1280");
+									}
+								}}
+								disabled={disabled}
+								className="w-4 h-4 rounded border-gray-300 text-blue-600"
+							/>
+							<span className="text-sm text-gray-700">Enable resize</span>
+						</label>
+						{convertConfig.resizeEnabled && (
+							<div className="space-y-3">
+								<div className="flex flex-wrap gap-2">
+									<button
+										type="button"
+										onClick={() => setResizeMode("fit")}
+										className={cn(
+											"px-3 py-1.5 text-xs font-medium rounded-full border transition-all",
+											convertConfig.resizeMode === "fit"
+												? "border-blue-500 bg-blue-500 text-white"
+												: "border-gray-200 bg-white text-gray-600",
+										)}
+									>
+										Fit
+									</button>
+									<button
+										type="button"
+										onClick={() => setResizeMode("longest-side")}
+										className={cn(
+											"px-3 py-1.5 text-xs font-medium rounded-full border transition-all",
+											convertConfig.resizeMode === "longest-side"
+												? "border-blue-500 bg-blue-500 text-white"
+												: "border-gray-200 bg-white text-gray-600",
+										)}
+									>
+										Longest Side
+									</button>
+									<button
+										type="button"
+										onClick={() => setResizeMode("shortest-side")}
+										className={cn(
+											"px-3 py-1.5 text-xs font-medium rounded-full border transition-all",
+											convertConfig.resizeMode === "shortest-side"
+												? "border-blue-500 bg-blue-500 text-white"
+												: "border-gray-200 bg-white text-gray-600",
+										)}
+									>
+										Shortest Side
+									</button>
+								</div>
+								{convertConfig.resizeMode === "longest-side" || convertConfig.resizeMode === "shortest-side" ? (
+									<div>
+										<div className="flex flex-wrap gap-2 mb-2">
+											{LONGEST_SIDE_PRESETS.map((option) => (
+												<button
+													key={option.value}
+													type="button"
+													onClick={() => setResizeLongestSide(option.value)}
+													className={cn(
+														"px-3 py-1.5 text-xs font-medium rounded-full border transition-all",
+														convertConfig.resizeLongestSide === option.value
+															? "border-blue-500 bg-blue-500 text-white"
+															: "border-gray-200 bg-white text-gray-600",
+													)}
+												>
+													{option.label}
+												</button>
+											))}
+										</div>
 										<Input
 											type="number"
 											min="1"
 											value={convertConfig.resizeLongestSide}
-											onChange={(e) =>
-												setResizeLongestSide(e.target.value)
-											}
+											onChange={(e) => setResizeLongestSide(e.target.value)}
 											disabled={disabled}
-											placeholder="1280"
-											className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
+											placeholder="Pixels"
+											className="border-gray-300 bg-white"
 										/>
 									</div>
-								</div>
-							) : (
-								<>
-							<div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-								{RESIZE_PRESETS.map((option) => (
-									<button
-										key={option.value}
-										type="button"
-										onClick={() => setResizePreset(option.value)}
-										disabled={disabled}
-										className={cn(
-											"flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all",
-											convertConfig.resizePreset === option.value
-												? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/20"
-												: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-gray-300",
+								) : (
+									<>
+										<div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+											{RESIZE_PRESETS.map((option) => (
+												<button
+													key={option.value}
+													type="button"
+													onClick={() => setResizePreset(option.value)}
+													className={cn(
+														"flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all",
+														convertConfig.resizePreset === option.value
+															? "border-blue-500 bg-blue-500 text-white"
+															: "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+													)}
+												>
+													<span className="text-xs font-medium">{option.label}</span>
+													<span className={cn(
+														"text-[10px]",
+														convertConfig.resizePreset === option.value ? "text-blue-100" : "text-gray-500"
+													)}>{option.description}</span>
+												</button>
+											))}
+										</div>
+										{convertConfig.resizePreset === "custom" && (
+											<div className="grid grid-cols-2 gap-2">
+												<Input
+													type="number"
+													min="1"
+													value={convertConfig.resizeWidth}
+													onChange={(e) => setResizeWidth(e.target.value)}
+													disabled={disabled}
+													placeholder="Width"
+													className="border-gray-300 bg-white"
+												/>
+												<Input
+													type="number"
+													min="1"
+													value={convertConfig.resizeHeight}
+													onChange={(e) => setResizeHeight(e.target.value)}
+													disabled={disabled}
+													placeholder="Height"
+													className="border-gray-300 bg-white"
+												/>
+											</div>
 										)}
-									>
-										<span className="text-sm font-medium">{option.label}</span>
-										<span
-											className={cn(
-												"text-xs mt-0.5",
-												convertConfig.resizePreset === option.value
-													? "text-blue-100"
-													: "text-gray-500",
-											)}
-										>
-											{option.description}
-										</span>
-									</button>
-								))}
-								</div>
+									</>
+								)}
+							</div>
+						)}
+					</div>
+				</AccordionSection>
 
-							{convertConfig.resizePreset === "custom" && (
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-									<div>
-										<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
-											Width (px)
-										</label>
-										<Input
-											type="number"
-											min="1"
-											value={convertConfig.resizeWidth}
-											onChange={(e) => setResizeWidth(e.target.value)}
-											disabled={disabled}
-											placeholder="Auto"
-											className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
-										/>
-									</div>
-									<div>
-										<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
-											Height (px)
-										</label>
-										<Input
-											type="number"
-											min="1"
-											value={convertConfig.resizeHeight}
-											onChange={(e) => setResizeHeight(e.target.value)}
-											disabled={disabled}
-											placeholder="Auto"
-											className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
-										/>
-									</div>
-								</div>
-							)}
-								</>
-							)}
-						</div>
-					)}
-				</div>
-
-				{/* Additional Options */}
-				<div className="space-y-4 pt-3 border-t border-gray-200">
-					{/* Output Suffix */}
+				{/* Output Options */}
+				<div className="pt-4 border-t border-gray-200 space-y-3">
 					<div>
 						<label className="block text-xs font-medium text-gray-700 mb-1.5 uppercase tracking-wider">
 							Output Suffix
@@ -505,65 +725,38 @@ export function VideoConvertConfiguration({
 						<Input
 							type="text"
 							value={localOutputSuffix}
-							onChange={(e) => handleOutputSuffixChange(e.target.value)}
+							onChange={(e) => {
+								setLocalOutputSuffix(e.target.value);
+								setOutputSuffix(e.target.value);
+							}}
 							placeholder="_converted"
-							className="border-gray-300 bg-white text-gray-900 focus:border-blue-500 focus:ring-blue-500"
+							className="border-gray-300 bg-white"
 						/>
-						<p className="text-[11px] text-gray-600 mt-1.5">
-							Resulting filename:{" "}
-							<span className="text-gray-900 font-medium">
-								video{localOutputSuffix || "_converted"}.mp4
-							</span>
-						</p>
 					</div>
-
-					{/* Delete Original */}
-					<label className="flex items-center gap-3 cursor-pointer group">
+					<label className="flex items-center gap-3 cursor-pointer">
 						<input
 							type="checkbox"
 							checked={convertConfig.deleteOriginal}
 							onChange={toggleDeleteOriginal}
 							disabled={disabled}
-							className="w-4 h-4 rounded border-gray-300 bg-white text-red-600 focus:ring-red-500 focus:ring-offset-2 transition-all cursor-pointer"
+							className="w-4 h-4 rounded border-gray-300 text-red-600"
 						/>
-						<div className="flex flex-col">
-							<span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors font-medium">
-								Delete original after conversion
-							</span>
-							<span className="text-xs text-gray-500">
-								The original video file will be permanently deleted after
-								successful conversion
-							</span>
-						</div>
+						<span className="text-sm text-gray-700">Delete original after conversion</span>
 					</label>
 				</div>
 
-				{/* Info about conversion */}
+				{/* Info */}
 				<div className="pt-3 border-t border-gray-200">
 					<div className="flex items-start gap-2 text-xs text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200">
 						<Video className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
 						<div className="space-y-1">
 							<p className="font-medium text-blue-800">Conversion Details:</p>
 							<ul className="list-disc list-inside space-y-0.5 text-blue-700">
-								<li>Output format: MP4 (H.264)</li>
-								<li>
-									Video codec: libx264, CRF {displayCrf}, preset{" "}
-									{convertConfig.encodingPreset}
-								</li>
-								{convertConfig.resizeEnabled && (
-									<li>
-										Resize:{" "}
-								{convertConfig.resizeMode === "longest-side"
-											? `longest side ${convertConfig.resizeLongestSide || "auto"}px`
-											: convertConfig.resizeMode === "shortest-side"
-												? `shortest side ${convertConfig.resizeLongestSide || "auto"}px`
-											: `fit within ${resizeSummary}`}{" "}
-										(no crop)
-									</li>
-								)}
-								<li>Audio codec: AAC, 128kbps</li>
-								<li>Pixel format: yuv420p</li>
-								<li>Faststart: Enabled for web streaming</li>
+								<li>Output: MP4 (H.264), CRF {displayCrf}, {convertConfig.encodingPreset}</li>
+								{convertConfig.speedEnabled && <li>Speed: {displaySpeed}</li>}
+								{convertConfig.trimEnabled && <li>Trim: -{trimStartFrames} frames start, -{trimEndFrames} frames end</li>}
+								{convertConfig.resizeEnabled && <li>Resize: {resizeSummary}</li>}
+								<li>Audio: AAC 128kbps, yuv420p</li>
 							</ul>
 						</div>
 					</div>

@@ -19,6 +19,11 @@ interface FpsConvertRequest {
 	resizeWidth?: number;
 	resizeHeight?: number;
 	resizeLongestSide?: number;
+	speedEnabled?: boolean;
+	speedValue?: number;
+	trimEnabled?: boolean;
+	trimStartFrames?: number;
+	trimEndFrames?: number;
 	timeout?: number;
 }
 
@@ -37,6 +42,11 @@ export async function POST(request: NextRequest) {
 			resizeWidth,
 			resizeHeight,
 			resizeLongestSide,
+			speedEnabled = false,
+			speedValue = 1,
+			trimEnabled = false,
+			trimStartFrames = 0,
+			trimEndFrames = 0,
 			timeout = 3600,
 		} = data;
 
@@ -50,6 +60,16 @@ export async function POST(request: NextRequest) {
 		if (!targetFps || targetFps < 1 || targetFps > 120) {
 			return NextResponse.json(
 				{ error: "Invalid target FPS. Must be between 1 and 120." },
+				{ status: 400 },
+			);
+		}
+
+		if (
+			speedEnabled &&
+			(!Number.isFinite(speedValue) || speedValue < 0.1 || speedValue > 10)
+		) {
+			return NextResponse.json(
+				{ error: "Invalid speed value. Must be between 0.1 and 10." },
 				{ status: 400 },
 			);
 		}
@@ -89,6 +109,13 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
+		if (trimEnabled && (trimStartFrames < 0 || trimEndFrames < 0)) {
+			return NextResponse.json(
+				{ error: "Trim frames must be non-negative." },
+				{ status: 400 },
+			);
+		}
+
 		// Check if FFmpeg is available
 		const ffmpegAvailable = await checkFFmpegAvailable();
 		if (!ffmpegAvailable) {
@@ -120,6 +147,11 @@ export async function POST(request: NextRequest) {
 			resizeWidth,
 			resizeHeight,
 			resizeLongestSide,
+			speedEnabled,
+			speedValue,
+			trimEnabled,
+			trimStartFrames,
+			trimEndFrames,
 			timeout,
 			taskId,
 		);
@@ -127,9 +159,18 @@ export async function POST(request: NextRequest) {
 		const response = {
 			success: true,
 			task_id: taskId,
-			message: `Started converting ${videos.length} videos to ${targetFps} FPS`,
+			message: trimEnabled
+				? `Started converting ${videos.length} videos to ${targetFps} FPS (trim ${trimStartFrames} start, ${trimEndFrames} end)${speedEnabled ? ` at ${speedValue}x speed` : ""}`
+				: speedEnabled
+					? `Started converting ${videos.length} videos to ${targetFps} FPS at ${speedValue}x speed`
+					: `Started converting ${videos.length} videos to ${targetFps} FPS`,
 			video_count: videos.length,
 			target_fps: targetFps,
+			speed_enabled: speedEnabled,
+			speed_value: speedValue,
+			trim_enabled: trimEnabled,
+			trim_start_frames: trimStartFrames,
+			trim_end_frames: trimEndFrames,
 		};
 
 		return NextResponse.json(response);
@@ -167,6 +208,30 @@ async function checkFFmpegAvailable(): Promise<boolean> {
 	});
 }
 
+function buildAtempoFilter(speedValue: number): string {
+	if (!Number.isFinite(speedValue) || speedValue <= 0) {
+		return "atempo=1";
+	}
+
+	const filters: string[] = [];
+	let remaining = speedValue;
+
+	while (remaining > 2) {
+		filters.push("atempo=2");
+		remaining /= 2;
+	}
+
+	while (remaining < 0.5) {
+		filters.push("atempo=0.5");
+		remaining /= 0.5;
+	}
+
+	const normalized = Number(remaining.toFixed(3));
+	filters.push(`atempo=${normalized}`);
+
+	return filters.join(",");
+}
+
 /**
  * Convert a single video FPS using FFmpeg
  */
@@ -182,6 +247,11 @@ function convertSingleVideo(
 	resizeWidth: number | undefined,
 	resizeHeight: number | undefined,
 	resizeLongestSide: number | undefined,
+	speedEnabled: boolean,
+	speedValue: number,
+	trimEnabled: boolean,
+	trimStartFrames: number,
+	trimEndFrames: number,
 	timeout: number,
 ): Promise<{
 	success: boolean;
@@ -239,12 +309,34 @@ function convertSingleVideo(
 			}
 		}
 
+		if (speedEnabled && speedValue !== 1) {
+			const ptsMultiplier = Number((1 / speedValue).toFixed(6));
+			filters.push(`setpts=${ptsMultiplier}*PTS`);
+		}
+
 		filters.push("format=yuv420p");
 
 		const cmd = "ffmpeg";
+		
+		const trimArgs: string[] = [];
+		if (trimEnabled && trimStartFrames > 0) {
+			const startSec = trimStartFrames / targetFps;
+			trimArgs.push("-ss", startSec.toString());
+		}
+		
+		const durationArgs: string[] = [];
+		if (trimEnabled && trimEndFrames > 0 && trimStartFrames >= 0) {
+			const totalDuration = (trimEndFrames - trimStartFrames) / targetFps;
+			if (totalDuration > 0) {
+				durationArgs.push("-t", totalDuration.toString());
+			}
+		}
+		
 		const args = [
 			"-i",
 			inputPath,
+			...trimArgs,
+			...durationArgs,
 			"-r",
 			targetFps.toString(),
 			"-c:v",
@@ -259,9 +351,11 @@ function convertSingleVideo(
 			"aac",
 			"-b:a",
 			"128k",
+			"-filter:a",
+			buildAtempoFilter(speedEnabled ? speedValue : 1),
 			"-movflags",
 			"+faststart",
-			"-y", // Overwrite output file without asking
+			"-y",
 			tempOutputPath,
 		];
 
@@ -408,8 +502,13 @@ async function convertVideosInBackground(
 	resizeWidth: number | undefined,
 	resizeHeight: number | undefined,
 	resizeLongestSide: number | undefined,
+	speedEnabled: boolean,
+	speedValue: number,
+	trimEnabled: boolean,
+	trimStartFrames: number,
+	trimEndFrames: number,
 	timeout: number,
-		taskId: string,
+	taskId: string,
 	) {
 	await writeLog(
 		`=== BACKGROUND FPS CONVERSION STARTED for task: ${taskId} ===`,
@@ -417,7 +516,11 @@ async function convertVideosInBackground(
 		taskId,
 	);
 	await writeLog(
-		`Converting ${videos.length} videos to ${targetFps} FPS`,
+		trimEnabled
+			? `Converting ${videos.length} videos to ${targetFps} FPS (trim ${trimStartFrames} start, ${trimEndFrames} end)${speedEnabled ? ` at ${speedValue}x speed` : ""}`
+			: speedEnabled
+				? `Converting ${videos.length} videos to ${targetFps} FPS at ${speedValue}x speed`
+				: `Converting ${videos.length} videos to ${targetFps} FPS`,
 		"info",
 		taskId,
 	);
@@ -427,10 +530,13 @@ async function convertVideosInBackground(
 				? `Resize enabled: longest side ${resizeLongestSide || "auto"}px`
 				: resizeMode === "shortest-side"
 					? `Resize enabled: shortest side ${resizeLongestSide || "auto"}px`
-				: `Resize enabled: fit within ${resizeWidth || "auto"}x${resizeHeight || "auto"}`,
+					: `Resize enabled: fit within ${resizeWidth || "auto"}x${resizeHeight || "auto"}`,
 			"info",
 			taskId,
 		);
+	}
+	if (speedEnabled && speedValue !== 1) {
+		await writeLog(`Speed enabled: ${speedValue}x`, "info", taskId);
 	}
 
 	let successCount = 0;
@@ -474,6 +580,11 @@ async function convertVideosInBackground(
 				resizeWidth,
 				resizeHeight,
 				resizeLongestSide,
+				speedEnabled,
+				speedValue,
+				trimEnabled,
+				trimStartFrames,
+				trimEndFrames,
 				timeout,
 			);
 

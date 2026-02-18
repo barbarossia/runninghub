@@ -1,0 +1,7 @@
+- [x] Review convert workflow and existing FPS conversion.
+- [x] Add speed fields and persistence to `useVideoConvertStore`.
+- [x] Add speed UI controls (toggle, presets, custom input) in `VideoConvertConfiguration`.
+- [x] Update `/api/workspace/fps-convert` to accept speed params and apply setpts/atempo.
+- [x] Pass speed settings from workspace convert handler.
+- [ ] Verify speed changes with sample videos (0.5x and 2x).
+- [ ] Run `npm run build` (currently blocked by pre-existing type error in `src/app/api/folder/list/route.ts`).

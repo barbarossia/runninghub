@@ -4,6 +4,8 @@ import { persist } from "zustand/middleware";
 export type FpsOption = 16 | 24 | 25 | 30 | 60 | "custom";
 export type QualityPreset = "high" | "medium" | "low" | "custom";
 export type EncodingPreset = "faster" | "fast" | "medium" | "slow" | "slower";
+export type SpeedPreset = "0.25" | "0.5" | "0.75" | "1" | "1.25" | "1.5" | "2" | "custom";
+export type TrimFramesPreset = "0" | "1" | "5" | "10" | "15" | "30" | "custom";
 export type ResizePreset =
 	| "720x1280"
 	| "1080x1920"
@@ -27,6 +29,14 @@ export interface VideoConvertConfig {
 	resizeWidth: string;
 	resizeHeight: string;
 	resizeLongestSide: string;
+	speedEnabled: boolean;
+	speedValue: SpeedPreset;
+	customSpeed: number;
+	trimEnabled: boolean;
+	trimStartFrames: TrimFramesPreset;
+	trimStartFramesCustom: number;
+	trimEndFrames: TrimFramesPreset;
+	trimEndFramesCustom: number;
 }
 
 const DEFAULT_CONVERT_CONFIG: VideoConvertConfig = {
@@ -43,6 +53,14 @@ const DEFAULT_CONVERT_CONFIG: VideoConvertConfig = {
 	resizeWidth: "720",
 	resizeHeight: "1280",
 	resizeLongestSide: "1280",
+	speedEnabled: false,
+	speedValue: "1",
+	customSpeed: 1,
+	trimEnabled: false,
+	trimStartFrames: "0",
+	trimStartFramesCustom: 0,
+	trimEndFrames: "0",
+	trimEndFramesCustom: 0,
 };
 
 interface VideoConvertState {
@@ -61,6 +79,14 @@ interface VideoConvertState {
 	setResizeWidth: (width: string) => void;
 	setResizeHeight: (height: string) => void;
 	setResizeLongestSide: (value: string) => void;
+	setSpeedEnabled: (enabled: boolean) => void;
+	setSpeedValue: (value: SpeedPreset) => void;
+	setCustomSpeed: (speed: number) => void;
+	setTrimEnabled: (enabled: boolean) => void;
+	setTrimStartFrames: (frames: TrimFramesPreset) => void;
+	setTrimStartFramesCustom: (frames: number) => void;
+	setTrimEndFrames: (frames: TrimFramesPreset) => void;
+	setTrimEndFramesCustom: (frames: number) => void;
 	resetConfig: () => void;
 }
 
@@ -179,9 +205,49 @@ export const useVideoConvertStore = create<VideoConvertState>()(
 					convertConfig: { ...state.convertConfig, resizeHeight: height },
 				})),
 
-			setResizeLongestSide: (value) =>
+		setResizeLongestSide: (value) =>
+			set((state) => ({
+				convertConfig: { ...state.convertConfig, resizeLongestSide: value },
+			})),
+
+			setSpeedEnabled: (enabled) =>
 				set((state) => ({
-					convertConfig: { ...state.convertConfig, resizeLongestSide: value },
+					convertConfig: { ...state.convertConfig, speedEnabled: enabled },
+				})),
+
+			setSpeedValue: (value) =>
+				set((state) => ({
+					convertConfig: { ...state.convertConfig, speedValue: value },
+				})),
+
+		setCustomSpeed: (speed) =>
+			set((state) => ({
+				convertConfig: { ...state.convertConfig, customSpeed: speed },
+			})),
+
+			setTrimEnabled: (enabled) =>
+				set((state) => ({
+					convertConfig: { ...state.convertConfig, trimEnabled: enabled },
+				})),
+
+			setTrimStartFrames: (frames) =>
+				set((state) => ({
+					convertConfig: { ...state.convertConfig, trimStartFrames: frames },
+				})),
+
+			setTrimStartFramesCustom: (frames) =>
+				set((state) => ({
+					convertConfig: { ...state.convertConfig, trimStartFramesCustom: frames },
+				})),
+
+			setTrimEndFrames: (frames) =>
+				set((state) => ({
+					convertConfig: { ...state.convertConfig, trimEndFrames: frames },
+				})),
+
+			setTrimEndFramesCustom: (frames) =>
+				set((state) => ({
+					convertConfig: { ...state.convertConfig, trimEndFramesCustom: frames },
 				})),
 
 			resetConfig: () => set({ convertConfig: DEFAULT_CONVERT_CONFIG }),
