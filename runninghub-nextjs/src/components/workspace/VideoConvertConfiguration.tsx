@@ -100,9 +100,11 @@ const SPEED_OPTIONS: { value: SpeedPreset; label: string; description: string }[
 ];
 
 const TRIM_FRAMES_OPTIONS: { value: TrimFramesPreset; label: string }[] = [
-	{ value: "0", label: "0" },
 	{ value: "1", label: "1" },
+	{ value: "2", label: "2" },
+	{ value: "4", label: "4" },
 	{ value: "5", label: "5" },
+	{ value: "8", label: "8" },
 	{ value: "10", label: "10" },
 	{ value: "15", label: "15" },
 	{ value: "30", label: "30" },

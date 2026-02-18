@@ -5,7 +5,7 @@ export type FpsOption = 16 | 24 | 25 | 30 | 60 | "custom";
 export type QualityPreset = "high" | "medium" | "low" | "custom";
 export type EncodingPreset = "faster" | "fast" | "medium" | "slow" | "slower";
 export type SpeedPreset = "0.25" | "0.5" | "0.75" | "1" | "1.25" | "1.5" | "2" | "custom";
-export type TrimFramesPreset = "0" | "1" | "5" | "10" | "15" | "30" | "custom";
+export type TrimFramesPreset = "1" | "2" | "4" | "5" | "8" | "10" | "15" | "30" | "custom";
 export type ResizePreset =
 	| "720x1280"
 	| "1080x1920"
@@ -57,10 +57,10 @@ const DEFAULT_CONVERT_CONFIG: VideoConvertConfig = {
 	speedValue: "1",
 	customSpeed: 1,
 	trimEnabled: false,
-	trimStartFrames: "0",
-	trimStartFramesCustom: 0,
-	trimEndFrames: "0",
-	trimEndFramesCustom: 0,
+	trimStartFrames: "1",
+	trimStartFramesCustom: 1,
+	trimEndFrames: "1",
+	trimEndFramesCustom: 1,
 };
 
 interface VideoConvertState {

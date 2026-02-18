@@ -662,7 +662,7 @@ export function MediaSelectionToolbar({
 												!selectedFiles.some((f) => f.type === "video")
 											}
 											className="h-11 w-20 border-blue-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700"
-											aria-label="Convert FPS"
+											aria-label="Convert"
 										>
 											<Zap className="h-4 w-4" />
 										</Button>
@@ -915,7 +915,7 @@ export function MediaSelectionToolbar({
 												!selectedFiles.some((f) => f.type === "video")
 											}
 											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
-											aria-label="Convert FPS"
+											aria-label="Convert"
 										>
 											<Zap className="h-3.5 w-3.5 text-blue-400" />
 										</Button>
