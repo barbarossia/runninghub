@@ -1774,9 +1774,27 @@ export default function WorkspacePage() {
 		const resizeLongestSide = convertConfig.resizeLongestSide
 			? parseInt(convertConfig.resizeLongestSide, 10)
 			: undefined;
+		const speedValue =
+			convertConfig.speedValue === "custom"
+				? convertConfig.customSpeed
+				: parseFloat(convertConfig.speedValue);
+		const trimStartFrames = convertConfig.trimStartFrames === "custom"
+			? convertConfig.trimStartFramesCustom
+			: parseInt(convertConfig.trimStartFrames, 10);
+		const trimEndFrames = convertConfig.trimEndFrames === "custom"
+			? convertConfig.trimEndFramesCustom
+			: parseInt(convertConfig.trimEndFrames, 10);
 
 		if (!targetFps || targetFps < 1 || targetFps > 120) {
 			toast.error("Invalid target FPS. Must be between 1 and 120.");
+			return;
+		}
+
+		if (
+			convertConfig.speedEnabled &&
+			(!Number.isFinite(speedValue) || speedValue < 0.1 || speedValue > 10)
+		) {
+			toast.error("Invalid speed. Must be between 0.1x and 10x.");
 			return;
 		}
 
@@ -1795,6 +1813,11 @@ export default function WorkspacePage() {
 			}
 		}
 
+		if (convertConfig.trimEnabled && (trimStartFrames < 0 || trimEndFrames < 0)) {
+			toast.error("Trim frames must be non-negative.");
+			return;
+		}
+
 		try {
 			const response = await fetch("/api/workspace/fps-convert", {
 				method: "POST",
@@ -1811,6 +1834,11 @@ export default function WorkspacePage() {
 					resizeWidth,
 					resizeHeight,
 					resizeLongestSide,
+					speedEnabled: convertConfig.speedEnabled,
+					speedValue,
+					trimEnabled: convertConfig.trimEnabled,
+					trimStartFrames,
+					trimEndFrames,
 					timeout: 3600,
 				}),
 			});
@@ -1821,7 +1849,11 @@ export default function WorkspacePage() {
 				setConvertTaskId(data.task_id);
 				setActiveConsoleTaskId(data.task_id);
 				toast.success(
-					`Started converting ${videos.length} video${videos.length > 1 ? "s" : ""} to ${targetFps} FPS`,
+					convertConfig.trimEnabled
+						? `Started converting ${videos.length} video${videos.length > 1 ? "s" : ""} to ${targetFps} FPS (trim ${trimStartFrames} start, ${trimEndFrames} end)${convertConfig.speedEnabled ? ` at ${speedValue}x speed` : ""}`
+						: convertConfig.speedEnabled
+							? `Started converting ${videos.length} video${videos.length > 1 ? "s" : ""} to ${targetFps} FPS at ${speedValue}x speed`
+							: `Started converting ${videos.length} video${videos.length > 1 ? "s" : ""} to ${targetFps} FPS`,
 				);
 				useVideoSelectionStore.getState().deselectAll();
 
@@ -2895,13 +2927,13 @@ export default function WorkspacePage() {
 								</div>
 
 								{/* Configuration Grid - Crop and FPS Convert */}
-								<div className="grid md:grid-cols-2 gap-6">
-									{/* Crop Configuration */}
-									<CropConfiguration />
+							<div className="space-y-6">
+								{/* Crop Configuration */}
+								<CropConfiguration />
 
 								{/* Convert Configuration */}
-									<VideoConvertConfiguration />
-								</div>
+								<VideoConvertConfiguration />
+							</div>
 
 								{/* Selection Toolbar */}
 								<VideoClipSelectionToolbar
