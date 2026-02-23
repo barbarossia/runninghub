@@ -104,6 +104,7 @@ gallery_debug_snapshot.txt
 *.pid.lock
 .cache/
 .parcel-cache/
+.build-cache/
 .pnp.*
 .pnp.js
 

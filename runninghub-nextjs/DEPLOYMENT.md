@@ -167,6 +167,41 @@ Build and run:
 ```bash
 docker build -t runninghub-nextjs .
 docker run -p 3000:3000 --env-file .env.production runninghub-nextjs
+
+---
+
+## Split Frontend/Backend Deployment
+
+Use the same codebase with different build targets.
+
+### Backend (API-only) Docker Image
+
+Build:
+
+```bash
+docker build -f runninghub-nextjs/Dockerfile.backend -t runninghub-backend .
+```
+
+Run:
+
+```bash
+docker run -p 3000:3000 --env-file .env.production \
+  -v /your/workspace/path:/data \
+  runninghub-backend
+```
+
+Set `WORKSPACE_PATH=/data` in the backend env.
+
+### Frontend (UI-only) Local Build
+
+Set the backend base URL for API proxying:
+
+```bash
+export RUNNINGHUB_BUILD_TARGET=frontend
+export NEXT_PUBLIC_API_BASE_URL=http://<backend-host>:3000
+npm run build:frontend
+npm run start
+```
 ```
 
 ### Option 3: Vercel Deployment
