@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+const isFrontendBuild = process.env.RUNNINGHUB_BUILD_TARGET === "frontend";
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
 const nextConfig: NextConfig = {
 	// Production optimizations
 	reactStrictMode: true,
@@ -63,6 +66,18 @@ const nextConfig: NextConfig = {
 				],
 			},
 		];
+	},
+
+	async rewrites() {
+		if (isFrontendBuild && apiBaseUrl) {
+			return [
+				{
+					source: "/api/:path*",
+					destination: `${apiBaseUrl}/api/:path*`,
+				},
+			];
+		}
+		return [];
 	},
 };
 

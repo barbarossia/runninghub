@@ -5,6 +5,8 @@
 	"scripts": {
 		"dev": "next dev",
 		"build": "next build",
+		"build:backend": "RUNNINGHUB_BUILD_TARGET=backend node scripts/build-target.mjs",
+		"build:frontend": "RUNNINGHUB_BUILD_TARGET=frontend node scripts/build-target.mjs",
 		"start": "next start",
 		"lint": "eslint",
 		"test": "jest",
