@@ -1,0 +1,13 @@
+version: '3.9'
+
+services:
+  runninghub-backend:
+    image: runninghub-backend
+    ports:
+      - '49152:49152'
+    env_file:
+      - .env.production
+    environment:
+      WORKSPACE_PATH: /data
+    volumes:
+      - /local/workspace:/data

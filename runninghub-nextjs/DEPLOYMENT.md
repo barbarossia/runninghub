@@ -185,7 +185,7 @@ docker build -f runninghub-nextjs/Dockerfile.backend -t runninghub-backend .
 Run:
 
 ```bash
-docker run -p 3000:3000 --env-file .env.production \
+docker run -p 49152:49152 --env-file .env.production \
   -v /your/workspace/path:/data \
   runninghub-backend
 ```
@@ -198,7 +198,7 @@ Set the backend base URL for API proxying:
 
 ```bash
 export RUNNINGHUB_BUILD_TARGET=frontend
-export NEXT_PUBLIC_API_BASE_URL=http://<backend-host>:3000
+export BACKEND_API_GATEWAY=http://<backend-host>:49152
 npm run build:frontend
 npm run start
 ```
