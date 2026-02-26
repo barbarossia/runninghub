@@ -30,7 +30,11 @@ export async function apiRequest<T>(
 	endpoint: string,
 	options: RequestInit = {},
 ): Promise<T> {
-	const url = `${process.env.NEXT_PUBLIC_BASE_URL || ""}${endpoint}`;
+	const baseUrl =
+		process.env.NEXT_PUBLIC_API_BASE_URL ||
+		process.env.NEXT_PUBLIC_BASE_URL ||
+		"";
+	const url = `${baseUrl}${endpoint}`;
 
 	const config: RequestInit = {
 		headers: {

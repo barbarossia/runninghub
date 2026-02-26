@@ -1,0 +1,35 @@
+FROM node:20-alpine AS base
+
+FROM base AS deps
+RUN apk add --no-cache python3 make g++
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ENV RUNNINGHUB_BUILD_TARGET=backend
+RUN npm run build:backend
+
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=49152
+ENV HOSTNAME=0.0.0.0
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 49152
+
+CMD ["node", "server.js"]
