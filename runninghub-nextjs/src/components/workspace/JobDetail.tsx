@@ -716,12 +716,6 @@ export function JobDetail({ jobId, onBack, className = "" }: JobDetailProps) {
 		}
 	};
 
-	// Swap languages
-	const handleSwapLanguages = () => {
-		setLeftLang(rightLang);
-		setRightLang(leftLang);
-	};
-
 	// Handle decoded file from duck decode
 	const handleFileDecoded = (
 		sourcePath: string,

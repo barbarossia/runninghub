@@ -1900,15 +1900,19 @@ export function MediaGallery({
 																size="sm"
 																className="h-6 px-2 text-xs"
 																onClick={() => {
-																	const content =
-																		formattedPrompt ||
-																		promptOverrides[previewFile.path] ||
-																		previewFile.prompt;
-																	navigator.clipboard.writeText(content);
-																	toast.success(
-																		"Prompt copied to clipboard",
-																	);
-																}}
+												const content =
+													formattedPrompt ||
+													promptOverrides[previewFile.path] ||
+													previewFile.prompt;
+												if (!content) {
+													toast.warning("No prompt available");
+													return;
+												}
+												navigator.clipboard.writeText(content);
+												toast.success(
+													"Prompt copied to clipboard",
+												);
+											}}
 															>
 																<Copy className="h-3 w-3 mr-1" />
 																Copy

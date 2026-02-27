@@ -22,11 +22,17 @@ ENV NODE_ENV=production
 ENV PORT=49152
 ENV HOSTNAME=0.0.0.0
 
+RUN apk add --no-cache python3 py3-pip
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/requirements.txt ./
+COPY --from=builder /app/runninghub_cli ./runninghub_cli
+
+RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
 USER nextjs
 

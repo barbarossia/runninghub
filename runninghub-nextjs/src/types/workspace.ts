@@ -266,7 +266,6 @@ export interface MediaFile {
 	codecLongName?: string; // Video codec (long name)
 	containerFormat?: string; // Container format (short name)
 	containerFormatLong?: string; // Container format (long name)
-	prompt?: string; // Embedded prompt/comment metadata
 
 	// Preview
 	thumbnail?: string; // Thumbnail URL

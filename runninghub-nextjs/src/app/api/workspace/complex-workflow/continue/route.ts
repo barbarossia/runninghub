@@ -336,10 +336,12 @@ export async function POST(request: NextRequest) {
 					fallbackOutput?.fileName || path.basename(fallbackPath);
 				const ext = path.extname(resolvedFileName).toLowerCase();
 				const inferredType =
-					fallbackOutput?.fileType ||
-					(ext.match(/\.(mp4|mov|avi|webm|mkv)$/)
-						? "video"
-						: "image");
+					fallbackOutput?.fileType === "video" ||
+					fallbackOutput?.fileType === "image"
+						? fallbackOutput.fileType
+						: ext.match(/\.(mp4|mov|avi|webm|mkv)$/)
+							? "video"
+							: "image";
 				let resolvedSize = fallbackOutput?.fileSize || 0;
 
 				try {
