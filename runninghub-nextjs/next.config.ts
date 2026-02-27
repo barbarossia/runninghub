@@ -1,11 +1,15 @@
 import type { NextConfig } from "next";
 
 const isFrontendBuild = process.env.RUNNINGHUB_BUILD_TARGET === "frontend";
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+const apiBaseUrl = process.env.BACKEND_API_GATEWAY;
 
 const nextConfig: NextConfig = {
 	// Production optimizations
 	reactStrictMode: true,
+
+	env: {
+		BACKEND_API_GATEWAY: process.env.BACKEND_API_GATEWAY || "",
+	},
 
 	// Image optimization
 	images: {

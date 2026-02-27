@@ -3,6 +3,7 @@ import { access, readFile, stat } from "fs/promises";
 import path from "path";
 import chokidar from "chokidar";
 import { getFileMetadata } from "@/lib/metadata";
+import type { ImageMetadata, VideoMetadata } from "@/lib/metadata";
 import { writeLog } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +57,10 @@ async function buildMediaPayload(filePath: string) {
 	const modifiedAt = stats.mtime?.getTime();
 
 	if (SUPPORTED_IMAGE_EXTENSIONS.has(extension)) {
-		const metadata = await getFileMetadata(filePath, "image");
+		const metadata = (await getFileMetadata(
+			filePath,
+			"image",
+		)) as ImageMetadata | null;
 		const captionData = await readCaptionFile(filePath);
 
 		return {
@@ -79,7 +83,10 @@ async function buildMediaPayload(filePath: string) {
 	}
 
 	if (SUPPORTED_VIDEO_EXTENSIONS.has(extension)) {
-		const metadata = (await getFileMetadata(filePath, "video")) as any;
+		const metadata = (await getFileMetadata(
+			filePath,
+			"video",
+		)) as VideoMetadata | null;
 		const captionData = await readCaptionFile(filePath);
 
 		return {

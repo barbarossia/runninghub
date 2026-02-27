@@ -323,7 +323,7 @@ export default function WorkspacePage() {
 		async (file: MediaFile) => {
 			setPromptFileName(file.name);
 			const cached = promptCache[file.path];
-			let prompt = cached ?? null;
+			let prompt: string | null = cached ?? null;
 			if (!prompt) {
 				prompt = await fetchPromptMetadata(file, false);
 			}

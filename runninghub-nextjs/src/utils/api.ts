@@ -31,7 +31,7 @@ export async function apiRequest<T>(
 	options: RequestInit = {},
 ): Promise<T> {
 	const baseUrl =
-		process.env.NEXT_PUBLIC_API_BASE_URL ||
+		process.env.BACKEND_API_GATEWAY ||
 		process.env.NEXT_PUBLIC_BASE_URL ||
 		"";
 	const url = `${baseUrl}${endpoint}`;

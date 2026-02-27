@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { getFileMetadata } from "@/lib/metadata";
+import type { ImageMetadata, VideoMetadata } from "@/lib/metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,8 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 				extension: string;
 				width?: number;
 				height?: number;
+				format?: string;
+				prompt?: string;
 				created_at?: number;
 				modified_at?: number;
 				caption?: string;
@@ -89,6 +92,12 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 				height?: number;
 				fps?: number;
 				duration?: number;
+				codec?: string;
+				codecLongName?: string;
+				bitrate?: number;
+				containerFormat?: string;
+				containerFormatLong?: string;
+				prompt?: string;
 				thumbnail?: string;
 				created_at?: number;
 				modified_at?: number;
@@ -142,7 +151,10 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 
 						if (supportedImageExtensions.includes(extension)) {
 							// Extract image metadata
-							const metadata = await getFileMetadata(itemPath, "image");
+						const metadata = (await getFileMetadata(
+							itemPath,
+							"image",
+						)) as ImageMetadata | null;
 
 							// Extract file timestamps (convert to milliseconds)
 							const createdAt = itemStats.birthtime?.getTime();
@@ -171,7 +183,7 @@ async function handleFolderList(folderPath: string, sessionId?: string) {
 							const metadata = (await getFileMetadata(
 								itemPath,
 								"video",
-							)) as any;
+							)) as VideoMetadata | null;
 							console.log(`[API] Video metadata for ${item}:`, metadata);
 
 							// Extract file timestamps (convert to milliseconds)
