@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { loadComplexWorkflowExecution } from "@/lib/complex-workflow-utils";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function POST(
 	request: NextRequest,
@@ -38,9 +39,7 @@ export async function POST(
 		const fs = await import("fs/promises");
 		const path = await import("path");
 
-		const EXECUTION_DIR = process.env.HOME
-			? `${process.env.HOME}/Downloads/workspace/complex-executions`
-			: "~/Downloads/workspace/complex-executions";
+		const EXECUTION_DIR = getWorkspaceDir("complex-executions");
 
 		const executionDir = path.join(EXECUTION_DIR, executionId);
 		const executionFile = path.join(executionDir, "execution.json");

@@ -21,12 +21,16 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=49152
 ENV HOSTNAME=0.0.0.0
+# Configurable workspace directory. Override at runtime with -e WORKSPACE_PATH=/your/path
+ENV WORKSPACE_PATH=/data/workspace
 
 RUN apk add --no-cache python3 py3-pip
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# Create workspace directory with correct ownership
+RUN mkdir -p /data/workspace && chown nextjs:nodejs /data/workspace
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/requirements.txt ./

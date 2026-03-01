@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function GET(request: NextRequest) {
 	try {
@@ -20,12 +21,7 @@ export async function GET(request: NextRequest) {
 		}
 
 		// Job directory: ~/Downloads/workspace/{jobId}/
-		const workspaceJobDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-		);
+		const workspaceJobDir = getWorkspaceDir(jobId);
 
 		const resultDir = path.join(workspaceJobDir, "result");
 

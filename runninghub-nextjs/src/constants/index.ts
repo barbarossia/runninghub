@@ -12,7 +12,6 @@ export const ENVIRONMENT_VARIABLES = {
 	DEFAULT_NODE_ID: process.env.DEFAULT_NODE_ID || "203",
 	MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE || "10485760"), // 10MB
 	MAX_FILES_COUNT: parseInt(process.env.MAX_FILES_COUNT || "100"),
-	WORKSPACE_PATH: process.env.WORKSPACE_PATH || "~/Downloads/workspace",
 	WORKSPACE_WORKFLOW_ID: process.env.WORKSPACE_WORKFLOW_ID || null,
 	MAX_CONCURRENT_PROCESSES: parseInt(
 		process.env.RUNNINGHUB_MAX_CONCURRENT_PROCESSES || "5",

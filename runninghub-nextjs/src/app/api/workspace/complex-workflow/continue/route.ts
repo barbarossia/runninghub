@@ -22,9 +22,9 @@ import type {
 	LocalWorkflow,
 } from "@/types/workspace";
 
-const EXECUTION_DIR = process.env.HOME
-	? `${process.env.HOME}/Downloads/workspace/complex-executions`
-	: "~/Downloads/workspace/complex-executions";
+import { getWorkspaceDir } from "@/lib/workspace-path";
+
+	const EXECUTION_DIR = getWorkspaceDir("complex-executions");
 
 type LoadedWorkflowDefinition = {
 	workflow: Workflow;

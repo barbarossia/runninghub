@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import os from "os";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 /**
  * POST /api/workflow/add-custom-id
@@ -71,10 +71,7 @@ export async function POST(request: NextRequest) {
 			updatedAt: Date.now(),
 		};
 
-		const workspacePath =
-			process.env.WORKSPACE_PATH ||
-			path.join(os.homedir(), "Downloads", "workspace");
-		const workflowsDir = path.join(workspacePath, "workflows");
+		const workflowsDir = getWorkspaceDir("workflows");
 
 		await fs.mkdir(workflowsDir, { recursive: true });
 		await fs.writeFile(

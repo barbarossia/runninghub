@@ -63,7 +63,7 @@ export interface TranslationResponse {
  * @note This type is still actively used for workspace configuration
  */
 export interface WorkspaceConfig {
-	path: string;
+	path: string | null;
 	workflowId: string | null;
 }
 
@@ -90,7 +90,6 @@ export interface FileUploadResponse {
 export interface ProcessRequest {
 	files: string[];
 	workflowId: string;
-	workspacePath: string;
 }
 
 export interface ProcessResponse {
@@ -104,7 +103,6 @@ export interface SaveTextRequest {
 	fileId: string;
 	content: string;
 	language: "en" | "zh";
-	workspacePath: string;
 }
 
 export interface SaveTextResponse {

@@ -7,7 +7,6 @@ import { useCallback } from "react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import {
 	API_ENDPOINTS,
-	ENVIRONMENT_VARIABLES,
 	ERROR_MESSAGES,
 } from "@/constants";
 import type {
@@ -46,12 +45,6 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 	 */
 	const uploadImages = useCallback(
 		async (files: File[]): Promise<FileUploadResponse[]> => {
-			if (!config.path) {
-				const error = ERROR_MESSAGES.WORKSPACE_NOT_CONFIGURED;
-				onError?.(error);
-				throw new Error(error);
-			}
-
 			setProcessing(true);
 
 			try {
@@ -73,13 +66,12 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 
 				const fileData = await Promise.all(filePromises);
 
-				// Upload to API
+				// Upload to API (workspacePath is now handled server-side)
 				const response = await fetch(API_ENDPOINTS.WORKSPACE_UPLOAD, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						files: fileData,
-						workspacePath: config.path,
 					}),
 				});
 
@@ -127,7 +119,7 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 				setProcessing(false);
 			}
 		},
-		[config.path, setProcessing, addUploadedFile, onError, onUploadComplete],
+		[setProcessing, addUploadedFile, onError, onUploadComplete],
 	);
 
 	/**
@@ -146,16 +138,7 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 				};
 			}
 
-			if (!config.path) {
-				const error = ERROR_MESSAGES.WORKSPACE_NOT_CONFIGURED;
-				onError?.(error);
-				return {
-					success: false,
-					taskId: "",
-					message: error,
-					error,
-				};
-			}
+			// config.path is now handled server-side via WORKSPACE_PATH env var
 
 			if (fileIds.length === 0) {
 				const error = ERROR_MESSAGES.NO_FILES_SELECTED;
@@ -189,7 +172,6 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 					body: JSON.stringify({
 						files: filePaths,
 						workflowId: config.workflowId,
-						workspacePath: config.path,
 					} as ProcessRequest),
 				});
 
@@ -239,7 +221,6 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 		},
 		[
 			config.workflowId,
-			config.path,
 			setProcessing,
 			updateFileStatus,
 			setActiveTaskId,
@@ -257,16 +238,7 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 			content: string,
 			language: "en" | "zh",
 		): Promise<SaveTextResponse> => {
-			if (!config.path) {
-				const error = ERROR_MESSAGES.WORKSPACE_NOT_CONFIGURED;
-				onError?.(error);
-				return {
-					success: false,
-					savedPath: "",
-					error,
-				};
-			}
-
+			// config.path is now handled server-side via WORKSPACE_PATH env var
 			try {
 				const response = await fetch(API_ENDPOINTS.WORKSPACE_SAVE, {
 					method: "POST",
@@ -275,7 +247,6 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 						fileId,
 						content,
 						language,
-						workspacePath: config.path,
 					} as SaveTextRequest),
 				});
 
@@ -306,7 +277,7 @@ export function useWorkspace(options: UseWorkspaceOptions = {}) {
 				};
 			}
 		},
-		[config.path, onError, onSaveComplete],
+		[onError, onSaveComplete],
 	);
 
 	/**

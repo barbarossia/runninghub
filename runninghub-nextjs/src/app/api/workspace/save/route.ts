@@ -8,12 +8,12 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { SaveTextRequest, SaveTextResponse } from "@/types/workspace";
 import { ERROR_MESSAGES } from "@/constants";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json();
-		const { fileId, content, language, workspacePath } =
-			body as SaveTextRequest;
+		const { fileId, content, language } = body as SaveTextRequest;
 
 		// Validate inputs
 		if (!fileId) {
@@ -46,22 +46,12 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		if (!workspacePath) {
-			return NextResponse.json(
-				{
-					success: false,
-					error: ERROR_MESSAGES.WORKSPACE_NOT_CONFIGURED,
-				},
-				{ status: 400 },
-			);
-		}
+		// Get workspace directory from centralized utility
+		const workspaceDir = getWorkspaceDir();
 
-		// Expand tilde in path
-		const expandedPath = workspacePath.replace(/^~/, process.env.HOME || "");
-
-		// Check if workspace directory exists
+		// Validate workspace directory exists
 		try {
-			await fs.access(expandedPath);
+			await fs.access(workspaceDir);
 		} catch {
 			return NextResponse.json(
 				{
@@ -72,11 +62,9 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Look up the file in the uploaded files
-		// For now, we'll use a simple naming convention
-		// In production, you'd want to track this properly
+		// Save file in workspace directory
 		const fileName = `${fileId}_${language}.txt`;
-		const filePath = path.join(expandedPath, fileName);
+		const filePath = path.join(workspaceDir, fileName);
 
 		// Write content to file
 		await fs.writeFile(filePath, content, "utf-8");

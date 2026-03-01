@@ -269,9 +269,9 @@ export const useWorkspaceStore = create<WorkspaceActions>()(
 			// ============================================================
 			// INITIAL STATE
 			// ============================================================
-			// Legacy state
+			// Legacy state (path is now handled server-side via WORKSPACE_PATH env var)
 			config: {
-				path: "~/Downloads/workspace",
+				path: null,
 				workflowId: null,
 			},
 			uploadedFiles: [],

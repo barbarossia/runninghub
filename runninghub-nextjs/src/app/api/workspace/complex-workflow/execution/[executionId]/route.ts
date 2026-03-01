@@ -9,6 +9,7 @@ import {
 	ensureExecutionIdentity,
 } from "@/lib/complex-workflow-utils";
 import type { GetComplexWorkflowExecutionResponse } from "@/types/workspace";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function GET(
 	request: NextRequest,
@@ -82,7 +83,7 @@ export async function GET(
 			}
 
 			try {
-				const jobDir = path.join(homeDir, "Downloads", "workspace", step.jobId);
+				const jobDir = getWorkspaceDir(step.jobId);
 				const jobFile = path.join(jobDir, "job.json");
 				const jobContent = await fs.readFile(jobFile, "utf-8");
 				const job = JSON.parse(jobContent);

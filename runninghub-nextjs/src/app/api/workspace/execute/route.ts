@@ -14,6 +14,7 @@ import {
 	takeNextQueued,
 	tryAcquireSlot,
 } from "@/lib/workspace-submit-queue";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 import type {
 	ExecuteJobRequest,
 	ExecuteJobResponse,
@@ -91,12 +92,7 @@ export async function POST(request: NextRequest) {
 		// Create job directory and save initial job.json
 		const fs = await import("fs/promises");
 		const path = await import("path");
-		const workspaceJobDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-		);
+		const workspaceJobDir = getWorkspaceDir(jobId);
 		await fs.mkdir(workspaceJobDir, { recursive: true });
 
 		const initialJob: Job = {
@@ -329,13 +325,7 @@ async function uploadFileToRunningHub(
 async function updateJobFile(jobId: string, updates: Partial<Job>) {
 	const fs = await import("fs/promises");
 	const path = await import("path");
-	const jobFilePath = path.join(
-		process.env.HOME || "~",
-		"Downloads",
-		"workspace",
-		jobId,
-		"job.json",
-	);
+	const jobFilePath = getWorkspaceDir(jobId, "job.json");
 
 	try {
 		const content = await fs.readFile(jobFilePath, "utf-8");
@@ -350,13 +340,7 @@ async function updateJobFile(jobId: string, updates: Partial<Job>) {
 async function readJobFile(jobId: string): Promise<Job | null> {
 	const fs = await import("fs/promises");
 	const path = await import("path");
-	const jobFilePath = path.join(
-		process.env.HOME || "~",
-		"Downloads",
-		"workspace",
-		jobId,
-		"job.json",
-	);
+	const jobFilePath = getWorkspaceDir(jobId, "job.json");
 
 	try {
 		const content = await fs.readFile(jobFilePath, "utf-8");
@@ -525,12 +509,7 @@ async function downloadOutputsToWorkspace(
 	const path = await import("path");
 
 	// Workspace job directory: ~/Downloads/workspace/{jobId}/result/
-	const workspaceJobDir = path.join(
-		process.env.HOME || "~",
-		"Downloads",
-		"workspace",
-		jobId,
-	);
+	const workspaceJobDir = getWorkspaceDir(jobId);
 
 	const workspaceOutputsDir = path.join(workspaceJobDir, "result");
 
@@ -688,13 +667,7 @@ async function getRunningHubTaskIdFromJob(jobId: string): Promise<string | null>
 	try {
 		const fs = await import("fs/promises");
 		const path = await import("path");
-		const jobFile = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-			"job.json",
-		);
+		const jobFile = getWorkspaceDir(jobId, "job.json");
 		const content = await fs.readFile(jobFile, "utf-8");
 		const job = JSON.parse(content) as { runninghubTaskId?: string };
 		return job.runninghubTaskId || null;
@@ -885,12 +858,7 @@ async function getWorkflowById(
 	// Handle local workflows
 	if (workflowId.startsWith("local_")) {
 		try {
-			const localWorkflowDir = path.join(
-				process.env.HOME || "~",
-				"Downloads",
-				"workspace",
-				"local-workflows",
-			);
+			const localWorkflowDir = getWorkspaceDir("local-workflows");
 			const workflowPath = path.join(localWorkflowDir, `${workflowId}.json`);
 
 			const content = await fs.readFile(workflowPath, "utf-8");
@@ -926,12 +894,7 @@ async function getWorkflowById(
 	}
 
 	try {
-		const workflowDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"workflows",
-		);
+		const workflowDir = getWorkspaceDir("workflows");
 		const workflowPath = path.join(workflowDir, `${workflowId}.json`);
 
 		const content = await fs.readFile(workflowPath, "utf-8");
@@ -956,12 +919,7 @@ async function copyInputFilesToJobDirectory(
 		const path = await import("path");
 
 		// Create job directory
-		const workspaceJobDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-		);
+		const workspaceJobDir = getWorkspaceDir(jobId);
 		await fs.mkdir(workspaceJobDir, { recursive: true });
 
 		await writeLog(
@@ -1028,12 +986,7 @@ async function processLocalJobOutputs(
 		const fs = await import("fs/promises");
 		const path = await import("path");
 
-		const workspaceJobDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-		);
+		const workspaceJobDir = getWorkspaceDir(jobId);
 		const workspaceOutputsDir = path.join(workspaceJobDir, "result");
 
 		// Create result directory
@@ -1219,14 +1172,7 @@ async function getOriginalFileNameFromExecution(
 	try {
 		const fs = await import("fs/promises");
 		const path = await import("path");
-		const executionPath = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"complex-executions",
-			seriesId,
-			"execution.json",
-		);
+		const executionPath = getWorkspaceDir("complex-executions", seriesId, "execution.json");
 		const content = await fs.readFile(executionPath, "utf-8");
 		const execution = JSON.parse(content);
 		const filePath =
@@ -1382,13 +1328,7 @@ async function updateComplexExecutionForJob(
 	try {
 		const fs = await import("fs/promises");
 		const path = await import("path");
-		const executionDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"complex-executions",
-			seriesId,
-		);
+		const executionDir = getWorkspaceDir("complex-executions", seriesId);
 		const executionFile = path.join(executionDir, "execution.json");
 		const executionContent = await fs.readFile(executionFile, "utf-8");
 		const execution = JSON.parse(executionContent);
@@ -1398,13 +1338,7 @@ async function updateComplexExecutionForJob(
 		);
 		if (stepIndex === -1) return null;
 
-		const jobFile = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-			"job.json",
-		);
+		const jobFile = getWorkspaceDir(jobId, "job.json");
 		let jobResults: any = undefined;
 		try {
 			const jobContent = await fs.readFile(jobFile, "utf-8");

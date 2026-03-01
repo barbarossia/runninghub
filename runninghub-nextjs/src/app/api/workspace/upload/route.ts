@@ -10,25 +10,14 @@ import crypto from "crypto";
 import type { FileUploadRequest, FileUploadResponse } from "@/types/workspace";
 import { ERROR_MESSAGES } from "@/constants";
 import { getFileMetadata } from "@/lib/metadata";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json();
-		const { files, workspacePath } = body as {
+		const { files } = body as {
 			files: FileUploadRequest[];
-			workspacePath: string;
 		};
-
-		// Validate workspace path
-		if (!workspacePath) {
-			return NextResponse.json(
-				{
-					success: false,
-					error: ERROR_MESSAGES.WORKSPACE_NOT_CONFIGURED,
-				},
-				{ status: 400 },
-			);
-		}
 
 		if (!files || files.length === 0) {
 			return NextResponse.json(
@@ -40,12 +29,12 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Expand tilde in path
-		const expandedPath = workspacePath.replace(/^~/, process.env.HOME || "");
+		// Get workspace directory from centralized utility
+		const workspaceDir = getWorkspaceDir();
 
 		// Ensure workspace directory exists
 		try {
-			await fs.mkdir(expandedPath, { recursive: true });
+			await fs.mkdir(workspaceDir, { recursive: true });
 		} catch (mkdirError) {
 			console.error("Failed to create workspace directory:", mkdirError);
 			return NextResponse.json(
@@ -68,8 +57,8 @@ export async function POST(request: NextRequest) {
 				// Decode base64 data
 				const buffer = Buffer.from(file.data, "base64");
 
-				// Construct file path
-				const filePath = path.join(expandedPath, file.name);
+				// Construct file path in workspace directory
+				const filePath = path.join(workspaceDir, file.name);
 
 				// Write file to disk
 				await fs.writeFile(filePath, buffer);
