@@ -179,7 +179,7 @@ Use the same codebase with different build targets.
 Build:
 
 ```bash
-docker build -f runninghub-nextjs/Dockerfile.backend -t runninghub-backend .
+docker build -f Dockerfile.backend -t runninghub-backend .
 ```
 
 Run:
@@ -349,5 +349,5 @@ docker logs -f runninghub-nextjs
 
 For issues or questions:
 1. Check the [GitHub Issues](https://github.com/your-repo/issues)
-2. Review the [main documentation](../README.md)
+2. Review the [main documentation](README.md)
 3. Contact the development team

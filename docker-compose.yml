@@ -3,6 +3,9 @@ version: '3.9'
 services:
   runninghub-backend:
     image: runninghub-backend
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
     ports:
       - '49152:49152'
     env_file:
