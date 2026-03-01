@@ -4,13 +4,13 @@ FROM base AS deps
 RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
-COPY package*.json ./
+COPY runninghub-nextjs/package*.json ./
 RUN npm ci
 
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY runninghub-nextjs/ .
 
 ENV RUNNINGHUB_BUILD_TARGET=backend
 RUN npm run build:backend
@@ -33,8 +33,8 @@ RUN adduser --system --uid 1001 nextjs
 RUN mkdir -p /data/workspace && chown nextjs:nodejs /data/workspace
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/requirements.txt ./
-COPY --from=builder /app/runninghub_cli ./runninghub_cli
+COPY requirements.txt ./
+COPY runninghub_cli ./runninghub_cli
 
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
 
