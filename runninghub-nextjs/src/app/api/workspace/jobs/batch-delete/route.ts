@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 type BatchDeleteRequest = {
 	jobIds: string[];
@@ -27,11 +28,7 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		const workspaceDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-		);
+		const workspaceDir = getWorkspaceDir();
 
 		const deleted: string[] = [];
 		const failed: string[] = [];

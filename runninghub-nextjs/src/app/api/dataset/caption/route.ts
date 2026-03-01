@@ -4,10 +4,11 @@ import { writeFile, mkdir, readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { existsSync } from "fs";
 import { execSync } from "child_process";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 // CLI and workflow configuration
 const RUNNINGHUB_CLI = "/opt/homebrew/Caskroom/miniconda/base/bin/runninghub";
-const WORKSPACE_WORKFLOWS = "/Users/barbarossia/Downloads/workspace/workflows";
+const WORKSPACE_WORKFLOWS = getWorkspaceDir("workflows");
 const VIDEO_CAPTION_WORKFLOW_JSON = "workflow_1768572436369_rvc96w13l.json";
 const IMAGE_CAPTION_WORKFLOW_JSON = "workflow_1769062557786_f2a0s6twm.json";
 

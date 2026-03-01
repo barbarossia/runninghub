@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import type { Job } from "@/types/workspace";
 import { getDisplayJobStatus } from "@/utils/job-status";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 type SyncMode = "trusted" | "smart";
 
@@ -121,11 +122,7 @@ const shouldSyncRemotely = (job: Job, mode: SyncMode): boolean => {
 };
 
 const loadJobsFromDisk = async (): Promise<Job[]> => {
-	const workspaceDir = path.join(
-		process.env.HOME || "~",
-		"Downloads",
-		"workspace",
-	);
+	const workspaceDir = getWorkspaceDir();
 	try {
 		await fs.access(workspaceDir);
 	} catch {
@@ -156,13 +153,7 @@ const loadJobsFromDisk = async (): Promise<Job[]> => {
 };
 
 const updateJobFile = async (jobId: string, updates: Partial<Job>) => {
-	const jobFilePath = path.join(
-		process.env.HOME || "~",
-		"Downloads",
-		"workspace",
-		jobId,
-		"job.json",
-	);
+	const jobFilePath = getWorkspaceDir(jobId, "job.json");
 
 	try {
 		const content = await fs.readFile(jobFilePath, "utf-8");

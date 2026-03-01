@@ -2,14 +2,11 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import type { Job } from "@/types/workspace";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function GET() {
 	try {
-		const workspaceDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-		);
+		const workspaceDir = getWorkspaceDir();
 
 		// Ensure workspace directory exists
 		try {

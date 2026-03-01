@@ -9,13 +9,17 @@ import path from "path";
 import crypto from "crypto";
 import type { ProcessRequest, ProcessResponse } from "@/types/workspace";
 import { ENVIRONMENT_VARIABLES, ERROR_MESSAGES } from "@/constants";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function POST(request: NextRequest) {
 	let taskId: string | null = null;
 
 	try {
 		const body = await request.json();
-		const { files, workflowId, workspacePath } = body as ProcessRequest;
+		const { files, workflowId } = body as ProcessRequest;
+
+		// Get workspace directory from centralized utility
+		const workspaceDir = getWorkspaceDir();
 
 		// Validate inputs
 		if (!workflowId) {
@@ -42,18 +46,6 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		if (!workspacePath) {
-			return NextResponse.json(
-				{
-					success: false,
-					taskId: "",
-					message: ERROR_MESSAGES.WORKSPACE_NOT_CONFIGURED,
-					error: ERROR_MESSAGES.WORKSPACE_NOT_CONFIGURED,
-				},
-				{ status: 400 },
-			);
-		}
-
 		// Generate task ID
 		taskId = crypto.randomBytes(16).toString("hex");
 
@@ -63,7 +55,7 @@ export async function POST(request: NextRequest) {
 			ENVIRONMENT_VARIABLES.PYTHON_CLI_PATH,
 		);
 
-		// Process each file
+		// Process each file using workspace directory
 		const promises = files.map((filePath) => {
 			return new Promise<void>((resolve, reject) => {
 				const args = [
@@ -74,7 +66,7 @@ export async function POST(request: NextRequest) {
 					"--workflow",
 					workflowId,
 					"--output-dir",
-					workspacePath,
+					workspaceDir,
 				];
 
 				const pythonProcess = spawn("python3", args, {

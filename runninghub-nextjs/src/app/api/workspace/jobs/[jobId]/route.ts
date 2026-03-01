@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import type { Job } from "@/types/workspace";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 interface JobUpdateRequest {
 	status?: Job["status"];
@@ -22,12 +23,7 @@ interface JobUpdateRequest {
 
 // Get the job directory path
 function getJobDir(jobId: string): string {
-	const workspaceDir = path.join(
-		process.env.HOME || "~",
-		"Downloads",
-		"workspace",
-	);
-	return path.join(workspaceDir, jobId);
+	return getWorkspaceDir(jobId);
 }
 
 export async function GET(

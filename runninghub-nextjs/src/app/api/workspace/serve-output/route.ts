@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export async function GET(request: NextRequest) {
 	try {
@@ -22,11 +23,7 @@ export async function GET(request: NextRequest) {
 
 		// Security: Ensure path is within workspace directory
 		// Allowed: ~/Downloads/workspace/{jobId}/result/
-		const workspaceDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-		);
+		const workspaceDir = getWorkspaceDir();
 		const resolvedPath = path.resolve(filePath);
 
 		if (!resolvedPath.startsWith(path.resolve(workspaceDir))) {

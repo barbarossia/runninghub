@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unlink } from "fs/promises";
 import { join } from "path";
-import { homedir } from "os";
-
-/**
- * Expand ~/ prefix in path to user home directory
- */
-function expandHomePath(path: string): string {
-	if (path.startsWith("~/")) {
-		return join(homedir(), path.slice(2));
-	}
-	return path;
-}
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 /**
  * DELETE /api/workflow/delete
@@ -31,9 +21,7 @@ export async function DELETE(request: NextRequest) {
 		}
 
 		// Get workspace path from env or use default
-		const workspacePath = process.env.WORKSPACE_PATH || "~/Downloads/workspace";
-		const expandedPath = expandHomePath(workspacePath);
-		const workflowsDir = join(expandedPath, "workflows");
+	const workflowsDir = getWorkspaceDir("workflows");
 		const filename = `${workflowId}.json`;
 		const filepath = join(workflowsDir, filename);
 

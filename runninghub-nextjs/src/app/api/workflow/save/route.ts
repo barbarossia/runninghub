@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-import { homedir } from "os";
 import type { Workflow } from "@/types/workspace";
-
-/**
- * Expand ~/ prefix in path to user home directory
- */
-function expandHomePath(path: string): string {
-	if (path.startsWith("~/")) {
-		return join(homedir(), path.slice(2));
-	}
-	return path;
-}
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 /**
  * POST /api/workflow/save
@@ -37,10 +27,7 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Get workspace path from env or use default
-		const workspacePath = process.env.WORKSPACE_PATH || "~/Downloads/workspace";
-		const expandedPath = expandHomePath(workspacePath);
-		const workflowsDir = join(expandedPath, "workflows");
+		const workflowsDir = getWorkspaceDir("workflows");
 
 		// Ensure workflows directory exists
 		try {

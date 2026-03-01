@@ -65,7 +65,6 @@ export function WorkspaceTextEditor({ fileId }: WorkspaceTextEditorProps) {
 					fileId,
 					content: currentText,
 					language: currentLanguage,
-					workspacePath: useWorkspaceStore.getState().config.path,
 				}),
 			});
 
@@ -85,8 +84,9 @@ export function WorkspaceTextEditor({ fileId }: WorkspaceTextEditorProps) {
 		}
 	};
 
+	// Return placeholder if file not found (unified render to avoid hydration issues)
 	if (!file) {
-		return null;
+		return <div className="p-4 text-gray-400">Loading...</div>;
 	}
 
 	return (
