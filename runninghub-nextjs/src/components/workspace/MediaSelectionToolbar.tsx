@@ -177,6 +177,7 @@ export function MediaSelectionToolbar({
 	const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 	const [isResizing, setIsResizing] = useState(false);
 	const [isCaptioning, setIsCaptioning] = useState(false);
+	const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
 	const [captionProgress, setCaptionProgress] = useState({
 		current: 0,
 		total: 0,
@@ -203,7 +204,8 @@ export function MediaSelectionToolbar({
 	}, [batchWorkflowId, batchWorkflowName, complexWorkflows]);
 
 	// Get workflows from store
-	const { workflows, setSelectedComplexWorkflowId } = useWorkspaceStore();
+	const { workflows, setSelectedComplexWorkflowId, setWorkflows } =
+		useWorkspaceStore();
 
 	// Get resize config from store
 	const { deleteOriginal, setDeleteOriginal } = useResizeConfigStore();
@@ -241,6 +243,58 @@ export function MediaSelectionToolbar({
 			isActive = false;
 		};
 	}, [showBatchConfirmDialog]);
+
+	useEffect(() => {
+		if (!showQuickRunDialog) return;
+		if (isLoadingWorkflows) return;
+
+		const hasRunningHubWorkflows = workflows.some(
+			(workflow) => workflow.sourceType !== "local",
+		);
+		if (hasRunningHubWorkflows) return;
+
+		let isActive = true;
+
+		const loadWorkflows = async () => {
+			setIsLoadingWorkflows(true);
+			try {
+				const response = await fetch("/api/workflow/list");
+				const data = await response.json();
+
+				if (!response.ok) {
+					throw new Error(data?.error || "Failed to load workflows");
+				}
+
+				if (!isActive) return;
+
+				const standardWorkflows: Workflow[] = data.workflows || [];
+				const localWorkflows = workflows.filter(
+					(workflow) => workflow.sourceType === "local",
+				);
+
+				setWorkflows([...standardWorkflows, ...localWorkflows]);
+			} catch (error) {
+				console.error("Failed to load workflows:", error);
+				if (isActive) {
+					toast.error(
+						error instanceof Error
+							? error.message
+							: "Failed to load workflows",
+					);
+				}
+			} finally {
+				if (isActive) {
+					setIsLoadingWorkflows(false);
+				}
+			}
+		};
+
+		loadWorkflows();
+
+		return () => {
+			isActive = false;
+		};
+	}, [showQuickRunDialog, workflows, setWorkflows, isLoadingWorkflows]);
 
 	const handleBatchProcess = useCallback(async () => {
 		if (!onBatchProcess) return;
@@ -501,17 +555,15 @@ export function MediaSelectionToolbar({
 								{onRunWorkflow && (
 									<DropdownMenu>
 										<DropdownMenuTrigger asChild>
-									<ToolbarTooltip content={`Run • ${selectedCountLabel}`}>
-												<Button
-													variant="default"
-													size="icon"
-													disabled={toolbarDisabled}
+											<Button
+												variant="default"
+												size="icon"
+												disabled={toolbarDisabled}
 												className="h-11 w-20 bg-blue-600 hover:bg-blue-700"
-													aria-label="Run workflow"
-												>
-													<Play className="h-4 w-4" />
-												</Button>
-											</ToolbarTooltip>
+												aria-label="Run workflow"
+											>
+												<Play className="h-4 w-4" />
+											</Button>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="start" className="w-56">
 											<DropdownMenuItem
@@ -754,17 +806,15 @@ export function MediaSelectionToolbar({
 								{onRunWorkflow && (
 									<DropdownMenu>
 										<DropdownMenuTrigger asChild>
-									<ToolbarTooltip content={`Run • ${selectedCountLabel}`}>
-												<Button
-													variant="ghost"
-													size="icon"
-													disabled={toolbarDisabled}
-													className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
-													aria-label="Run workflow"
-												>
-													<Play className="h-3.5 w-3.5 text-blue-400" />
-												</Button>
-											</ToolbarTooltip>
+											<Button
+												variant="ghost"
+												size="icon"
+												disabled={toolbarDisabled}
+												className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+												aria-label="Run workflow"
+											>
+												<Play className="h-3.5 w-3.5 text-blue-400" />
+											</Button>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="start" className="w-48">
 											<DropdownMenuItem

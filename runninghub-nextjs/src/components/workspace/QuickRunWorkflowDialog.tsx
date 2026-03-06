@@ -75,10 +75,12 @@ export function QuickRunWorkflowDialog({
 	}, [open]);
 
 	const workflowItems = useMemo(() => {
-		const runningHubItems = workflows.map((workflow) => ({
-			kind: "runninghub" as const,
-			workflow,
-		}));
+		const runningHubItems = workflows
+			.filter((workflow) => workflow.sourceType !== "local")
+			.map((workflow) => ({
+				kind: "runninghub" as const,
+				workflow,
+			}));
 		const localItems = localWorkflows.map((workflow) => ({
 			kind: "local" as const,
 			workflow,
@@ -152,6 +154,15 @@ export function QuickRunWorkflowDialog({
 		);
 		let compatible = 0;
 		let incompatible = 0;
+
+		// If the workflow has no file-type parameters, all selected files are compatible
+		if (fileParams.length === 0) {
+			return {
+				compatible: selectedFiles.length,
+				incompatible: 0,
+				total: selectedFiles.length,
+			};
+		}
 
 		selectedFiles.forEach((file) => {
 			const isCompatible = fileParams.some(
