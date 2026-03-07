@@ -2084,14 +2084,8 @@ async function processWorkflowInBackground(
 			taskId,
 		);
 
-		// Set working directory to job folder so CLI output files are saved there, not in Downloads
-		const path = await import("path");
-		const jobDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			jobId,
-		);
+		// Set working directory to job folder so CLI output files are saved there
+		const jobDir = getWorkspaceDir(jobId);
 
 		const childProcess = spawn("python", args, {
 			cwd: jobDir, // Set working directory to job folder
