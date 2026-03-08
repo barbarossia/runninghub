@@ -508,7 +508,7 @@ async function downloadOutputsToWorkspace(
 	const fs = await import("fs/promises");
 	const path = await import("path");
 
-	// Workspace job directory: ~/Downloads/workspace/{jobId}/result/
+	// Workspace job directory: ${WORKSPACE_PATH}/{jobId}/result/
 	const workspaceJobDir = getWorkspaceDir(jobId);
 
 	const workspaceOutputsDir = path.join(workspaceJobDir, "result");
@@ -1477,7 +1477,7 @@ async function processWorkflowInBackground(
 		}
 
 		// Clean up temporary uploads immediately after ensuring they are in the job folder
-		// This prevents accumulation of files in ~/Downloads/workspace/uploads
+		// This prevents accumulation of files in ${WORKSPACE_PATH}/uploads
 		// SKIP if this is part of a complex workflow execution (files might be needed by subsequent steps)
 		const isComplexExecution = seriesId && seriesId.startsWith("exec_");
 		

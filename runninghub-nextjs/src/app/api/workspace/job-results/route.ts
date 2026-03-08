@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 			);
 		}
 
-		// Job directory: ~/Downloads/workspace/{jobId}/
+		// Job directory: ${WORKSPACE_PATH}/{jobId}/
 		const workspaceJobDir = getWorkspaceDir(jobId);
 
 		const resultDir = path.join(workspaceJobDir, "result");
