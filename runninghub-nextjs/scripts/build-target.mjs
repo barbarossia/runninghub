@@ -16,6 +16,19 @@ const appDir = path.join(rootDir, 'src', 'app');
 const cacheRoot = path.join(rootDir, '.build-cache');
 const fullAppDir = path.join(cacheRoot, 'app-full');
 
+async function moveDir(source, destination) {
+  try {
+    await rename(source, destination);
+  } catch (error) {
+    if (error && error.code === 'EXDEV') {
+      await cp(source, destination, { recursive: true });
+      await rm(source, { recursive: true, force: true });
+      return;
+    }
+    throw error;
+  }
+}
+
 async function prepareAppTree() {
   if (!existsSync(appDir)) {
     throw new Error(`Missing app directory: ${appDir}`);
@@ -23,7 +36,7 @@ async function prepareAppTree() {
 
   await rm(cacheRoot, { recursive: true, force: true });
   await mkdir(cacheRoot, { recursive: true });
-  await rename(appDir, fullAppDir);
+  await moveDir(appDir, fullAppDir);
 
   await mkdir(appDir, { recursive: true });
 
@@ -47,7 +60,7 @@ async function restoreAppTree() {
     await rm(appDir, { recursive: true, force: true });
   }
   if (existsSync(fullAppDir)) {
-    await rename(fullAppDir, appDir);
+    await moveDir(fullAppDir, appDir);
   }
   await rm(cacheRoot, { recursive: true, force: true });
 }
