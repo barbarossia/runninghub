@@ -13,6 +13,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY runninghub-nextjs/ .
 
 ENV RUNNINGHUB_BUILD_TARGET=backend
+ENV WORKSPACE_PATH=/data
+RUN mkdir -p /data
 RUN npm run build:backend
 
 FROM base AS runner
