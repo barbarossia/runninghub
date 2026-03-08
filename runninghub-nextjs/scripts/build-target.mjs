@@ -66,12 +66,17 @@ async function restoreAppTree() {
 }
 
 async function runBuild() {
+  const buildWorkspacePath =
+    process.env.WORKSPACE_PATH || path.join(cacheRoot, 'workspace');
+  await mkdir(buildWorkspacePath, { recursive: true });
+
   return new Promise((resolve, reject) => {
     const child = spawn('npm', ['run', 'build'], {
       stdio: 'inherit',
       env: {
         ...process.env,
         RUNNINGHUB_BUILD_TARGET: target,
+        WORKSPACE_PATH: buildWorkspacePath,
       },
       cwd: rootDir,
     });
