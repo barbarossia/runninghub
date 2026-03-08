@@ -23,10 +23,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=49152
 ENV HOSTNAME=0.0.0.0
+# Ensure Python can import runninghub_cli without install
+ENV PYTHONPATH=/app
 # Configurable workspace directory. Override at runtime with -e WORKSPACE_PATH=/your/path
 ENV WORKSPACE_PATH=/data/workspace
 
-RUN apk add --no-cache python3 py3-pip
+RUN apk add --no-cache python3 py3-pip su-exec
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -38,10 +40,12 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY requirements.txt ./
 COPY runninghub_cli ./runninghub_cli
 
-RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
+# Ensure runtime user can import runninghub_cli
+RUN chown -R nextjs:nodejs ./runninghub_cli \
+  && chmod -R a+rX ./runninghub_cli
 
-USER nextjs
+RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 EXPOSE 49152
 
-CMD ["node", "server.js"]
+CMD ["/bin/sh", "-c", "mkdir -p /data/runninghub-tasks /data/workspace /data/workflows /home/nextjs/Downloads/workspace && ln -sfn /data/workflows /home/nextjs/Downloads/workspace/workflows && chown -R nextjs:nodejs /data /home/nextjs/Downloads && exec su-exec nextjs node server.js"]
