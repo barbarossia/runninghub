@@ -24,7 +24,7 @@ This document summarizes the logging and messaging patterns used across the Runn
 ## 2. API Routes (Next.js Backend)
 
 **Utility:** `writeLog(message, level, taskId)` in `src/lib/logger.ts`
-**Persistence:** Appends JSON objects to `.next/cache/runninghub-logs/process.log`.
+**Persistence:** Appends JSON objects to `${WORKSPACE_PATH}/runninghub-logs/process.log`.
 **Usage:** Background tasks, long-running processes, and audit trails shown in `ConsoleViewer`.
 
 | Level | Argument | Color in UI |

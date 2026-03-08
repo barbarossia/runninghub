@@ -1,9 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
-import os from "os";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
-// Use the system temp directory or a project-local temp directory
-const LOG_DIR = path.join(process.cwd(), ".next/cache/runninghub-logs");
+const LOG_DIR = getWorkspaceDir("runninghub-logs");
 const LOG_FILE = path.join(LOG_DIR, "process.log");
 
 // Ensure log directory exists

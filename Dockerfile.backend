@@ -25,6 +25,8 @@ ENV PORT=49152
 ENV HOSTNAME=0.0.0.0
 # Ensure Python can import runninghub_cli without install
 ENV PYTHONPATH=/app
+# Ensure Next.js cache is writable outside /app
+ENV NEXT_CACHE_DIR=/data/runninghub-cache
 # Configurable workspace directory. Override at runtime with -e WORKSPACE_PATH=/your/path
 ENV WORKSPACE_PATH=/data/workspace
 
@@ -50,4 +52,4 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirement
 
 EXPOSE 49152
 
-CMD ["/bin/sh", "-c", "mkdir -p /data/runninghub-tasks /data/workspace /data/workflows /home/nextjs/Downloads/workspace && ln -sfn /data/workflows /home/nextjs/Downloads/workspace/workflows && chown -R nextjs:nodejs /data /home/nextjs/Downloads && exec su-exec nextjs node server.js"]
+CMD ["/bin/sh", "-c", "mkdir -p /data/runninghub-tasks /data/workspace /data/workflows /data/runninghub-cache /home/nextjs/Downloads/workspace && ln -sfn /data/workflows /home/nextjs/Downloads/workspace/workflows && chown -R nextjs:nodejs /data /home/nextjs/Downloads && exec su-exec nextjs node server.js"]
