@@ -37,6 +37,54 @@ For Docker, mount your host workspace to `/data` and place workflow JSON files a
 | Execute a workflow | POST | `/api/workspace/execute` |
 | List jobs | GET | `/api/workspace/jobs` |
 
+## Upload Then Execute
+
+Use `/api/workspace/upload` to send the image to the server workspace, then pass the returned
+`workspacePath` into `/api/workspace/execute`.
+
+### POST /api/workspace/upload
+
+#### Multipart (recommended for large files)
+
+```
+curl -X POST "http://localhost:49152/api/workspace/upload" \
+  -F "files=@118259777_000.png"
+```
+
+#### Base64 JSON (small files)
+
+```
+BASE64_DATA=$(python3 - <<'PY'
+import base64
+with open("118259777_000.png", "rb") as f:
+    print(base64.b64encode(f.read()).decode())
+PY
+)
+
+curl -X POST "http://localhost:49152/api/workspace/upload" \
+  -H "Content-Type: application/json" \
+  -d "{\n    \"files\": [\n      {\n        \"name\": \"118259777_000.png\",\n        \"data\": \"${BASE64_DATA}\"\n      }\n    ]\n  }"
+```
+
+### Upload Response (example)
+
+```
+{
+  "success": true,
+  "uploadedFiles": [
+    {
+      "id": "<file-id>",
+      "name": "118259777_000.png",
+      "workspacePath": "/data/118259777_000.png",
+      "width": 1024,
+      "height": 1024
+    }
+  ]
+}
+```
+
+Use `uploadedFiles[0].workspacePath` as `fileInputs[].filePath` in the execute call.
+
 ## Invoke Workflow (First Example)
 
 Workflow name: `单图图像反推工作流_api`
