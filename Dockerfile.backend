@@ -38,7 +38,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY requirements.txt ./
 COPY runninghub_cli ./runninghub_cli
 
-RUN python3 -m pip install --no-cache-dir -r requirements.txt
+RUN python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 USER nextjs
 
