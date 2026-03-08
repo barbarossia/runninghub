@@ -38,10 +38,7 @@ async function loadWorkflowDefinition(
 
 	if (workflowId.startsWith("local_")) {
 		const localWorkflowPath = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"local-workflows",
+			getWorkspaceDir("local-workflows"),
 			`${workflowId}.json`,
 		);
 		const localWorkflowContent = await fs.readFile(
@@ -57,10 +54,7 @@ async function loadWorkflowDefinition(
 	}
 
 	const workflowPath = path.join(
-		process.env.HOME || "~",
-		"Downloads",
-		"workspace",
-		"workflows",
+		getWorkspaceDir("workflows"),
 		`${workflowId}.json`,
 	);
 	const workflowContent = await fs.readFile(workflowPath, "utf-8");
@@ -92,10 +86,7 @@ export async function POST(request: NextRequest) {
 
 		// Load complex workflow
 		const workflowPath = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"complex-workflows",
+			getWorkspaceDir("complex-workflows"),
 			`${body.complexWorkflowId}.json`,
 		);
 

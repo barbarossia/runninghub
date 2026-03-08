@@ -35,8 +35,7 @@ export async function GET(
 
 		const fs = await import("fs/promises");
 		const path = await import("path");
-		const os = await import("os");
-		const homeDir = os.homedir();
+		const workspaceRoot = getWorkspaceDir("");
 
 		const hasStructuredInputs = (inputs?: Record<string, any>) => {
 			if (!inputs || typeof inputs !== "object") return false;
@@ -141,12 +140,7 @@ export async function GET(
 			if (step.status === "running" && step.jobId) {
 				// Check job status
 				try {
-					const jobDir = path.join(
-						homeDir,
-						"Downloads",
-						"workspace",
-						step.jobId,
-					);
+				const jobDir = getWorkspaceDir(step.jobId);
 					const jobFile = path.join(jobDir, "job.json");
 
 					const jobContent = await fs.readFile(jobFile, "utf-8");
@@ -195,9 +189,7 @@ export async function GET(
 		// Save updated execution if changes were made
 		if (needsUpdate) {
 			const executionDir = path.join(
-				homeDir,
-				"Downloads",
-				"workspace",
+				workspaceRoot,
 				"complex-executions",
 				executionId,
 			);
