@@ -14,6 +14,11 @@ http://192.168.1.63:49152
 Content-Type: application/json
 ```
 
+## Task State Location
+
+Task state is stored under `${WORKSPACE_PATH}/runninghub-tasks` (configured via `WORKSPACE_PATH`).
+Restart the backend process after changing `WORKSPACE_PATH`.
+
 ## API Info (Usage)
 
 | Purpose | Method | Path |
@@ -82,4 +87,26 @@ curl "http://192.168.1.63:49152/api/workflow/nodes?workflowId=<workflow-id>"
 
 ```
 curl "http://192.168.1.63:49152/api/workspace/jobs"
+```
+
+## Latest API Test Run (2026-03-08)
+
+### GET /api/workflow/list
+
+```
+success: true
+count: 32
+includes: workflow_1768654339955_xxsbhdk22 (单图图像反推工作流_api)
+```
+
+### GET /api/workflow/nodes?workflowId=workflow_1768654339955_xxsbhdk22
+
+```
+{"workflowId":"workflow_1768654339955_xxsbhdk22","nodes":[],"count":0}
+```
+
+### POST /api/workspace/execute
+
+```
+{"success":false,"error":"ENOENT: no such file or directory, open '/app/.next/cache/runninghub-tasks/workspace_job_1772943161612_772eff6b.json'"}
 ```
