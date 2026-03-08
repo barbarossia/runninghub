@@ -38,7 +38,7 @@ Currently, the API captures CLI output and logs it to `writeLog`.
   - `print_error` -> `writeLog(msg, 'error', taskId, 'cli')`
 
 ## 3. Storage & Retrieval
-- **Persistence:** All logs are stored in `.next/cache/runninghub-logs/process.log` (local file).
+- **Persistence:** All logs are stored in `${WORKSPACE_PATH}/runninghub-logs/process.log` (local file).
 - **Viewing:** `ConsoleViewer` component polls `/api/logs` to show the combined stream.
 - **Filtering:** Add a "Source" filter (UI/API/CLI) to the `ConsoleViewer`.
 

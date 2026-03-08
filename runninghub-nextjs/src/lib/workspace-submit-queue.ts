@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 export interface SubmitQueueItem {
 	jobId: string;
@@ -13,8 +14,8 @@ interface SubmitQueueState {
 	queue: SubmitQueueItem[];
 }
 
-const QUEUE_DIR = path.join(process.cwd(), ".next/cache");
-const QUEUE_PATH = path.join(QUEUE_DIR, "runninghub-submit-queue.json");
+const QUEUE_DIR = getWorkspaceDir("runninghub-queue");
+const QUEUE_PATH = path.join(QUEUE_DIR, "submit-queue.json");
 
 let cachedState: SubmitQueueState | null = null;
 let loadPromise: Promise<SubmitQueueState> | null = null;
