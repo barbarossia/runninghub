@@ -63,7 +63,7 @@ export function JobInputEditor({
 
 	// Validate file existence
 	// For job files: check if file is either in mediaFiles OR exists in job folder
-	// Job folder files (~/Downloads/workspace/jobId/*) are valid even if not in mediaFiles
+	// Job folder files (${WORKSPACE_PATH}/jobId/*) are valid even if not in mediaFiles
 	useEffect(() => {
 		const validateFiles = async () => {
 			const errors: Record<string, string> = {};

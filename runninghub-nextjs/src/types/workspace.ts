@@ -351,7 +351,7 @@ export interface JobResult {
 		fileName?: string;
 		fileType?: "text" | "image" | "video";
 		fileSize?: number;
-		workspacePath?: string; // Path in ~/Downloads/workspace/{jobId}/result/
+		workspacePath?: string; // Path in ${WORKSPACE_PATH}/{jobId}/result/
 	}>;
 	summary?: string;
 
