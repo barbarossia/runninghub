@@ -1,7 +1,10 @@
 import fs from "fs/promises";
 import path from "path";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
-const TASK_DIR = path.join(process.cwd(), ".next/cache/runninghub-tasks");
+function resolveTaskDir() {
+	return getWorkspaceDir("runninghub-tasks");
+}
 
 export interface TaskState {
 	taskId: string;
@@ -17,14 +20,14 @@ export interface TaskState {
 
 async function ensureDir() {
 	try {
-		await fs.mkdir(TASK_DIR, { recursive: true });
+		await fs.mkdir(resolveTaskDir(), { recursive: true });
 	} catch (error) {
 		// Ignore
 	}
 }
 
 function getTaskPath(taskId: string) {
-	return path.join(TASK_DIR, `${taskId}.json`);
+	return path.join(resolveTaskDir(), `${taskId}.json`);
 }
 
 export async function initTask(taskId: string, totalImages: number) {
