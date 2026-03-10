@@ -238,6 +238,7 @@ export async function POST(request: NextRequest) {
 			body.textInputs || {},
 			body.deleteSourceFiles || false,
 			env,
+			body.instanceType,
 			body.seriesId,
 		);
 
@@ -441,6 +442,7 @@ async function startQueuedJob(jobId: string, taskId: string) {
 		job.textInputs || {},
 		job.deleteSourceFiles,
 		env,
+		undefined,
 		job.seriesId,
 	);
 }
@@ -1392,14 +1394,15 @@ async function updateComplexExecutionForJob(
 
 async function processWorkflowInBackground(
 	taskId: string,
-	jobId: string,
-	workflowId: string,
-	fileInputs: FileInputAssignment[],
-	textInputs: Record<string, string>,
-	deleteSourceFiles: boolean,
-	env: NodeJS.ProcessEnv,
-	seriesId?: string,
-) {
+		jobId: string,
+		workflowId: string,
+		fileInputs: FileInputAssignment[],
+		textInputs: Record<string, string>,
+		deleteSourceFiles: boolean,
+		env: NodeJS.ProcessEnv,
+		requestedInstanceType: ExecuteJobRequest["instanceType"],
+		seriesId?: string,
+	) {
 	try {
 		await writeLog(`=== WORKFLOW JOB STARTED: ${taskId} ===`, "info", taskId);
 		await writeLog(
@@ -1537,6 +1540,8 @@ async function processWorkflowInBackground(
 		// Before executing CLI, get workflow info
 		const workflow = await getWorkflowById(workflowId);
 		const executionType = workflow?.executionType || "ai-app"; // Default to ai-app for backward compatibility
+		const resolvedInstanceType =
+			requestedInstanceType || workflow?.instanceType || "standard";
 		await writeLog(`Execution type: ${executionType}`, "info", taskId);
 		const localOperation = workflow?.localOperation;
 
@@ -2070,6 +2075,10 @@ async function processWorkflowInBackground(
 		// Local commands (convert-video, etc.) don't support --workflow-id
 		if (env.RUNNINGHUB_WORKFLOW_ID && executionType !== "local") {
 			args.push("--workflow-id", env.RUNNINGHUB_WORKFLOW_ID);
+		}
+
+		if (executionType !== "local" && resolvedInstanceType === "plus") {
+			args.push("--instance-type", "plus");
 		}
 
 		// Add common flags

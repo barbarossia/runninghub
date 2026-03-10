@@ -398,6 +398,7 @@ export async function POST(request: NextRequest) {
 					textInputs: mergedTextInputs,
 					folderPath: baseWorkspaceFolder,
 					deleteSourceFiles: resolvedDeleteSourceFiles,
+					instanceType: nextWorkflow?.instanceType,
 					seriesId: body.executionId, // Identify as part of complex workflow
 				}),
 			},

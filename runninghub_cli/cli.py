@@ -22,6 +22,12 @@ from .utils import (
 )
 
 
+def normalize_instance_type(value: Optional[str]) -> Optional[str]:
+    if value == "plus":
+        return "plus"
+    return None
+
+
 # ============================================================================
 # Workflow Field Name Detection from JSON
 # ============================================================================
@@ -230,8 +236,16 @@ def upload(ctx, file_path):
     type=click.Choice(["STRING", "IMAGE", "LIST"]),
     help="Input type (default: STRING)",
 )
+@click.option(
+    "--instance-type",
+    "instance_type",
+    type=click.Choice(["standard", "plus"]),
+    default="standard",
+    show_default=True,
+    help="Instance type for task execution",
+)
 @click.pass_context
-def run(ctx, node, input_value, input_type):
+def run(ctx, node, input_value, input_type, instance_type):
     """Submit a task to RunningHub."""
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
@@ -247,7 +261,11 @@ def run(ctx, node, input_value, input_type):
         }
 
         print_info(f"Submitting task to node: {node}")
-        task_id = client.submit_task(cfg.workflow_id, [node_config])
+        task_id = client.submit_task(
+            cfg.workflow_id,
+            [node_config],
+            instance_type=normalize_instance_type(instance_type),
+        )
 
         print_success(f"Task submitted successfully!")
         print(f"Task ID: {task_id}")
@@ -366,6 +384,14 @@ def wait(ctx, task_id, timeout, poll_interval, output_json, no_download):
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
 @click.option("--workflow-id", help="Override workflow ID from configuration")
+@click.option(
+    "--instance-type",
+    "instance_type",
+    type=click.Choice(["standard", "plus"]),
+    default="standard",
+    show_default=True,
+    help="Instance type for task execution",
+)
 @click.pass_context
 def process(
     ctx,
@@ -377,6 +403,7 @@ def process(
     no_cleanup,
     params,
     workflow_id,
+    instance_type,
 ):
     """Upload a file and process it in one command."""
     source_file_path = file_path
@@ -431,7 +458,11 @@ def process(
             except Exception as e:
                 print_error(f"Failed to parse parameter '{param}': {e}")
 
-        task_id = client.submit_task(active_workflow_id, node_configs)
+        task_id = client.submit_task(
+            active_workflow_id,
+            node_configs,
+            instance_type=normalize_instance_type(instance_type),
+        )
         if output_json:
             print(json.dumps({"taskId": task_id, "status": "submitted"}))
         else:
@@ -525,9 +556,25 @@ def process(
     "--workflow-id",
     help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)",
 )
+@click.option(
+    "--instance-type",
+    "instance_type",
+    type=click.Choice(["standard", "plus"]),
+    default="standard",
+    show_default=True,
+    help="Instance type for task execution",
+)
 @click.pass_context
 def process_multiple(
-    ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id
+    ctx,
+    images,
+    params,
+    workflow_json,
+    timeout,
+    output_json,
+    no_download,
+    workflow_id,
+    instance_type,
 ):
     """Process multiple files in one workflow."""
     cfg = ctx.obj["config"]
@@ -641,7 +688,11 @@ def process_multiple(
         print_info(
             f"Submitting task to workflow {active_workflow_id} with multiple inputs..."
         )
-        task_id = client.submit_task(active_workflow_id, node_configs)
+        task_id = client.submit_task(
+            active_workflow_id,
+            node_configs,
+            instance_type=normalize_instance_type(instance_type),
+        )
         if output_json:
             print(json.dumps({"taskId": task_id, "status": "submitted"}))
         else:
@@ -692,9 +743,25 @@ def process_multiple(
     "--workflow-id",
     help="Override workflow ID from configuration (or use sourceWorkflowId from --workflow)",
 )
+@click.option(
+    "--instance-type",
+    "instance_type",
+    type=click.Choice(["standard", "plus"]),
+    default="standard",
+    show_default=True,
+    help="Instance type for task execution",
+)
 @click.pass_context
 def run_workflow(
-    ctx, images, params, workflow_json, timeout, output_json, no_download, workflow_id
+    ctx,
+    images,
+    params,
+    workflow_json,
+    timeout,
+    output_json,
+    no_download,
+    workflow_id,
+    instance_type,
 ):
     """Run a workflow using /task/openapi/create endpoint.
 
@@ -829,7 +896,11 @@ def run_workflow(
             print_info(
                 f"Submitting task to workflow {active_workflow_id} with multiple inputs..."
             )
-        task_id = client.submit_workflow_task(active_workflow_id, node_configs)
+        task_id = client.submit_workflow_task(
+            active_workflow_id,
+            node_configs,
+            instance_type=normalize_instance_type(instance_type),
+        )
         if output_json:
             print(json.dumps({"taskId": task_id, "status": "submitted"}))
         else:
@@ -869,8 +940,18 @@ def run_workflow(
     "--no-download", is_flag=True, help="Skip automatic download of output files"
 )
 @click.option("--workflow-id", help="Override workflow ID from configuration")
+@click.option(
+    "--instance-type",
+    "instance_type",
+    type=click.Choice(["standard", "plus"]),
+    default="standard",
+    show_default=True,
+    help="Instance type for task execution",
+)
 @click.pass_context
-def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_id):
+def run_text_workflow(
+    ctx, params, timeout, output_json, no_download, workflow_id, instance_type
+):
     """Run a workflow using text/number parameters only (no image input).
 
     This command submits workflows that only require text or numeric parameters,
@@ -980,7 +1061,11 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
         # Step 2: Submit task using workflow endpoint
         if not output_json:
             print_info(f"Submitting task to workflow {active_workflow_id}...")
-        task_id = client.submit_workflow_task(active_workflow_id, node_configs)
+        task_id = client.submit_workflow_task(
+            active_workflow_id,
+            node_configs,
+            instance_type=normalize_instance_type(instance_type),
+        )
         if output_json:
             print(json.dumps({"taskId": task_id, "status": "submitted"}))
         else:
@@ -1046,6 +1131,14 @@ def run_text_workflow(ctx, params, timeout, output_json, no_download, workflow_i
 @click.option(
     "--max-concurrent", default=1, help="Maximum concurrent processes (default: 1)"
 )
+@click.option(
+    "--instance-type",
+    "instance_type",
+    type=click.Choice(["standard", "plus"]),
+    default="standard",
+    show_default=True,
+    help="Instance type for task execution",
+)
 @click.pass_context
 def batch(
     ctx,
@@ -1058,6 +1151,7 @@ def batch(
     no_cleanup,
     max_concurrent,
     params,
+    instance_type,
 ):
     """Batch process all files in a directory."""
     cfg = ctx.obj["config"]
@@ -1130,7 +1224,11 @@ def batch(
                 except Exception as e:
                     print_error(f"Failed to parse parameter '{param}': {e}")
 
-            task_id = client.submit_task(cfg.workflow_id, node_configs)
+            task_id = client.submit_task(
+                cfg.workflow_id,
+                node_configs,
+                instance_type=normalize_instance_type(instance_type),
+            )
             print_success(f"Task submitted successfully! Task ID: {task_id}")
 
             # Step 3: Wait for completion
@@ -1225,8 +1323,26 @@ def batch(
 @click.option(
     "--no-cleanup", is_flag=True, help="Skip automatic deletion of source files"
 )
+@click.option(
+    "--instance-type",
+    "instance_type",
+    type=click.Choice(["standard", "plus"]),
+    default="standard",
+    show_default=True,
+    help="Instance type for task execution",
+)
 @click.pass_context
-def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, params):
+def folder(
+    ctx,
+    node,
+    pattern,
+    timeout,
+    output_json,
+    no_download,
+    no_cleanup,
+    params,
+    instance_type,
+):
     """Process all images from the configured folder."""
     cfg = ctx.obj["config"]
     client = RunningHubClient(cfg.api_key, cfg.api_host)
@@ -1305,7 +1421,11 @@ def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, pa
                 except Exception as e:
                     print_error(f"Failed to parse parameter '{param}': {e}")
 
-            task_id = client.submit_task(cfg.workflow_id, node_configs)
+            task_id = client.submit_task(
+                cfg.workflow_id,
+                node_configs,
+                instance_type=normalize_instance_type(instance_type),
+            )
             print_success(f"Task submitted successfully! Task ID: {task_id}")
 
             # Step 3: Wait for completion
@@ -1380,7 +1500,9 @@ def folder(ctx, node, pattern, timeout, output_json, no_download, no_cleanup, pa
 @cli.command()
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option("--fps", type=int, help="Target frames per second")
-@click.option("--crf", type=int, default=20, help="Constant Rate Factor (quality, 0-51)")
+@click.option(
+    "--crf", type=int, default=20, help="Constant Rate Factor (quality, 0-51)"
+)
 @click.option(
     "--preset",
     type=click.Choice(
