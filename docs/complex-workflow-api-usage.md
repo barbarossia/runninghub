@@ -88,8 +88,11 @@ curl -X POST "http://localhost:49152/api/workspace/complex-workflow/save" \
 
 Response:
 
-```
-{"success":true,"workflowId":"complex_1730000000000_demo"}
+```json
+{
+  "success": true,
+  "workflowId": "complex_1730000000000_demo"
+}
 ```
 
 Validation rules:
@@ -110,8 +113,17 @@ curl "http://localhost:49152/api/workspace/complex-workflow/list"
 
 Response:
 
-```
-{"success":true,"workflows":[{"id":"complex_1730000000000_demo","name":"Demo Complex Workflow","steps":[]}]} 
+```json
+{
+  "success": true,
+  "workflows": [
+    {
+      "id": "complex_1730000000000_demo",
+      "name": "Demo Complex Workflow",
+      "steps": []
+    }
+  ]
+}
 ```
 
 ## Get / Update / Delete Complex Workflow
@@ -124,8 +136,15 @@ curl "http://localhost:49152/api/workspace/complex-workflow/complex_173000000000
 
 Response:
 
-```
-{"success":true,"workflow":{"id":"complex_1730000000000_demo","name":"Demo Complex Workflow","steps":[]}}
+```json
+{
+  "success": true,
+  "workflow": {
+    "id": "complex_1730000000000_demo",
+    "name": "Demo Complex Workflow",
+    "steps": []
+  }
+}
 ```
 
 ### PUT /api/workspace/complex-workflow/<workflowId>
@@ -144,8 +163,11 @@ curl -X PUT "http://localhost:49152/api/workspace/complex-workflow/complex_17300
 
 Response:
 
-```
-{"success":true,"workflowId":"complex_1730000000000_demo"}
+```json
+{
+  "success": true,
+  "workflowId": "complex_1730000000000_demo"
+}
 ```
 
 ### DELETE /api/workspace/complex-workflow/<workflowId>
@@ -156,8 +178,11 @@ curl -X DELETE "http://localhost:49152/api/workspace/complex-workflow/complex_17
 
 Response:
 
-```
-{"success":true,"message":"Complex workflow deleted"}
+```json
+{
+  "success": true,
+  "message": "Complex workflow deleted"
+}
 ```
 
 ## Execute Complex Workflow
@@ -189,8 +214,13 @@ curl -X POST "http://localhost:49152/api/workspace/complex-workflow/execute" \
 
 Response:
 
-```
-{"success":true,"executionId":"complex_exec_1730000000000_demo","jobId":"job_1772953613029_593e5e39","message":"Complex workflow execution started"}
+```json
+{
+  "success": true,
+  "executionId": "complex_exec_1730000000000_demo",
+  "jobId": "job_1772953613029_593e5e39",
+  "message": "Complex workflow execution started"
+}
 ```
 
 Notes:
@@ -220,8 +250,12 @@ curl -X POST "http://localhost:49152/api/workspace/complex-workflow/continue" \
 
 Response:
 
-```
-{"success":true,"jobId":"job_1772953613029_593e5e39","message":"Step 2 started"}
+```json
+{
+  "success": true,
+  "jobId": "job_1772953613029_593e5e39",
+  "message": "Step 2 started"
+}
 ```
 
 Notes:
@@ -239,8 +273,18 @@ curl "http://localhost:49152/api/workspace/complex-workflow/execution/list"
 
 Response:
 
-```
-{"success":true,"executions":[{"id":"complex_exec_1730000000000_demo","complexWorkflowId":"complex_1730000000000_demo","status":"running","currentStep":1}]}
+```json
+{
+  "success": true,
+  "executions": [
+    {
+      "id": "complex_exec_1730000000000_demo",
+      "complexWorkflowId": "complex_1730000000000_demo",
+      "status": "running",
+      "currentStep": 1
+    }
+  ]
+}
 ```
 
 ## Get Execution Status
@@ -253,8 +297,96 @@ curl "http://localhost:49152/api/workspace/complex-workflow/execution/complex_ex
 
 Response:
 
+```json
+{
+  "success": true,
+  "execution": {
+    "id": "complex_exec_1730000000000_demo",
+    "status": "running",
+    "currentStep": 1,
+    "steps": []
+  }
+}
 ```
-{"success":true,"execution":{"id":"complex_exec_1730000000000_demo","status":"running","currentStep":1,"steps":[]}}
+
+## Poll Execution Until Complete
+
+The UI polls every 2 seconds. For CLI usage, keep polling until the execution
+status becomes `completed` or `failed`. If the status is `paused`, call the
+continue API using the current step number and then keep polling.
+
+Polling commands (copy/paste):
+
+Execute complex workflow:
+
+```bash
+curl -X POST "http://localhost:49152/api/workspace/complex-workflow/execute" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "complexWorkflowId": "complex_1769762016351_1d75febd",
+    "autoContinue": true,
+    "initialParameters": {
+      "fileInputs": [
+        {
+          "parameterId": "local_1769695285543_2a4b3725_file",
+          "filePath": "/data/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+          "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+          "fileSize": 5554491,
+          "fileType": "video",
+          "valid": true
+        }
+      ],
+      "textInputs": {},
+      "deleteSourceFiles": false
+    }
+  }'
+```
+
+Continue step 3 after workflow file was available:
+
+```bash
+curl -X POST "http://localhost:49152/api/workspace/complex-workflow/continue" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "executionId": "exec_1773146459417_0ad7f885",
+    "stepNumber": 3,
+    "parameters": {
+      "fileInputs": [],
+      "textInputs": {},
+      "deleteSourceFiles": false
+    }
+  }'
+```
+
+Final execution status:
+
+```bash
+curl "http://localhost:49152/api/workspace/complex-workflow/execution/exec_1773146459417_0ad7f885"
+```
+
+Example (bash + python):
+
+```bash
+EXEC_ID="complex_exec_1730000000000_demo"
+
+while true; do
+  resp=$(curl -s "http://localhost:49152/api/workspace/complex-workflow/execution/${EXEC_ID}")
+  status=$(printf '%s' "$resp" | python -c 'import sys,json; print(json.load(sys.stdin)["execution"]["status"])')
+  current_step=$(printf '%s' "$resp" | python -c 'import sys,json; print(json.load(sys.stdin)["execution"]["currentStep"])')
+
+  if [ "$status" = "completed" ] || [ "$status" = "failed" ]; then
+    printf '%s' "$resp" | python -m json.tool
+    break
+  fi
+
+  if [ "$status" = "paused" ]; then
+    curl -s -X POST "http://localhost:49152/api/workspace/complex-workflow/continue" \
+      -H "Content-Type: application/json" \
+      -d "{\"executionId\":\"${EXEC_ID}\",\"stepNumber\":${current_step},\"parameters\":{\"fileInputs\":[],\"textInputs\":{},\"deleteSourceFiles\":false}}" > /dev/null
+  fi
+
+  sleep 2
+done
 ```
 
 Notes:
@@ -270,9 +402,388 @@ curl -X POST "http://localhost:49152/api/workspace/complex-workflow/execution/co
 
 Response:
 
+```json
+{
+  "success": true,
+  "message": "Execution paused"
+}
 ```
-{"success":true,"message":"Execution paused"}
+
+## Tested Run (2026-03-10)
+
+Workflow: `短视频生成一键版`
+Input video: `/Users/barbarossia/Downloads/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4`
+
+### 1) Upload video
+
+Request:
+
 ```
+curl -X POST "http://localhost:49152/api/workspace/upload" \
+  -F "files=@/Users/barbarossia/Downloads/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "uploadedFiles": [
+    {
+      "id": "c7dd0b779950bccc6dacb7033787d4d6",
+      "name": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+      "workspacePath": "/Users/barbarossia/Downloads/workspace/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+      "width": 544,
+      "height": 704
+    }
+  ]
+}
+```
+
+### 2) Execute complex workflow
+
+Request:
+
+```
+curl -X POST "http://localhost:49152/api/workspace/complex-workflow/execute" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "complexWorkflowId": "complex_1769762016351_1d75febd",
+    "autoContinue": true,
+    "initialParameters": {
+      "fileInputs": [
+        {
+          "parameterId": "local_1769695285543_2a4b3725_file",
+          "filePath": "/Users/barbarossia/Downloads/workspace/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+          "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+          "fileSize": 5554491,
+          "fileType": "video",
+          "valid": true
+        }
+      ],
+      "textInputs": {},
+      "deleteSourceFiles": false
+    }
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "executionId": "exec_1773144181888_4da483ad",
+  "jobId": "job_1773144181943_d7b8874b",
+  "message": "Complex workflow execution started"
+}
+```
+
+### 3) Execution status (immediate)
+
+Request:
+
+```
+curl "http://localhost:49152/api/workspace/complex-workflow/execution/exec_1773144181888_4da483ad"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "execution": {
+    "complexWorkflowId": "complex_1769762016351_1d75febd",
+    "name": "短视频生成一键版",
+    "status": "running",
+    "currentStep": 3,
+    "autoContinue": true,
+    "baseUrl": "http://localhost:49152",
+    "steps": [
+      {
+        "stepNumber": 1,
+        "workflowId": "local_1769695285543_2a4b3725",
+        "jobId": "job_1773144181943_d7b8874b",
+        "status": "completed",
+        "inputs": {
+          "fileInputs": [
+            {
+              "parameterId": "local_1769695285543_2a4b3725_file",
+              "filePath": "/Users/barbarossia/Downloads/workspace/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+              "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+              "fileSize": 5554491,
+              "fileType": "video",
+              "valid": true
+            }
+          ],
+          "textInputs": {},
+          "deleteSourceFiles": false
+        },
+        "startedAt": 1773144181950,
+        "completedAt": 1773144182627,
+        "outputs": {
+          "outputs": [
+            {
+              "type": "file",
+              "path": "/Users/barbarossia/Downloads/workspace/job_1773144181943_d7b8874b/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileType": "video",
+              "workspacePath": "job_1773144181943_d7b8874b/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4"
+            }
+          ],
+          "textOutputs": []
+        },
+        "workflowName": "视频压缩"
+      },
+      {
+        "stepNumber": 2,
+        "workflowId": "local_1769761819812_695997f7",
+        "jobId": "job_1773144182735_eacb2573",
+        "status": "completed",
+        "inputs": {
+          "fileInputs": [
+            {
+              "parameterId": "local_1769761819812_695997f7_file",
+              "filePath": "/Users/barbarossia/Downloads/workspace/job_1773144181943_d7b8874b/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileSize": 0,
+              "fileType": "video",
+              "valid": true
+            }
+          ],
+          "textInputs": {
+            "local_1769761819812_695997f7_mode": "from-width",
+            "local_1769761819812_695997f7_targetWidth": "720",
+            "local_1769761819812_695997f7_targetHeight": "",
+            "local_1769761819812_695997f7_rounding": "round"
+          },
+          "deleteSourceFiles": false
+        },
+        "startedAt": 1773144182738,
+        "completedAt": 1773144182902,
+        "outputs": {
+          "outputs": [
+            {
+              "type": "text",
+              "path": "/Users/barbarossia/Downloads/workspace/job_1773144182735_eacb2573/result/aspect_height.txt",
+              "fileName": "aspect_height.txt",
+              "fileType": "text",
+              "workspacePath": "job_1773144182735_eacb2573/result/aspect_height.txt"
+            },
+            {
+              "type": "text",
+              "path": "/Users/barbarossia/Downloads/workspace/job_1773144182735_eacb2573/result/aspect_width.txt",
+              "fileName": "aspect_width.txt",
+              "fileType": "text",
+              "workspacePath": "job_1773144182735_eacb2573/result/aspect_width.txt"
+            }
+          ],
+          "textOutputs": [
+            {
+              "fileName": "aspect_height.txt",
+              "filePath": "/Users/barbarossia/Downloads/workspace/job_1773144182735_eacb2573/result/aspect_height.txt",
+              "content": {
+                "original": "933"
+              },
+              "autoTranslated": false
+            },
+            {
+              "fileName": "aspect_width.txt",
+              "filePath": "/Users/barbarossia/Downloads/workspace/job_1773144182735_eacb2573/result/aspect_width.txt",
+              "content": {
+                "original": "720"
+              },
+              "autoTranslated": false
+            }
+          ]
+        },
+        "workflowName": "计算视频比例"
+      },
+      {
+        "stepNumber": 3,
+        "workflowId": "workflow_1768471112335_0amgxobq4",
+        "jobId": "job_1773144182964_0d7ddc97",
+        "status": "running",
+        "inputs": {
+          "fileInputs": [
+            {
+              "parameterId": "param_22_video",
+              "filePath": "/Users/barbarossia/Downloads/workspace/job_1773144181943_d7b8874b/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileSize": 0,
+              "fileType": "video",
+              "valid": true
+            }
+          ],
+          "textInputs": {
+            "param_46_value": "720",
+            "param_47_value": "933"
+          },
+          "deleteSourceFiles": false
+        },
+        "startedAt": 1773144182967,
+        "workflowName": "video_wan2_2_数字人工作流2-放大_api"
+      },
+      {
+        "stepNumber": 4,
+        "workflowId": "local_1770210347180_bfd5ed75",
+        "jobId": "",
+        "status": "pending",
+        "inputs": {
+          "fileInputs": [],
+          "textInputs": {},
+          "deleteSourceFiles": false
+        }
+      }
+    ],
+    "id": "exec_1773144181888_4da483ad",
+    "createdAt": 1773144181888
+  }
+}
+```
+
+## Tested Run (Docker, 2026-03-10)
+
+Workspace: `/data` (host: `/Users/barbarossia/Downloads/test`)
+Workflow: `短视频生成一键版`
+Input video: `/Users/barbarossia/Downloads/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4`
+
+### 1) Upload video
+
+Request:
+
+```
+curl -X POST "http://localhost:49152/api/workspace/upload" \
+  -F "files=@/Users/barbarossia/Downloads/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "uploadedFiles": [
+    {
+      "id": "efcbdc491e484e187ed36cc9bca73ef3",
+      "name": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+      "workspacePath": "/data/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+      "width": 544,
+      "height": 704
+    }
+  ]
+}
+```
+
+### 2) Execute complex workflow
+
+Request:
+
+```
+curl -X POST "http://localhost:49152/api/workspace/complex-workflow/execute" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "complexWorkflowId": "complex_1769762016351_1d75febd",
+    "autoContinue": true,
+    "initialParameters": {
+      "fileInputs": [
+        {
+          "parameterId": "local_1769695285543_2a4b3725_file",
+          "filePath": "/data/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+          "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+          "fileSize": 5554491,
+          "fileType": "video",
+          "valid": true
+        }
+      ],
+      "textInputs": {},
+      "deleteSourceFiles": false
+    }
+  }'
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "executionId": "exec_1773146459417_0ad7f885",
+  "jobId": "job_1773146459437_a53e6feb",
+  "message": "Complex workflow execution started"
+}
+```
+
+### 3) Execution status (immediate)
+
+Request:
+
+```
+curl "http://localhost:49152/api/workspace/complex-workflow/execution/exec_1773146459417_0ad7f885"
+```
+
+Response (truncated):
+
+```json
+{
+  "success": true,
+  "execution": {
+    "complexWorkflowId": "complex_1769762016351_1d75febd",
+    "name": "短视频生成一键版",
+    "status": "running",
+    "currentStep": 3,
+    "autoContinue": true,
+    "baseUrl": "http://0.0.0.0:3000",
+    "steps": [
+      {
+        "stepNumber": 1,
+        "workflowId": "local_1769695285543_2a4b3725",
+        "jobId": "job_1773146459437_a53e6feb",
+        "status": "completed",
+        "inputs": {
+          "fileInputs": [
+            {
+              "parameterId": "local_1769695285543_2a4b3725_file",
+              "filePath": "/data/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+              "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4",
+              "fileSize": 5554491,
+              "fileType": "video",
+              "valid": true
+            }
+          ],
+          "textInputs": {},
+          "deleteSourceFiles": false
+        },
+        "startedAt": 1773146459449,
+        "completedAt": 1773146460092,
+        "outputs": {
+          "outputs": [
+            {
+              "type": "file",
+              "path": "/data/job_1773146459437_a53e6feb/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileName": "bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4",
+              "fileType": "video",
+              "workspacePath": "job_1773146459437_a53e6feb/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4"
+            }
+          ],
+          "textOutputs": []
+        },
+        "workflowName": "视频压缩"
+      },
+      "..."
+    ]
+  }
+}
+```
+
+### 4) Final execution status (failed)
+
+Response (truncated):
+
+```
+{"success":true,"execution":{"complexWorkflowId":"complex_1769762016351_1d75febd","name":"短视频生成一键版","status":"failed","currentStep":3,"autoContinue":true,"baseUrl":"http://0.0.0.0:3000","steps":[{"stepNumber":1,"workflowId":"local_1769695285543_2a4b3725","jobId":"job_1773146459437_a53e6feb","status":"completed","inputs":{"fileInputs":[{"parameterId":"local_1769695285543_2a4b3725_file","filePath":"/data/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4","fileName":"bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da.mp4","fileSize":5554491,"fileType":"video","valid":true}],"textInputs":{},"deleteSourceFiles":false},"startedAt":1773146459449,"completedAt":1773146460092,"outputs":{"outputs":[{"type":"file","path":"/data/job_1773146459437_a53e6feb/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4","fileName":"bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4","fileType":"video","workspacePath":"job_1773146459437_a53e6feb/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4"}],"textOutputs":[]},"workflowName":"视频压缩"},{"stepNumber":2,"workflowId":"local_1769761819812_695997f7","jobId":"job_1773146460104_0806c033","status":"completed","inputs":{"fileInputs":[{"parameterId":"local_1769761819812_695997f7_file","filePath":"/data/job_1773146459437_a53e6feb/result/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4","fileName":"bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4","fileSize":0,"fileType":"video","valid":true}]}"textInputs":{"local_1769761819812_695997f7_mode":"from-width","local_1769761819812_695997f7_targetWidth":"720","local_1769761819812_695997f7_targetHeight":"","local_1769761819812_695997f7_rounding":"round"},"deleteSourceFiles":false},"startedAt":1773146460107,"completedAt":1773146460229,"outputs":{"outputs":[{"type":"text","path":"/data/job_1773146460104_0806c033/result/aspect_height.txt","fileName":"aspect_height.txt","fileType":"text","workspacePath":"job_1773146460104_0806c033/result/aspect_height.txt"},{"type":"text","path":"/data/job_1773146460104_0806c033/result/aspect_width.txt","fileName":"aspect_width.txt","fileType":"text","workspacePath":"job_1773146460104_0806c033/result/aspect_width.txt"}],"textOutputs":[{"fileName":"aspect_height.txt","filePath":"/data/job_1773146460104_0806c033/result/aspect_height.txt","content":{"original":"933"},"autoTranslated":false},{"fileName":"aspect_width.txt","filePath":"/data/job_1773146460104_0806c033/result/aspect_width.txt","content":{"original":"720"},"autoTranslated":false}]},"workflowName":"计算视频比例"},{"stepNumber":3,"workflowId":"workflow_1768471112335_0amgxobq4","jobId":"job_1773146460234_16e0bccf","status":"failed","inputs":{"fileInputs":[{"parameterId":"param_22_video","filePath":"/data/job_1773146460234_16e0bccf/bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4","fileName":"bea78fbc-b9b9-4fc9-9a0c-bc846f24c6da_converted.mp4","fileSize":0,"fileType":"video","valid":true}],"textInputs":{"param_46_value":"720","param_47_value":"933"},"deleteSourceFiles":false},"startedAt":1773146460237,"workflowName":"video_wan2_2_数字人工作流2-放大_api"}]}}
+```
+
+Notes:
+- Step 3 failed with `Exit code 1` in job status.
+- `process.log` shows `BrokenPipeError(32, 'Broken pipe')` during RunningHub execution for step 3.
 
 ## Tested Run (2026-03-08)
 
@@ -290,15 +801,26 @@ curl -X POST "http://localhost:49152/api/workspace/upload" \
 
 Response:
 
-```
-{"success":true,"uploadedFiles":[{"id":"6f1082fe0eab32ecf2fad511417e7703","name":"67ca02f1-e8f2-4e69-bb50-3ef79d7b1630.mp4","workspacePath":"/data/67ca02f1-e8f2-4e69-bb50-3ef79d7b1630.mp4","width":544,"height":704}]}
+```json
+{
+  "success": true,
+  "uploadedFiles": [
+    {
+      "id": "6f1082fe0eab32ecf2fad511417e7703",
+      "name": "67ca02f1-e8f2-4e69-bb50-3ef79d7b1630.mp4",
+      "workspacePath": "/data/67ca02f1-e8f2-4e69-bb50-3ef79d7b1630.mp4",
+      "width": 544,
+      "height": 704
+    }
+  ]
+}
 ```
 
 ### 2) Execute complex workflow
 
 Request:
 
-```
+```json
 {
   "complexWorkflowId": "complex_1769762016351_1d75febd",
   "autoContinue": true,
@@ -321,29 +843,46 @@ Request:
 
 Response:
 
-```
-{"success":true,"executionId":"exec_1772975636390_13699c74","jobId":"job_1772975636402_6c209cbc","message":"Complex workflow execution started"}
+```json
+{
+  "success": true,
+  "executionId": "exec_1772975636390_13699c74",
+  "jobId": "job_1772975636402_6c209cbc",
+  "message": "Complex workflow execution started"
+}
 ```
 
 ### 3) Continue step 3 after workflow file was available
 
 Request:
 
-```
-{"executionId":"exec_1772975636390_13699c74","stepNumber":2,"parameters":{"fileInputs":[],"textInputs":{},"deleteSourceFiles":false}}
+```json
+{
+  "executionId": "exec_1772975636390_13699c74",
+  "stepNumber": 2,
+  "parameters": {
+    "fileInputs": [],
+    "textInputs": {},
+    "deleteSourceFiles": false
+  }
+}
 ```
 
 Response:
 
-```
-{"success":true,"jobId":"job_1772975815396_bc55d10e","message":"Step 3 started"}
+```json
+{
+  "success": true,
+  "jobId": "job_1772975815396_bc55d10e",
+  "message": "Step 3 started"
+}
 ```
 
 ### 4) Final execution status
 
 Response:
 
-```
+```json
 {
   "success": true,
   "execution": {
@@ -436,13 +975,17 @@ Response:
             {
               "fileName": "aspect_height.txt",
               "filePath": "/data/job_1772975637993_410f9d96/result/aspect_height.txt",
-              "content": {"original": "933"},
+              "content": {
+                "original": "933"
+              },
               "autoTranslated": false
             },
             {
               "fileName": "aspect_width.txt",
               "filePath": "/data/job_1772975637993_410f9d96/result/aspect_width.txt",
-              "content": {"original": "720"},
+              "content": {
+                "original": "720"
+              },
               "autoTranslated": false
             }
           ]
