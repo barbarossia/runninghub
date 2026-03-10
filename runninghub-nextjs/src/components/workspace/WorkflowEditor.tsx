@@ -44,6 +44,7 @@ import type {
 	WorkflowInputParameter,
 	CliNode,
 	WorkflowExecutionType,
+	WorkflowInstanceType,
 } from "@/types/workspace";
 
 export interface WorkflowEditorProps {
@@ -105,6 +106,10 @@ export function WorkflowEditor({
 		WorkflowExecutionType | undefined
 	>(workflow?.executionType);
 
+	const [instanceType, setInstanceType] = useState<WorkflowInstanceType>(
+		workflow?.instanceType ?? "standard",
+	);
+
 	// Output configuration state
 	const [outputType, setOutputType] = useState<
 		"none" | "text" | "image" | "video" | "mixed"
@@ -123,6 +128,7 @@ export function WorkflowEditor({
 			setOutputType(workflow.output?.type || "none");
 			setOutputDescription(workflow.output?.description || "");
 			setExecutionType(workflow.executionType);
+			setInstanceType(workflow.instanceType ?? "standard");
 			// Reset template state when editing existing workflow
 			setSelectedWorkflowId("");
 			setCustomWorkflowId("");
@@ -136,6 +142,7 @@ export function WorkflowEditor({
 			setOutputType("none");
 			setOutputDescription("");
 			setExecutionType(undefined);
+			setInstanceType("standard");
 			setSelectedWorkflowId("");
 			setCustomWorkflowId("");
 			setTemplateLoaded(false);
@@ -493,6 +500,7 @@ export function WorkflowEditor({
 				? "template"
 				: workflow?.sourceType || "custom",
 			executionType,
+			instanceType,
 		};
 
 		// Save to workspace folder
@@ -530,6 +538,7 @@ export function WorkflowEditor({
 		outputDescription,
 		workflow,
 		templateLoaded,
+		instanceType,
 		onSave,
 	]);
 
@@ -595,6 +604,29 @@ export function WorkflowEditor({
 							<p className="text-xs text-gray-500 mt-1">
 								The numeric workflow ID from RunningHub URL (e.g., from
 								https://www.runninghub.cn/workflow/1980237776367083521)
+							</p>
+						</div>
+
+						<div>
+							<label htmlFor="instance-type" className="text-sm font-medium">
+								Instance Type
+							</label>
+							<Select
+								value={instanceType}
+								onValueChange={(value: WorkflowInstanceType) =>
+									setInstanceType(value)
+								}
+							>
+								<SelectTrigger className="mt-1">
+									<SelectValue placeholder="Select instance type" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="standard">Standard</SelectItem>
+									<SelectItem value="plus">Plus (48GB)</SelectItem>
+								</SelectContent>
+							</Select>
+							<p className="text-xs text-gray-500 mt-1">
+								Use Plus to run on 48GB VRAM instances.
 							</p>
 						</div>
 					</div>

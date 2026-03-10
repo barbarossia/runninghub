@@ -189,6 +189,8 @@ export interface WorkflowOutput {
  */
 export type WorkflowExecutionType = "ai-app" | "workflow" | "local";
 
+export type WorkflowInstanceType = "standard" | "plus";
+
 /**
  * Workflow configuration
  * Represents a user-configured workflow with input parameters
@@ -204,6 +206,7 @@ export interface Workflow {
 	sourceWorkflowId?: string; // RunningHub workflow ID (numeric ID from URL like "1980237776367083521")
 	sourceType?: "template" | "custom" | "local"; // How this workflow was created
 	executionType?: WorkflowExecutionType; // Which API endpoint to use ('ai-app' or 'workflow')
+	instanceType?: WorkflowInstanceType;
 	localOperation?: LocalWorkflowOperationType;
 	localConfig?: Record<string, any>;
 }
@@ -351,7 +354,7 @@ export interface JobResult {
 		fileName?: string;
 		fileType?: "text" | "image" | "video";
 		fileSize?: number;
-		workspacePath?: string; // Path in ~/Downloads/workspace/{jobId}/result/
+		workspacePath?: string; // Path in ${WORKSPACE_PATH}/{jobId}/result/
 	}>;
 	summary?: string;
 
@@ -455,6 +458,7 @@ export interface ExecuteJobRequest {
 	textInputs: Record<string, string>;
 	folderPath?: string;
 	deleteSourceFiles: boolean;
+	instanceType?: WorkflowInstanceType;
 	parentJobId?: string; // ID of job this was recreated from
 	seriesId?: string; // Groups related jobs
 }

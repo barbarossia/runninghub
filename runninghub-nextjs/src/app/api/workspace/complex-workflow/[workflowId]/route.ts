@@ -8,6 +8,7 @@ import {
 	loadComplexWorkflow,
 	updateComplexWorkflow,
 } from "@/lib/complex-workflow-utils";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 import type { ComplexWorkflow } from "@/types/workspace";
 
 export async function GET(
@@ -57,12 +58,7 @@ export async function DELETE(
 		const fs = await import("fs/promises");
 		const path = await import("path");
 
-		const workflowDir = path.join(
-			process.env.HOME || "~",
-			"Downloads",
-			"workspace",
-			"complex-workflows",
-		);
+		const workflowDir = getWorkspaceDir("complex-workflows");
 
 		const filePath = path.join(workflowDir, `${workflowId}.json`);
 

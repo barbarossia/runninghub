@@ -1207,6 +1207,7 @@ export default function WorkspacePage() {
 					textInputs: textInputs,
 					folderPath: selectedFolder?.folder_path,
 					deleteSourceFiles: deleteSourceFiles || false,
+					instanceType: workflow.instanceType,
 					parentJobId,
 					seriesId,
 				}),

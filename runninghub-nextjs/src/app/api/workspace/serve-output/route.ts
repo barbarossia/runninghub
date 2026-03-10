@@ -1,7 +1,7 @@
 /**
  * Output File Serve API
  * Serves output files from workspace job result directories
- * Directory structure: ~/Downloads/workspace/{jobId}/result/
+ * Directory structure: ${WORKSPACE_PATH}/{jobId}/result/
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 		}
 
 		// Security: Ensure path is within workspace directory
-		// Allowed: ~/Downloads/workspace/{jobId}/result/
+		// Allowed: ${WORKSPACE_PATH}/{jobId}/result/
 		const workspaceDir = getWorkspaceDir();
 		const resolvedPath = path.resolve(filePath);
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 		}
 
 		// Additional security: Ensure path contains a job ID folder and result subfolder
-		// Valid paths: ~/Downloads/workspace/{jobId}/result/{filename}
+		// Valid paths: ${WORKSPACE_PATH}/{jobId}/result/{filename}
 		const relativePath = path.relative(
 			path.resolve(workspaceDir),
 			resolvedPath,

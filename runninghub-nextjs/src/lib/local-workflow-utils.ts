@@ -6,16 +6,11 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import os from 'os';
 
 import type { LocalWorkflow } from '@/types/workspace';
+import { getWorkspaceDir } from '@/lib/workspace-path';
 
-const LOCAL_WORKFLOW_DIR = join(
-	os.homedir(),
-	'Downloads',
-	'workspace',
-	'local-workflows',
-);
+const LOCAL_WORKFLOW_DIR = getWorkspaceDir('local-workflows');
 
 export function generateLocalWorkflowId(): string {
 	return `local_${Date.now()}_${randomUUID().substring(0, 8)}`;

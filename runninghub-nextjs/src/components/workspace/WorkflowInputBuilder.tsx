@@ -216,7 +216,6 @@ export function WorkflowInputBuilder({
 				// Generate unique filename to prevent collisions in uploads folder
 				const timestamp = Date.now();
 				const uniqueName = `${timestamp}_${file.name}`;
-				const uploadPath = "~/Downloads/workspace/uploads";
 
 				// Upload
 				const response = await fetch("/api/workspace/upload", {
@@ -224,7 +223,6 @@ export function WorkflowInputBuilder({
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						files: [{ name: uniqueName, data: base64Data }],
-						workspacePath: uploadPath,
 					}),
 				});
 
@@ -252,7 +250,7 @@ export function WorkflowInputBuilder({
 					};
 
 					console.log(
-						`[Direct Upload] ${uploadedFile.name} uploaded to ${uploadPath}`,
+						`[Direct Upload] ${uploadedFile.name} uploaded to ${uploadedFile.workspacePath}`,
 					);
 
 					assignFileToParameter(newMediaFile.path, paramId, newMediaFile);

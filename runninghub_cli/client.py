@@ -39,10 +39,7 @@ class RunningHubClient:
             requests.RequestException: If the API request fails.
         """
         url = f"{self.base_url}/api/webapp/apiCallDemo"
-        params = {
-            "apiKey": self.api_key,
-            "webappId": webapp_id
-        }
+        params = {"apiKey": self.api_key, "webappId": webapp_id}
 
         response = self.session.get(url, params=params)
         response.raise_for_status()
@@ -50,7 +47,9 @@ class RunningHubClient:
         data = response.json()
         if data.get("code") != 0:
             # Include more details from the API response
-            raise Exception(f"API returned error: {data.get('message', 'Unknown error')}. Response: {data}")
+            raise Exception(
+                f"API returned error: {data.get('message', 'Unknown error')}. Response: {data}"
+            )
 
         # RunningHub API returns nodeInfoList inside data object
         return data.get("data", {}).get("nodeInfoList", [])
@@ -77,15 +76,10 @@ class RunningHubClient:
 
         # Open file for upload
         with open(file_path, "rb") as file:
-            files = {
-                "file": (file_path.name, file, "application/octet-stream")
-            }
+            files = {"file": (file_path.name, file, "application/octet-stream")}
 
             # Create form data
-            data = {
-                "apiKey": self.api_key,
-                "fileType": "input"
-            }
+            data = {"apiKey": self.api_key, "fileType": "input"}
 
             if not silent:
                 print(f"Uploading {file_path.name}...")
@@ -95,7 +89,9 @@ class RunningHubClient:
 
         result = response.json()
         if result.get("code") != 0:
-            raise Exception(f"Upload failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}")
+            raise Exception(
+                f"Upload failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}"
+            )
 
         # RunningHub API returns fileName instead of fileId
         return result.get("data", {}).get("fileName", "")
@@ -103,7 +99,8 @@ class RunningHubClient:
     def submit_task(
         self,
         webapp_id: str,
-        node_info_list: List[Dict[str, Any]]
+        node_info_list: List[Dict[str, Any]],
+        instance_type: Optional[str] = None,
     ) -> str:
         """Submit a task to RunningHub.
 
@@ -122,28 +119,33 @@ class RunningHubClient:
         payload = {
             "webappId": webapp_id,
             "apiKey": self.api_key,
-            "nodeInfoList": node_info_list
+            "nodeInfoList": node_info_list,
         }
+        if instance_type == "plus":
+            payload["instanceType"] = instance_type
 
-        print(f"Submitting task payload: {json.dumps(node_info_list, indent=2, ensure_ascii=False)}")
+        print(
+            f"Submitting task payload: {json.dumps(node_info_list, indent=2, ensure_ascii=False)}"
+        )
 
         response = self.session.post(
-            url,
-            json=payload,
-            headers={"Content-Type": "application/json"}
+            url, json=payload, headers={"Content-Type": "application/json"}
         )
         response.raise_for_status()
 
         result = response.json()
         if result.get("code") != 0:
-            raise Exception(f"Task submission failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}")
+            raise Exception(
+                f"Task submission failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}"
+            )
 
         return result.get("data", {}).get("taskId", "")
 
     def submit_workflow_task(
         self,
         workflow_id: str,
-        node_info_list: List[Dict[str, Any]]
+        node_info_list: List[Dict[str, Any]],
+        instance_type: Optional[str] = None,
     ) -> str:
         """Submit a workflow task to RunningHub.
 
@@ -162,21 +164,25 @@ class RunningHubClient:
         payload = {
             "apiKey": self.api_key,
             "workflowId": workflow_id,
-            "nodeInfoList": node_info_list
+            "nodeInfoList": node_info_list,
         }
+        if instance_type == "plus":
+            payload["instanceType"] = instance_type
 
-        print(f"Submitting workflow task payload: {json.dumps(node_info_list, indent=2, ensure_ascii=False)}")
+        print(
+            f"Submitting workflow task payload: {json.dumps(node_info_list, indent=2, ensure_ascii=False)}"
+        )
 
         response = self.session.post(
-            url,
-            json=payload,
-            headers={"Content-Type": "application/json"}
+            url, json=payload, headers={"Content-Type": "application/json"}
         )
         response.raise_for_status()
 
         result = response.json()
         if result.get("code") != 0:
-            raise Exception(f"Workflow task submission failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}")
+            raise Exception(
+                f"Workflow task submission failed: {result.get('message', 'Unknown error')} - Full response: {json.dumps(result)}"
+            )
 
         return result.get("data", {}).get("taskId", "")
 
@@ -194,15 +200,10 @@ class RunningHubClient:
         """
         url = f"{self.base_url}/task/openapi/outputs"
 
-        payload = {
-            "apiKey": self.api_key,
-            "taskId": task_id
-        }
+        payload = {"apiKey": self.api_key, "taskId": task_id}
 
         response = self.session.post(
-            url,
-            json=payload,
-            headers={"Content-Type": "application/json"}
+            url, json=payload, headers={"Content-Type": "application/json"}
         )
         response.raise_for_status()
 
@@ -214,7 +215,7 @@ class RunningHubClient:
         task_id: str,
         poll_interval: int = 5,
         timeout: Optional[int] = None,
-        silent: bool = False
+        silent: bool = False,
     ) -> Dict[str, Any]:
         """Wait for a task to complete.
 
@@ -235,8 +236,11 @@ class RunningHubClient:
 
         # Use a dummy file object to suppress tqdm output when silent
         class DummyFile:
-            def write(self, x): pass
-            def flush(self): pass
+            def write(self, x):
+                pass
+
+            def flush(self):
+                pass
 
         pbar_file = DummyFile() if silent else None
         pbar = tqdm(desc="Waiting for completion", unit="s", file=pbar_file)
@@ -254,14 +258,18 @@ class RunningHubClient:
                     pass
                 elif status_code == 805:
                     # Task failed
-                    raise Exception(f"Task failed: {status.get('message', 'Unknown error')}")
+                    raise Exception(
+                        f"Task failed: {status.get('message', 'Unknown error')}"
+                    )
                 else:
                     # Unknown status code
                     raise Exception(f"Unknown status code: {status_code}")
 
                 # Check timeout
                 if timeout and (time.time() - start_time) > timeout:
-                    raise TimeoutError(f"Task did not complete within {timeout} seconds")
+                    raise TimeoutError(
+                        f"Task did not complete within {timeout} seconds"
+                    )
 
                 # Update progress bar and wait
                 pbar.update(poll_interval)
@@ -286,7 +294,7 @@ class RunningHubClient:
         download_path.parent.mkdir(parents=True, exist_ok=True)
 
         # If file_url is a relative path, construct full URL
-        if file_url.startswith('/'):
+        if file_url.startswith("/"):
             file_url = f"{self.base_url}{file_url}"
 
         # Create a clean session for downloads (without Host header that breaks cross-domain requests)
@@ -297,24 +305,27 @@ class RunningHubClient:
 
         # If that fails, try with API key as query parameter
         if response.status_code == 404 or response.status_code == 403:
-            if '?' in file_url:
-                separator = '&'
+            if "?" in file_url:
+                separator = "&"
             else:
-                separator = '?'
+                separator = "?"
             authenticated_url = f"{file_url}{separator}apiKey={self.api_key}"
             response = download_session.get(authenticated_url, stream=True)
 
         response.raise_for_status()
 
-        total_size = int(response.headers.get('content-length', 0))
+        total_size = int(response.headers.get("content-length", 0))
 
-        with open(download_path, 'wb') as file, tqdm(
-            desc=f"Downloading {download_path.name}",
-            total=total_size,
-            unit='B',
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as pbar:
+        with (
+            open(download_path, "wb") as file,
+            tqdm(
+                desc=f"Downloading {download_path.name}",
+                total=total_size,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+            ) as pbar,
+        ):
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     file.write(chunk)
@@ -322,7 +333,12 @@ class RunningHubClient:
 
         return download_path
 
-    def download_task_outputs(self, task_status: Dict[str, Any], download_dir: Path, input_filename: Optional[str] = None) -> List[Path]:
+    def download_task_outputs(
+        self,
+        task_status: Dict[str, Any],
+        download_dir: Path,
+        input_filename: Optional[str] = None,
+    ) -> List[Path]:
         """Download all output files from a completed task.
 
         Args:
@@ -339,7 +355,9 @@ class RunningHubClient:
         downloaded_files = []
 
         if task_status.get("code") != 0:
-            raise Exception(f"Task not completed successfully: {task_status.get('message', 'Unknown error')}")
+            raise Exception(
+                f"Task not completed successfully: {task_status.get('message', 'Unknown error')}"
+            )
 
         data = task_status.get("data", {})
         if not data:
@@ -355,7 +373,12 @@ class RunningHubClient:
         else:
             return downloaded_files
 
-    def _download_from_list_format(self, data_list: List[Dict[str, Any]], download_dir: Path, input_filename: Optional[str] = None) -> List[Path]:
+    def _download_from_list_format(
+        self,
+        data_list: List[Dict[str, Any]],
+        download_dir: Path,
+        input_filename: Optional[str] = None,
+    ) -> List[Path]:
         """Download files from list format response."""
         downloaded_files = []
         image_files = []
@@ -450,7 +473,7 @@ class RunningHubClient:
                     response.raise_for_status()
                     text_content = response.text
 
-                    with open(txt_path, 'w', encoding='utf-8') as f:
+                    with open(txt_path, "w", encoding="utf-8") as f:
                         f.write(text_content)
                     downloaded_files.append(txt_path)
                     print(f"Saved text: {txt_path}")
@@ -462,7 +485,12 @@ class RunningHubClient:
 
         return downloaded_files
 
-    def _download_from_dict_format(self, data_dict: Dict[str, Any], download_dir: Path, input_filename: Optional[str] = None) -> List[Path]:
+    def _download_from_dict_format(
+        self,
+        data_dict: Dict[str, Any],
+        download_dir: Path,
+        input_filename: Optional[str] = None,
+    ) -> List[Path]:
         """Download files from dict format response (legacy)."""
         downloaded_files = []
         image_files = []
@@ -500,7 +528,7 @@ class RunningHubClient:
                     txt_path = download_dir / txt_filename
 
                     try:
-                        with open(txt_path, 'w', encoding='utf-8') as f:
+                        with open(txt_path, "w", encoding="utf-8") as f:
                             f.write(t_content)
                         downloaded_files.append(txt_path)
                         print(f"Saved text: {txt_path}")
@@ -522,20 +550,20 @@ class RunningHubClient:
         # Try to extract from URL path
         parsed_url = urllib.parse.urlparse(url)
         path = parsed_url.path
-        if '.' in path:
+        if "." in path:
             return Path(path).suffix
 
         # If no extension in URL, try to make a request to get Content-Type
         try:
             response = self.session.head(url)
             if response.status_code == 200:
-                content_type = response.headers.get('content-type', '')
-                if 'image/png' in content_type:
-                    return '.png'
-                elif 'image/jpeg' in content_type:
-                    return '.jpg'
-                elif 'image/webp' in content_type:
-                    return '.webp'
+                content_type = response.headers.get("content-type", "")
+                if "image/png" in content_type:
+                    return ".png"
+                elif "image/jpeg" in content_type:
+                    return ".jpg"
+                elif "image/webp" in content_type:
+                    return ".webp"
         except:
             pass
 

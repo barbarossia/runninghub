@@ -6,7 +6,7 @@
 import { promises as fs } from "fs";
 import { join, basename, sep } from "path";
 import { randomUUID } from "crypto";
-import os from "os";
+import { getWorkspaceDir } from "@/lib/workspace-path";
 
 
 import type {
@@ -21,19 +21,9 @@ import type {
 	WorkflowInputParameter,
 } from "@/types/workspace";
 
-const COMPLEX_WORKFLOW_DIR = join(
-	os.homedir(),
-	"Downloads",
-	"workspace",
-	"complex-workflows",
-);
+const COMPLEX_WORKFLOW_DIR = getWorkspaceDir("complex-workflows");
 
-const COMPLEX_EXECUTION_DIR = join(
-	os.homedir(),
-	"Downloads",
-	"workspace",
-	"complex-executions",
-);
+const COMPLEX_EXECUTION_DIR = getWorkspaceDir("complex-executions");
 
 /**
  * Generate unique ID for complex workflow
@@ -516,13 +506,8 @@ export async function mapPreviousInputsToInputs(
 					);
 					// File missing, try to find in job directory
 					if (sourceStep.jobId) {
-						// Strategy 1: Standard location (~/Downloads/workspace)
-						const jobDir = join(
-							os.homedir(),
-							"Downloads",
-							"workspace",
-							sourceStep.jobId,
-						);
+					// Strategy 1: Standard location (${WORKSPACE_PATH})
+					const jobDir = getWorkspaceDir(sourceStep.jobId);
 						let fallbackPath = join(jobDir, sourceFileInput.fileName);
 						let found = false;
 
