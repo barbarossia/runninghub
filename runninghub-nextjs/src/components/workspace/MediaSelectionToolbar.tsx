@@ -760,9 +760,9 @@ export function MediaSelectionToolbar({
 											size="icon"
 											onClick={() => {
 												// Check if any duck-encoded file requires password
-												const requiresPassword = selectedFiles
-													.filter((f) => f.type === "image" && f.isDuckEncoded)
-													.some((f) => f.duckRequiresPassword);
+									const requiresPassword = selectedFiles
+										.filter((f) => f.type === "image" && f.isDuckEncoded)
+										.some((f) => f.duckRequiresPassword !== false);
 
 												if (requiresPassword) {
 													setDecodePassword("");
@@ -1001,9 +1001,9 @@ export function MediaSelectionToolbar({
 												size="icon"
 												onClick={() => {
 													// Check if any duck-encoded file requires password
-													const requiresPassword = selectedFiles
-														.filter((f) => f.type === "image" && f.isDuckEncoded)
-														.some((f) => f.duckRequiresPassword);
+									const requiresPassword = selectedFiles
+										.filter((f) => f.type === "image" && f.isDuckEncoded)
+										.some((f) => f.duckRequiresPassword !== false);
 
 													if (requiresPassword) {
 														setDecodePassword("");
@@ -1147,7 +1147,7 @@ export function MediaSelectionToolbar({
 								(f) =>
 									f.type === "image" &&
 									f.isDuckEncoded &&
-									f.duckRequiresPassword,
+									f.duckRequiresPassword === true,
 							) && (
 								<Alert>
 									<AlertCircle className="h-4 w-4" />

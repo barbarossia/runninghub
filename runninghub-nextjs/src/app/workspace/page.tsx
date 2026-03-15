@@ -79,6 +79,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/utils/logger";
+import { isDuckEncodedFilename } from "@/utils/duck";
 import { API_ENDPOINTS, ERROR_MESSAGES } from "@/constants";
 import { cn } from "@/lib/utils";
 import {
@@ -426,59 +427,23 @@ export default function WorkspacePage() {
 		};
 	}, []);
 
-	// Validate duck encoding for all images in parallel
 	const validateAllImagesForDuck = useCallback(
 		async (imageFiles: MediaFile[]) => {
 			const imagesOnly = imageFiles.filter((f) => f.type === "image");
 
 			if (imagesOnly.length === 0) return;
-
-			console.log(
-				`[Workspace] Validating duck encoding for ${imagesOnly.length} images in parallel...`,
-			);
-
-			// Mark all images as pending validation
 			imagesOnly.forEach((file) => {
-				updateMediaFile(file.id, { duckValidationPending: true });
+				updateMediaFile(file.id, {
+					isDuckEncoded: isDuckEncodedFilename(file.name),
+					duckRequiresPassword: undefined,
+					duckValidationPending: false,
+				});
 			});
+			return;
 
-			// Validate all images in parallel
-			const validationPromises = imagesOnly.map(async (file) => {
-				try {
-					const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ imagePath: file.path }),
-					});
 
-					const data = await response.json();
 
-					console.log(`[Workspace] Validation result for ${file.name}:`, data);
 
-					// Update the file with validation result
-					console.log(
-						`[Workspace] Updating ${file.name} with isDuckEncoded=${data.isDuckEncoded}`,
-					);
-					updateMediaFile(file.id, {
-						isDuckEncoded: data.isDuckEncoded,
-						duckRequiresPassword: data.requiresPassword,
-						duckValidationPending: false,
-					});
-					console.log(
-						`[Workspace] Updated ${file.name}, new state:`,
-						mediaFiles.find((f) => f.id === file.id)?.isDuckEncoded,
-					);
-				} catch (error) {
-					console.error(`[Workspace] Failed to validate ${file.name}:`, error);
-					updateMediaFile(file.id, {
-						isDuckEncoded: false,
-						duckValidationPending: false,
-					});
-				}
-			});
-
-			// Wait for all validations to complete (but don't block UI)
-			Promise.allSettled(validationPromises);
 		},
 		[updateMediaFile],
 	);
@@ -572,7 +537,7 @@ export default function WorkspacePage() {
 					thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
 					selected: false,
 					// Initialize duck encoding fields
-					isDuckEncoded: undefined,
+					isDuckEncoded: isDuckEncodedFilename(file.name),
 					duckRequiresPassword: undefined,
 					duckValidationPending: false,
 					// Caption from associated txt file
@@ -802,6 +767,12 @@ export default function WorkspacePage() {
 							payload.type === "video"
 								? `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`
 								: undefined,
+						isDuckEncoded:
+							payload.type === "image"
+								? isDuckEncodedFilename(file.name)
+								: undefined,
+						duckRequiresPassword: undefined,
+						duckValidationPending: false,
 						caption: file.caption,
 						captionPath: file.captionPath,
 					};
@@ -1077,35 +1048,13 @@ export default function WorkspacePage() {
 			// Skip if already validated (true or false) or validation is in progress
 			if (file.isDuckEncoded !== undefined || file.duckValidationPending)
 				return;
+			updateMediaFile(file.id, {
+				isDuckEncoded: isDuckEncodedFilename(file.name),
+				duckRequiresPassword: undefined,
+				duckValidationPending: false,
+			});
+			return;
 
-			console.log(
-				"[Workspace] Fallback: Validating duck encoding for selected image:",
-				file.name,
-			);
-
-			// Mark as pending to prevent duplicate validations
-			updateMediaFile(file.id, { duckValidationPending: true });
-
-			try {
-				const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ imagePath: file.path }),
-				});
-
-				const data = await response.json();
-
-				console.log("[Workspace] Validation result for", file.name, ":", data);
-
-				updateMediaFile(file.id, {
-					isDuckEncoded: data.isDuckEncoded,
-					duckRequiresPassword: data.requiresPassword,
-					duckValidationPending: false,
-				});
-			} catch (error) {
-				console.error(`[Workspace] Failed to validate ${file.name}:`, error);
-				updateMediaFile(file.id, { duckValidationPending: false });
-			}
 		};
 
 		validateSelectedImages();
