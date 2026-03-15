@@ -427,26 +427,6 @@ export default function WorkspacePage() {
 		};
 	}, []);
 
-	const validateAllImagesForDuck = useCallback(
-		async (imageFiles: MediaFile[]) => {
-			const imagesOnly = imageFiles.filter((f) => f.type === "image");
-
-			if (imagesOnly.length === 0) return;
-			imagesOnly.forEach((file) => {
-				updateMediaFile(file.id, {
-					isDuckEncoded: isDuckEncodedFilename(file.name),
-					duckRequiresPassword: undefined,
-					duckValidationPending: false,
-				});
-			});
-			return;
-
-
-
-
-		},
-		[updateMediaFile],
-	);
 
 	// Helper to process and update media files
 	const processFolderContents = useCallback(
@@ -621,11 +601,8 @@ export default function WorkspacePage() {
 				mergeMediaFiles(uniqueFiles as MediaFile[]);
 			}
 
-			// NOTE: Disabled automatic validation on folder load for performance
-			// Images will be validated lazily when selected instead
-			// validateAllImagesForDuck(uniqueFiles as MediaFile[]);
 		},
-		[mergeMediaFiles, setMediaFiles, validateAllImagesForDuck],
+		[mergeMediaFiles, setMediaFiles],
 	);
 
 	const handleRefresh = useCallback(
@@ -767,12 +744,6 @@ export default function WorkspacePage() {
 							payload.type === "video"
 								? `/api/videos/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`
 								: undefined,
-						isDuckEncoded:
-							payload.type === "image"
-								? isDuckEncodedFilename(file.name)
-								: undefined,
-						duckRequiresPassword: undefined,
-						duckValidationPending: false,
 						caption: file.caption,
 						captionPath: file.captionPath,
 					};
@@ -1032,32 +1003,17 @@ export default function WorkspacePage() {
 		manualLiveOverride,
 	]);
 
-	// Fallback: Validate duck encoding for selected images (only if not already validated on load)
-	// NOTE: Most images are validated in parallel on load via validateAllImagesForDuck()
-	// This is a fallback for images that weren't validated for some reason
+	// Check duck encoding by filename only when an image is selected
 	useEffect(() => {
-		const validateSelectedImages = async () => {
-			// Only validate single selections for duck decoding
-			if (selectedFiles.length !== 1) return;
-
-			const file = selectedFiles[0];
-
-			// Only validate images
-			if (file.type !== "image") return;
-
-			// Skip if already validated (true or false) or validation is in progress
-			if (file.isDuckEncoded !== undefined || file.duckValidationPending)
-				return;
-			updateMediaFile(file.id, {
-				isDuckEncoded: isDuckEncodedFilename(file.name),
-				duckRequiresPassword: undefined,
-				duckValidationPending: false,
-			});
-			return;
-
-		};
-
-		validateSelectedImages();
+		if (selectedFiles.length !== 1) return;
+		const file = selectedFiles[0];
+		if (file.type !== "image") return;
+		if (file.isDuckEncoded !== undefined) return;
+		updateMediaFile(file.id, {
+			isDuckEncoded: isDuckEncodedFilename(file.name),
+			duckRequiresPassword: undefined,
+			duckValidationPending: false,
+		});
 	}, [selectedFiles, updateMediaFile]);
 
 	// Track progress modal state (similar to crop page)
