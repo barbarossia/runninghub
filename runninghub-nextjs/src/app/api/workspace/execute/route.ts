@@ -1242,7 +1242,11 @@ async function applyDuckDecodeWorkspaceOptions(params: {
 	if (renameToOriginal) {
 		const originalName = await getOriginalFileNameFromExecution(seriesId);
 		if (originalName) {
-			targetName = originalName;
+			// Use only the basename (no extension) from the original name,
+			// but keep the extension from the decoded output file.
+			const originalBase = path.basename(originalName, path.extname(originalName));
+			const outputExt = path.extname(output.fileName);
+			targetName = `${originalBase}${outputExt}`;
 		} else {
 			await writeLog(
 				"Original filename not found; keeping decoded output name",
