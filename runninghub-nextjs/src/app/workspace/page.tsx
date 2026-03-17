@@ -703,16 +703,6 @@ export default function WorkspacePage() {
 						}
 					}
 
-					// Defensive check: skip if file already exists in store to prevent duplicates
-					const currentFiles = useWorkspaceStore.getState().mediaFiles;
-					if (currentFiles.some((f) => f.id === file.path)) {
-						console.log(
-							"[Workspace] File already exists in store, skipping update:",
-							file.path,
-						);
-						return;
-					}
-
 					const cacheBuster = file.modified_at || file.created_at || Date.now();
 					const mediaFile: MediaFile = {
 						id: file.path,
@@ -875,12 +865,12 @@ export default function WorkspacePage() {
 				}
 			}
 
-			if (taskId === convertTaskId && status === "completed") {
-				handleRefresh(false);
+			if (taskId === convertTaskId) {
 				setConvertTaskId(null);
+				// SSE handles new/updated files automatically
 			}
 		},
-		[jobs, updateJob, handleRefresh, fetchJobs, convertTaskId],
+		[jobs, updateJob, fetchJobs, convertTaskId],
 	);
 
 	const handleStatusChange = useCallback(

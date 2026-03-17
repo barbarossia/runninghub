@@ -202,10 +202,12 @@ export function ConsoleViewer({
 		fetchLogs();
 
 		if (!isPaused) {
-			const interval = setInterval(fetchLogs, 1000);
+			// Poll more aggressively when a task is active, back off when idle
+			const pollInterval = taskId ? 1000 : 5000;
+			const interval = setInterval(fetchLogs, pollInterval);
 			return () => clearInterval(interval);
 		}
-	}, [isPaused]);
+	}, [isPaused, taskId]);
 
 	// Auto-scroll to top (newest logs are first)
 	useEffect(() => {
