@@ -212,11 +212,26 @@ export const useFolderStore = create<FolderState>()(
 			storage: createJSONStorage(() => localStorage),
 			partialize: (state) => ({
 				recentFolders: state.recentFolders,
-				images: state.images,
-				videos: state.videos,
-				workspace: state.workspace,
-				clip: state.clip,
-				crop: state.crop,
+				images: {
+					selectedFolder: state.images.selectedFolder,
+					currentPath: state.images.currentPath,
+				},
+				videos: {
+					selectedFolder: state.videos.selectedFolder,
+					currentPath: state.videos.currentPath,
+				},
+				workspace: {
+					selectedFolder: state.workspace.selectedFolder,
+					currentPath: state.workspace.currentPath,
+				},
+				clip: {
+					selectedFolder: state.clip.selectedFolder,
+					currentPath: state.clip.currentPath,
+				},
+				crop: {
+					selectedFolder: state.crop.selectedFolder,
+					currentPath: state.crop.currentPath,
+				},
 			}),
 		},
 	),

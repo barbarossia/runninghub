@@ -79,6 +79,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { logger } from "@/utils/logger";
+import { isDuckEncodedFilename } from "@/utils/duck";
 import { API_ENDPOINTS, ERROR_MESSAGES } from "@/constants";
 import { cn } from "@/lib/utils";
 import {
@@ -426,62 +427,6 @@ export default function WorkspacePage() {
 		};
 	}, []);
 
-	// Validate duck encoding for all images in parallel
-	const validateAllImagesForDuck = useCallback(
-		async (imageFiles: MediaFile[]) => {
-			const imagesOnly = imageFiles.filter((f) => f.type === "image");
-
-			if (imagesOnly.length === 0) return;
-
-			console.log(
-				`[Workspace] Validating duck encoding for ${imagesOnly.length} images in parallel...`,
-			);
-
-			// Mark all images as pending validation
-			imagesOnly.forEach((file) => {
-				updateMediaFile(file.id, { duckValidationPending: true });
-			});
-
-			// Validate all images in parallel
-			const validationPromises = imagesOnly.map(async (file) => {
-				try {
-					const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ imagePath: file.path }),
-					});
-
-					const data = await response.json();
-
-					console.log(`[Workspace] Validation result for ${file.name}:`, data);
-
-					// Update the file with validation result
-					console.log(
-						`[Workspace] Updating ${file.name} with isDuckEncoded=${data.isDuckEncoded}`,
-					);
-					updateMediaFile(file.id, {
-						isDuckEncoded: data.isDuckEncoded,
-						duckRequiresPassword: data.requiresPassword,
-						duckValidationPending: false,
-					});
-					console.log(
-						`[Workspace] Updated ${file.name}, new state:`,
-						mediaFiles.find((f) => f.id === file.id)?.isDuckEncoded,
-					);
-				} catch (error) {
-					console.error(`[Workspace] Failed to validate ${file.name}:`, error);
-					updateMediaFile(file.id, {
-						isDuckEncoded: false,
-						duckValidationPending: false,
-					});
-				}
-			});
-
-			// Wait for all validations to complete (but don't block UI)
-			Promise.allSettled(validationPromises);
-		},
-		[updateMediaFile],
-	);
 
 	// Helper to process and update media files
 	const processFolderContents = useCallback(
@@ -572,7 +517,7 @@ export default function WorkspacePage() {
 					thumbnail: `/api/images/serve?path=${encodeURIComponent(file.path)}&v=${cacheBuster}`,
 					selected: false,
 					// Initialize duck encoding fields
-					isDuckEncoded: undefined,
+					isDuckEncoded: isDuckEncodedFilename(file.name),
 					duckRequiresPassword: undefined,
 					duckValidationPending: false,
 					// Caption from associated txt file
@@ -656,11 +601,8 @@ export default function WorkspacePage() {
 				mergeMediaFiles(uniqueFiles as MediaFile[]);
 			}
 
-			// NOTE: Disabled automatic validation on folder load for performance
-			// Images will be validated lazily when selected instead
-			// validateAllImagesForDuck(uniqueFiles as MediaFile[]);
 		},
-		[mergeMediaFiles, setMediaFiles, validateAllImagesForDuck],
+		[mergeMediaFiles, setMediaFiles],
 	);
 
 	const handleRefresh = useCallback(
@@ -759,16 +701,6 @@ export default function WorkspacePage() {
 								removeMediaFileByPath(existing.path),
 							);
 						}
-					}
-
-					// Defensive check: skip if file already exists in store to prevent duplicates
-					const currentFiles = useWorkspaceStore.getState().mediaFiles;
-					if (currentFiles.some((f) => f.id === file.path)) {
-						console.log(
-							"[Workspace] File already exists in store, skipping update:",
-							file.path,
-						);
-						return;
 					}
 
 					const cacheBuster = file.modified_at || file.created_at || Date.now();
@@ -933,12 +865,12 @@ export default function WorkspacePage() {
 				}
 			}
 
-			if (taskId === convertTaskId && status === "completed") {
-				handleRefresh(false);
+			if (taskId === convertTaskId) {
 				setConvertTaskId(null);
+				// SSE handles new/updated files automatically
 			}
 		},
-		[jobs, updateJob, handleRefresh, fetchJobs, convertTaskId],
+		[jobs, updateJob, fetchJobs, convertTaskId],
 	);
 
 	const handleStatusChange = useCallback(
@@ -1061,54 +993,17 @@ export default function WorkspacePage() {
 		manualLiveOverride,
 	]);
 
-	// Fallback: Validate duck encoding for selected images (only if not already validated on load)
-	// NOTE: Most images are validated in parallel on load via validateAllImagesForDuck()
-	// This is a fallback for images that weren't validated for some reason
+	// Check duck encoding by filename only when an image is selected
 	useEffect(() => {
-		const validateSelectedImages = async () => {
-			// Only validate single selections for duck decoding
-			if (selectedFiles.length !== 1) return;
-
-			const file = selectedFiles[0];
-
-			// Only validate images
-			if (file.type !== "image") return;
-
-			// Skip if already validated (true or false) or validation is in progress
-			if (file.isDuckEncoded !== undefined || file.duckValidationPending)
-				return;
-
-			console.log(
-				"[Workspace] Fallback: Validating duck encoding for selected image:",
-				file.name,
-			);
-
-			// Mark as pending to prevent duplicate validations
-			updateMediaFile(file.id, { duckValidationPending: true });
-
-			try {
-				const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ imagePath: file.path }),
-				});
-
-				const data = await response.json();
-
-				console.log("[Workspace] Validation result for", file.name, ":", data);
-
-				updateMediaFile(file.id, {
-					isDuckEncoded: data.isDuckEncoded,
-					duckRequiresPassword: data.requiresPassword,
-					duckValidationPending: false,
-				});
-			} catch (error) {
-				console.error(`[Workspace] Failed to validate ${file.name}:`, error);
-				updateMediaFile(file.id, { duckValidationPending: false });
-			}
-		};
-
-		validateSelectedImages();
+		if (selectedFiles.length !== 1) return;
+		const file = selectedFiles[0];
+		if (file.type !== "image") return;
+		if (file.isDuckEncoded !== undefined) return;
+		updateMediaFile(file.id, {
+			isDuckEncoded: isDuckEncodedFilename(file.name),
+			duckRequiresPassword: undefined,
+			duckValidationPending: false,
+		});
 	}, [selectedFiles, updateMediaFile]);
 
 	// Track progress modal state (similar to crop page)

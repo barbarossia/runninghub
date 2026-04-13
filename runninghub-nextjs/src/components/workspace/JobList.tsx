@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { useWorkspaceFolder } from "@/store/folder-store";
+import { isDuckEncodedFilename } from "@/utils/duck";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,9 +78,6 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		new Set(),
 	);
 	const [isDeletingSelected, setIsDeletingSelected] = useState(false);
-	const [encodedStatus, setEncodedStatus] = useState<Record<string, boolean>>(
-		{},
-	);
 
 	// Fetch jobs on mount
 	useEffect(() => {
@@ -328,57 +326,6 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 		return savedOutputPaths.some((savedPath) => isMediaPath(savedPath));
 	};
 
-	const imagePreviewPaths = useMemo(() => {
-		const paths = new Set<string>();
-		pagedJobs.forEach((job) => {
-			const previews = getPreviews(job);
-			previews.forEach((preview) => {
-				if (preview.type === "image") {
-					paths.add(preview.path);
-				}
-			});
-		});
-		return Array.from(paths);
-	}, [pagedJobs]);
-
-	useEffect(() => {
-		const pending = imagePreviewPaths.filter(
-			(path) => !(path in encodedStatus),
-		);
-		if (pending.length === 0) return;
-
-		let cancelled = false;
-		const checkEncoded = async () => {
-			for (const path of pending) {
-				try {
-					const response = await fetch("/api/workspace/duck-validate", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ imagePath: path }),
-					});
-					const data = await response.json();
-					if (!cancelled) {
-						setEncodedStatus((prev) => ({
-							...prev,
-							[path]: Boolean(data.isDuckEncoded),
-						}));
-					}
-				} catch (error) {
-					if (!cancelled) {
-						setEncodedStatus((prev) => ({
-							...prev,
-							[path]: false,
-						}));
-					}
-				}
-			}
-		};
-
-		checkEncoded();
-		return () => {
-			cancelled = true;
-		};
-	}, [imagePreviewPaths, encodedStatus]);
 
 	const getBasename = (filePath: string) => {
 		return filePath.split(/[\\/]/).pop() || filePath;
@@ -707,7 +654,7 @@ export function JobList({ onJobClick, className = "" }: JobListProps) {
 																					>
 																						<FolderOpen className="h-3.5 w-3.5" />
 																					</Button>
-																					{encodedStatus[preview.path] && (
+																					{isDuckEncodedFilename(preview.fileName) && (
 																						<DuckDecodeButton
 																							imagePath={preview.path}
 																							jobId={job.id}

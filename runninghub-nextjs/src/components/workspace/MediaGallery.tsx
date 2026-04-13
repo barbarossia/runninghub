@@ -67,7 +67,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { API_ENDPOINTS } from "@/constants";
+import { isDuckEncodedFilename } from "@/utils/duck";
 import { toast } from "sonner";
 import type { MediaFile } from "@/types/workspace";
 
@@ -236,9 +236,6 @@ export function MediaGallery({
 	const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
 	const [showMoreDetails, setShowMoreDetails] = useState(false);
 	const [copiedPath, setCopiedPath] = useState(false);
-	const [validatingFileIds, setValidatingFileIds] = useState<Set<string>>(
-		new Set(),
-	);
 	const [promptOverrides, setPromptOverrides] = useState<
 		Record<string, string | null>
 	>({});
@@ -417,94 +414,25 @@ export function MediaGallery({
 		[hasSelection, deselectAll],
 	);
 
-	// Lazy validation: Validate selected images that haven't been validated yet (workspace mode only)
 	useEffect(() => {
 		// Skip validation in dataset mode
 		if (mode === "dataset") return;
 
 		const selectedImages = files.filter(
-			(f) =>
-				f.selected &&
-				f.type === "image" &&
-				f.isDuckEncoded === undefined &&
-				!f.duckValidationPending &&
-				!validatingFileIds.has(f.id),
+			(f) => f.selected && f.type === "image" && f.isDuckEncoded === undefined,
 		);
 
 		if (selectedImages.length === 0) return;
-
-		console.log(
-			`[MediaGallery] Lazy validating ${selectedImages.length} selected images...`,
-		);
-
-		// Mark files as being validated to prevent re-validation
-		setValidatingFileIds((prev) => {
-			const newSet = new Set(prev);
-			selectedImages.forEach((f) => newSet.add(f.id));
-			return newSet;
+		selectedImages.forEach((file) => {
+			updateFile(file.id, {
+				isDuckEncoded: isDuckEncodedFilename(file.name),
+				duckRequiresPassword: undefined,
+				duckValidationPending: false,
+			});
 		});
+		return;
 
-		const validateImage = async (file: MediaFile) => {
-			try {
-				// Mark as pending
-				updateFile(file.id, { duckValidationPending: true });
-
-				const response = await fetch(API_ENDPOINTS.WORKSPACE_DUCK_VALIDATE, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ imagePath: file.path }),
-				});
-
-				const data = await response.json();
-
-				console.log(`[MediaGallery] Validation result for ${file.name}:`, data);
-
-				// Update the file with validation result
-				updateFile(file.id, {
-					isDuckEncoded: data.isDuckEncoded,
-					duckRequiresPassword: data.requiresPassword,
-					duckValidationPending: false,
-				});
-
-				// Remove from validating set
-				setValidatingFileIds((prev) => {
-					const newSet = new Set(prev);
-					newSet.delete(file.id);
-					return newSet;
-				});
-			} catch (error) {
-				console.error(`[MediaGallery] Failed to validate ${file.name}:`, error);
-				updateFile(file.id, {
-					isDuckEncoded: false,
-					duckValidationPending: false,
-				});
-
-				// Remove from validating set
-				setValidatingFileIds((prev) => {
-					const newSet = new Set(prev);
-					newSet.delete(file.id);
-					return newSet;
-				});
-			}
-		};
-
-		// Validate all selected images in parallel (but limit to 3 at a time to avoid overwhelming)
-		const validateWithConcurrency = async (
-			imagesToValidate: MediaFile[],
-			concurrency = 3,
-		) => {
-			const chunks = [];
-			for (let i = 0; i < imagesToValidate.length; i += concurrency) {
-				chunks.push(imagesToValidate.slice(i, i + concurrency));
-			}
-
-			for (const chunk of chunks) {
-				await Promise.allSettled(chunk.map(validateImage));
-			}
-		};
-
-		validateWithConcurrency(selectedImages);
-	}, [files, updateFile, validatingFileIds, mode]);
+	}, [files, updateFile, mode]);
 
 	// Handle select all toggle
 	const handleSelectAllToggle = useCallback(() => {
@@ -1181,7 +1109,7 @@ export function MediaGallery({
 															<DropdownMenuItem
 																onClick={(e) => {
 																	e.stopPropagation();
-																	if (file.duckRequiresPassword) {
+										if (file.duckRequiresPassword !== false) {
 																		setDecodeDialogOpen(file);
 																	} else {
 																		handleDecodeConfirm(file);
