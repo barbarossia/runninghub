@@ -326,12 +326,14 @@ export function MediaSelectionToolbar({
 	}, [onDelete, selectedFiles, onDeselectAll]);
 
 	// Handle decode (single or batch)
-	const handleDecode = useCallback(async () => {
+	const handleDecode = useCallback(async (passwordOverride?: string) => {
 		if (!onDecode || duckEncodedCount === 0) return;
 
 		setIsDecoding(true);
 		setShowDecodeDialog(false); // Close dialog immediately
 		setDecodeProgress({ current: 0, total: duckEncodedCount });
+		const passwordToUse =
+			passwordOverride !== undefined ? passwordOverride : decodePassword;
 
 		try {
 			// Filter duck-encoded images
@@ -341,7 +343,7 @@ export function MediaSelectionToolbar({
 
 			// Decode each file with progress tracking
 			for (let i = 0; i < duckEncodedFiles.length; i++) {
-				await onDecode(duckEncodedFiles[i], decodePassword, {
+				await onDecode(duckEncodedFiles[i], passwordToUse, {
 					current: i + 1,
 					total: duckEncodedFiles.length,
 				});
@@ -760,15 +762,17 @@ export function MediaSelectionToolbar({
 											size="icon"
 											onClick={() => {
 												// Check if any duck-encoded file requires password
-									const requiresPassword = selectedFiles
-										.filter((f) => f.type === "image" && f.isDuckEncoded)
-										.some((f) => f.duckRequiresPassword !== false);
+												const requiresPassword = selectedFiles
+													.filter(
+														(f) => f.type === "image" && f.isDuckEncoded,
+													)
+													.some((f) => f.duckRequiresPassword === true);
 
 												if (requiresPassword) {
 													setDecodePassword("");
 													setShowDecodeDialog(true);
 												} else {
-													handleDecode();
+													handleDecode("");
 												}
 											}}
 											disabled={toolbarDisabled || !hasDuckEncodedImages}
@@ -1001,15 +1005,17 @@ export function MediaSelectionToolbar({
 												size="icon"
 												onClick={() => {
 													// Check if any duck-encoded file requires password
-									const requiresPassword = selectedFiles
-										.filter((f) => f.type === "image" && f.isDuckEncoded)
-										.some((f) => f.duckRequiresPassword !== false);
+													const requiresPassword = selectedFiles
+														.filter(
+															(f) => f.type === "image" && f.isDuckEncoded,
+														)
+														.some((f) => f.duckRequiresPassword === true);
 
 													if (requiresPassword) {
 														setDecodePassword("");
 														setShowDecodeDialog(true);
 													} else {
-														handleDecode();
+														handleDecode("");
 													}
 												}}
 												disabled={toolbarDisabled || !hasDuckEncodedImages}
@@ -1190,7 +1196,7 @@ export function MediaSelectionToolbar({
 								Cancel
 							</Button>
 							<Button
-								onClick={handleDecode}
+								onClick={() => handleDecode()}
 								disabled={isDecoding}
 								className="bg-green-600 hover:bg-green-700"
 							>
