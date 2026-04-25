@@ -507,12 +507,17 @@ export function MediaGallery({
 		setDecodePassword("");
 	}, []);
 
-	const handleDecodeConfirm = async (file?: MediaFile) => {
+	const handleDecodeConfirm = async (
+		file?: MediaFile,
+		passwordOverride?: string,
+	) => {
 		const targetFile = file || decodeDialogFile;
 		if (!targetFile || !onDecode) return;
 		try {
 			setIsDecoding(true);
-			await onDecode(targetFile, decodePassword || undefined);
+			const passwordToUse =
+				passwordOverride !== undefined ? passwordOverride : decodePassword;
+			await onDecode(targetFile, passwordToUse || undefined);
 			setDecodeDialogFile(null);
 			setDecodePassword("");
 		} catch (error) {
@@ -1109,10 +1114,10 @@ export function MediaGallery({
 															<DropdownMenuItem
 																onClick={(e) => {
 																	e.stopPropagation();
-										if (file.duckRequiresPassword !== false) {
+																	if (file.duckRequiresPassword === true) {
 																		setDecodeDialogOpen(file);
 																	} else {
-																		handleDecodeConfirm(file);
+																		handleDecodeConfirm(file, "");
 																	}
 																}}
 																className="text-green-600 bg-green-50/50 focus:bg-green-100"

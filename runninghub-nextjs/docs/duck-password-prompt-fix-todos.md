@@ -1,0 +1,7 @@
+- [x] Add plan for duck password prompt default behavior fix.
+- [x] Update decode prompt gating in media selection toolbar.
+- [x] Update decode prompt gating in media gallery menu.
+- [x] Ensure direct decode path uses empty password when prompt is skipped.
+- [x] Run `npm run build` in `runninghub-nextjs`.
+- [x] Manual UI check: duck image without password decodes without showing dialog.
+- [x] Manual UI check: password-protected duck image still shows password dialog.
