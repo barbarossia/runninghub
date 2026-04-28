@@ -293,6 +293,34 @@ export default function WorkspacePage() {
 		return value;
 	}, []);
 
+	const copyTextToClipboard = useCallback(async (text: string) => {
+		try {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(text);
+				return true;
+			}
+		} catch (error) {
+			console.error("Clipboard API copy failed:", error);
+		}
+
+		try {
+			const textArea = document.createElement("textarea");
+			textArea.value = text;
+			textArea.setAttribute("readonly", "");
+			textArea.style.position = "fixed";
+			textArea.style.left = "-9999px";
+			textArea.style.top = "0";
+			document.body.appendChild(textArea);
+			textArea.select();
+			const copied = document.execCommand("copy");
+			document.body.removeChild(textArea);
+			return copied;
+		} catch (error) {
+			console.error("Fallback clipboard copy failed:", error);
+			return false;
+		}
+	}, []);
+
 	const fetchPromptMetadata = useCallback(
 		async (file: MediaFile, silent = true) => {
 			try {
@@ -3269,12 +3297,16 @@ export default function WorkspacePage() {
 									<Button
 										variant="outline"
 										size="sm"
-										onClick={() => {
+										onClick={async () => {
 											const content = isPromptFormatted
 												? formatPrompt(promptContent) || ""
 												: promptContent || "";
-											navigator.clipboard.writeText(content);
-											toast.success("Prompt copied to clipboard");
+											const copied = await copyTextToClipboard(content);
+											if (copied) {
+												toast.success("Prompt copied to clipboard");
+											} else {
+												toast.error("Failed to copy prompt");
+											}
 										}}
 										disabled={!promptContent}
 									>

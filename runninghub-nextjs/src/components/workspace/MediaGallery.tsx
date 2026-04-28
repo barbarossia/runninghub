@@ -155,6 +155,10 @@ function formatPrompt(prompt?: string): string | null {
 	return prompt;
 }
 
+function hasPromptMetadata(file: MediaFile): boolean {
+	return typeof file.prompt === "string" && file.prompt.trim().length > 0;
+}
+
 export type MediaGalleryMode = "workspace" | "dataset";
 
 export interface MediaGalleryProps {
@@ -1105,9 +1109,21 @@ export function MediaGallery({
 																	e.stopPropagation();
 																	onPrompt(file);
 																}}
+																className={cn(
+																	hasPromptMetadata(file) &&
+																		"bg-blue-50/70 text-blue-700 focus:bg-blue-100 focus:text-blue-800",
+																)}
 															>
 																<MessageSquare className="h-4 w-4 mr-2" />
-																Prompt
+																<span className="flex-1">Prompt</span>
+																{hasPromptMetadata(file) && (
+																	<Badge
+																		variant="secondary"
+																		className="ml-3 h-5 bg-blue-100 px-1.5 text-[10px] font-medium text-blue-700"
+																	>
+																		Available
+																	</Badge>
+																)}
 															</DropdownMenuItem>
 														)}
 														{onDecode && file.isDuckEncoded && (
