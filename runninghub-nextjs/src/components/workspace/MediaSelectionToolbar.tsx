@@ -10,6 +10,7 @@ import {
 	Eye,
 	AlertCircle,
 	Scissors,
+	FileImage,
 	Download,
 	Zap,
 	Maximize2,
@@ -79,6 +80,7 @@ interface MediaSelectionToolbarProps {
 	batchWorkflowId?: string | null;
 	batchWorkflowName?: string | null;
 	onClip?: (files: MediaFile[]) => Promise<void>;
+	onClipFirstFrame?: (files: MediaFile[]) => Promise<void>;
 	onExport?: (files: MediaFile[]) => Promise<void>;
 	onConvertFps?: (files: MediaFile[]) => Promise<void>;
 	onResize?: (
@@ -123,6 +125,7 @@ export function MediaSelectionToolbar({
 	batchWorkflowId = null,
 	batchWorkflowName = null,
 	onClip,
+	onClipFirstFrame,
 	onExport,
 	onConvertFps,
 	onResize,
@@ -137,6 +140,11 @@ export function MediaSelectionToolbar({
 	showCaptionButton = false,
 }: MediaSelectionToolbarProps) {
 	const selectedCount = selectedFiles.length;
+	const selectedVideoFiles = useMemo(
+		() => selectedFiles.filter((file) => file.type === "video"),
+		[selectedFiles],
+	);
+	const selectedVideoCount = selectedVideoFiles.length;
 
 	// Count duck-encoded images in selection
 	const duckEncodedCount = useMemo(() => {
@@ -174,6 +182,7 @@ export function MediaSelectionToolbar({
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [isDecoding, setIsDecoding] = useState(false);
 	const [isClipping, setIsClipping] = useState(false);
+	const [isClippingFirstFrame, setIsClippingFirstFrame] = useState(false);
 	const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 	const [isResizing, setIsResizing] = useState(false);
 	const [isCaptioning, setIsCaptioning] = useState(false);
@@ -394,8 +403,7 @@ export function MediaSelectionToolbar({
 
 		setIsClipping(true);
 		try {
-			const videoFiles = selectedFiles.filter((f) => f.type === "video");
-			await onClip(videoFiles);
+			await onClip(selectedVideoFiles);
 			onDeselectAll?.(); // Clear selection after action
 		} catch (error) {
 			toast.error(
@@ -404,7 +412,25 @@ export function MediaSelectionToolbar({
 		} finally {
 			setIsClipping(false);
 		}
-	}, [onClip, selectedFiles, onDeselectAll]);
+	}, [onClip, selectedVideoFiles, onDeselectAll]);
+
+	const handleClipFirstFrame = useCallback(async () => {
+		if (!onClipFirstFrame) return;
+
+		setIsClippingFirstFrame(true);
+		try {
+			await onClipFirstFrame(selectedVideoFiles);
+			onDeselectAll?.();
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Failed to clip first frame",
+			);
+		} finally {
+			setIsClippingFirstFrame(false);
+		}
+	}, [onClipFirstFrame, selectedVideoFiles, onDeselectAll]);
 
 	// Handle export
 	const handleExportClick = useCallback(() => {
@@ -517,6 +543,7 @@ export function MediaSelectionToolbar({
 		isDeleting ||
 		isDecoding ||
 		isClipping ||
+		isClippingFirstFrame ||
 		isResizing ||
 		isCaptioning;
 
@@ -533,6 +560,10 @@ export function MediaSelectionToolbar({
 
 	const selectedCountLabel =
 		selectedCount === 1 ? "1 selected" : `${selectedCount} selected`;
+	const selectedVideoCountLabel =
+		selectedVideoCount === 1
+			? "1 video selected"
+			: `${selectedVideoCount} videos selected`;
 
 	return (
 		<>
@@ -614,8 +645,7 @@ export function MediaSelectionToolbar({
 											size="icon"
 											onClick={handleClip}
 											disabled={
-												toolbarDisabled ||
-												!selectedFiles.some((f) => f.type === "video")
+												toolbarDisabled || selectedVideoCount === 0
 											}
 											className="h-11 w-20 bg-purple-600 hover:bg-purple-700"
 											aria-label="Clip videos"
@@ -624,6 +654,29 @@ export function MediaSelectionToolbar({
 												<Loader2 className="h-4 w-4 animate-spin" />
 											) : (
 												<Scissors className="h-4 w-4" />
+											)}
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{onClipFirstFrame && (
+									<ToolbarTooltip
+										content={`First frame • ${selectedVideoCountLabel}`}
+									>
+										<Button
+											variant="default"
+											size="icon"
+											onClick={handleClipFirstFrame}
+											disabled={
+												toolbarDisabled || selectedVideoCount === 0
+											}
+											className="h-11 w-20 bg-cyan-600 hover:bg-cyan-700"
+											aria-label="Clip first frame"
+										>
+											{isClippingFirstFrame ? (
+												<Loader2 className="h-4 w-4 animate-spin" />
+											) : (
+												<FileImage className="h-4 w-4" />
 											)}
 										</Button>
 									</ToolbarTooltip>
@@ -847,8 +900,7 @@ export function MediaSelectionToolbar({
 											size="icon"
 											onClick={handleClip}
 											disabled={
-												toolbarDisabled ||
-												!selectedFiles.some((f) => f.type === "video")
+												toolbarDisabled || selectedVideoCount === 0
 											}
 											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
 											aria-label="Clip videos"
@@ -857,6 +909,29 @@ export function MediaSelectionToolbar({
 												<Loader2 className="h-3.5 w-3.5 animate-spin" />
 											) : (
 												<Scissors className="h-3.5 w-3.5 text-purple-400" />
+											)}
+										</Button>
+									</ToolbarTooltip>
+								)}
+
+								{onClipFirstFrame && (
+									<ToolbarTooltip
+										content={`First frame • ${selectedVideoCountLabel}`}
+									>
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={handleClipFirstFrame}
+											disabled={
+												toolbarDisabled || selectedVideoCount === 0
+											}
+											className="h-10 w-18 text-gray-300 hover:text-white hover:bg-gray-800 rounded-full"
+											aria-label="Clip first frame"
+										>
+											{isClippingFirstFrame ? (
+												<Loader2 className="h-3.5 w-3.5 animate-spin" />
+											) : (
+												<FileImage className="h-3.5 w-3.5 text-cyan-400" />
 											)}
 										</Button>
 									</ToolbarTooltip>

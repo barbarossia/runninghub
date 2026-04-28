@@ -174,6 +174,7 @@ export interface MediaGalleryProps {
 	onResize?: (file: MediaFile) => void;
 	onAddCaption?: (files: MediaFile[]) => Promise<void>;
 	onPrompt?: (file: MediaFile) => void;
+	onClipFirstFrame?: (files: MediaFile[]) => Promise<void>;
 	className?: string;
 }
 
@@ -190,6 +191,7 @@ export function MediaGallery({
 	onResize,
 	onAddCaption,
 	onPrompt,
+	onClipFirstFrame,
 	className = "",
 }: MediaGalleryProps) {
 	const {
@@ -1124,6 +1126,17 @@ export function MediaGallery({
 																		Available
 																	</Badge>
 																)}
+															</DropdownMenuItem>
+														)}
+														{onClipFirstFrame && file.type === "video" && (
+															<DropdownMenuItem
+																onClick={(e) => {
+																	e.stopPropagation();
+																	void onClipFirstFrame([file]);
+																}}
+															>
+																<FileImage className="h-4 w-4 mr-2 text-cyan-600" />
+																Clip First Frame
 															</DropdownMenuItem>
 														)}
 														{onDecode && file.isDuckEncoded && (
