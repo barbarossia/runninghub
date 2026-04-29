@@ -80,7 +80,7 @@ import {
 import { toast } from "sonner";
 import { logger } from "@/utils/logger";
 import { isDuckEncodedFilename } from "@/utils/duck";
-import { API_ENDPOINTS, ERROR_MESSAGES } from "@/constants";
+import { API_ENDPOINTS, CLIP_MODES, ERROR_MESSAGES } from "@/constants";
 import { cn } from "@/lib/utils";
 import {
 	exportImagesToFolder,
@@ -102,7 +102,20 @@ import type {
 	LocalWorkflow,
 	LocalWorkflowOperationType,
 } from "@/types/workspace";
+import type { VideoClipConfig } from "@/types/video-clip";
 import { mapLocalWorkflowToWorkflow } from "@/lib/local-workflow-mapper";
+
+const FIRST_FRAME_CLIP_CONFIG: VideoClipConfig = {
+	mode: CLIP_MODES.FIRST_FRAME,
+	imageFormat: "png",
+	quality: 95,
+	frameCount: 1,
+	intervalSeconds: 10,
+	intervalFrames: 1,
+	organizeByVideo: false,
+	deleteOriginal: false,
+	saveToWorkspace: true,
+};
 
 export default function WorkspacePage() {
 	// Folder store state - use page-specific folder state for workspace page
@@ -1963,6 +1976,44 @@ export default function WorkspacePage() {
 		handleClipVideos([video.path]);
 	}, []);
 
+	const handleClipFirstFrameVideos = useCallback(
+		async (files: MediaFile[]) => {
+			const videoFiles = files.filter((file) => file.type === "video");
+			if (videoFiles.length === 0) {
+				toast.error("No videos selected");
+				return;
+			}
+
+			try {
+				const response = await fetch(API_ENDPOINTS.VIDEOS_CLIP, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						videos: videoFiles.map((file) => file.path),
+						clip_config: FIRST_FRAME_CLIP_CONFIG,
+						timeout: 3600,
+						outputDir: selectedFolder?.folder_path,
+					}),
+				});
+
+				const data = await response.json();
+
+				if (data.success) {
+					setActiveConsoleTaskId(data.task_id);
+					toast.success(
+						`Started first-frame clipping for ${videoFiles.length} video${videoFiles.length > 1 ? "s" : ""}`,
+					);
+				} else {
+					toast.error(data.error || "Failed to start first-frame clipping");
+				}
+			} catch (error) {
+				console.error("Error clipping first frame:", error);
+				toast.error("Failed to start first-frame clipping");
+			}
+		},
+		[selectedFolder?.folder_path],
+	);
+
 	const handleVideoSelectionChange = useCallback(
 		(videoPath: string, selected: boolean) => {
 			updateMediaFile(videoPath, { selected });
@@ -2749,6 +2800,7 @@ export default function WorkspacePage() {
 									onBatchProcess={handleBatchProcess}
 									batchWorkflowId={selectedComplexWorkflowId}
 									batchWorkflowName={selectedComplexWorkflowName}
+									onClipFirstFrame={handleClipFirstFrameVideos}
 									onExport={handleExport}
 									onExportToDataset={() => {
 										setFileToExportToDataset(null); // null means use selectedFiles
@@ -2806,6 +2858,7 @@ export default function WorkspacePage() {
 										setShowResizeDialog(true);
 									}}
 									onPrompt={handleViewPromptForFile}
+									onClipFirstFrame={handleClipFirstFrameVideos}
 								/>
 							</TabsContent>
 
